@@ -41,7 +41,7 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use opencmdb_core::ipam::IpPolicy;
 use sqlx::MySqlPool;
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 
 use crate::ipam_audit::{self, FindingKind, Network, Plan, Seen};
 use crate::ipam_repo::{self, Subnet};
@@ -152,7 +152,7 @@ pub(crate) const MAX_DRAWN_ADDRESSES: u64 = 1024;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlanView {
     /// One entry per address in the subnet, in numeric order.
-    pub(crate) cells: Vec<(Ipv4Addr, CellState)>,
+    pub(crate) cells: Vec<(IpAddr, CellState)>,
 }
 
 /// How protective a policy is, for the ONE question the grid, the offer and the verdict must answer
@@ -196,8 +196,8 @@ impl PlanView {
     /// rule, applied where the operator looks.
     pub(crate) fn derive(
         subnet: Subnet,
-        ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy)],
-        defined: &[Ipv4Addr],
+        ranges: &[(IpAddr, IpAddr, IpPolicy)],
+        defined: &[IpAddr],
     ) -> Self {
         let cells = subnet
             .addresses()
@@ -258,7 +258,7 @@ impl PlanView {
 #[derive(Clone)]
 pub(crate) struct IpamState {
     /// The store the plan is read from.
-    pool: MySqlPool,
+    pub(crate) pool: MySqlPool,
     /// The configured scan perimeter, for the shell's header.
     perimeter: Option<String>,
 }
@@ -299,7 +299,7 @@ struct ReleasedNote {
 /// The confirmation for `?released=`, or the empty string when the value is not an address.
 pub(crate) fn released_note(released: Option<&str>) -> String {
     released
-        .and_then(|value| value.trim().parse::<Ipv4Addr>().ok())
+        .and_then(|value| value.trim().parse::<IpAddr>().ok())
         .map(|addr| {
             ReleasedNote {
                 sentence: rust_i18n::t!("ipam.released_note", address = addr.to_string())
@@ -319,607 +319,21 @@ pub(crate) fn released_note(released: Option<&str>) -> String {
 pub(crate) fn router(pool: MySqlPool, perimeter: Option<String>) -> Router {
     Router::new()
         .route("/ipam", get(ipam))
-        .route(ADDRESS_CHECK_PATH, get(address_check))
-        .route(RANGE_CHECK_PATH, get(range_check))
-        .route(DELETE_CHECK_PATH, get(delete_check))
+        // 🔑 The three checks live in `ipam_checks` since story 14.6's split; they are still
+        // mounted HERE, which is the one thing the move must not change.
+        .route(
+            crate::ipam_checks::ADDRESS_CHECK_PATH,
+            get(crate::ipam_checks::address_check),
+        )
+        .route(
+            crate::ipam_checks::RANGE_CHECK_PATH,
+            get(crate::ipam_checks::range_check),
+        )
+        .route(
+            crate::ipam_checks::DELETE_CHECK_PATH,
+            get(crate::ipam_checks::delete_check),
+        )
         .with_state(IpamState { pool, perimeter })
-}
-
-/// Where the address form asks, BEFORE the write, what the network and the registers know about
-/// the address being typed (Guy's decision 7, 2026-09-15).
-///
-/// 🔴 **A GET route that is neither a write route nor a `Screen`**, so neither perimeter guard walks
-/// it by default — story 6b.2's defect, measured on a screen route. `main.rs` names it in its own
-/// perimeter test and in the page-budget guard.
-pub(crate) const ADDRESS_CHECK_PATH: &str = "/ipam/address-check";
-
-/// The query the address check accepts.
-#[derive(Debug, Default, serde::Deserialize)]
-pub(crate) struct AddressCheckQuery {
-    /// The address as typed so far. Anything that is not yet an IPv4 address is answered with an
-    /// empty warning, before the store is touched.
-    pub(crate) addr: Option<String>,
-}
-
-/// Warn about an address before it is defined — and never refuse it.
-///
-/// 🔑 **The form warns and still writes** (Guy's arbitration of 2026-09-10): the most frequent
-/// legitimate case is entering into the plan the machine that is already there. So this answers a
-/// fragment the form shows beside the field, and the POST is untouched.
-///
-/// ⚠️ **Budgeted like the screen**, and focus is NOT moved: the region is `aria-live`, so the warning
-/// is announced while the operator keeps typing.
-async fn address_check(
-    State(state): State<IpamState>,
-    Query(query): Query<AddressCheckQuery>,
-) -> Response {
-    let Some(addr) = query
-        .addr
-        .as_deref()
-        .and_then(|typed| typed.trim().parse::<Ipv4Addr>().ok())
-    else {
-        return Html(String::new()).into_response();
-    };
-    answer_a_check(
-        crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
-            address_check_data(&state.pool, addr)
-                .await
-                .map_err(|error| {
-                    tracing::error!(%error, "checking an address against the plan and the network");
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                })
-        })
-        .await,
-    )
-}
-
-/// Answer one of the two checks: the fragment it produced, or a keyed *could not check* sentence.
-///
-/// 🔴 **A REFUSAL USED TO LEAVE THE PREVIOUS ADDRESS'S WARNING STANDING UNDER A NEW VALUE, and a
-/// render error put a WHOLE ERROR PAGE inside the live region.** Measured by the review: the handler
-/// answered 500, htmx does not swap a 5xx by default, so the region kept the last answer — the
-/// operator read *"192.0.2.20 has been seen on the network"* while typing `192.0.2.30`, which is a
-/// warning about an address they are not writing. 🔑 **So a check always answers 200 with a body**:
-/// what it knows, or that it could not find out. *A live region that keeps a stale sentence is worse
-/// than one that says nothing, because the operator cannot tell which address it is about.*
-///
-/// ⚠️ The status is NOT how this refusal is signalled, and `main.rs`'s budget guard asserts the new
-/// contract (200 within the budget, carrying the keyed sentence) rather than the old one.
-fn answer_a_check(read: Result<String, Response>) -> Response {
-    Html(read.unwrap_or_else(|_| render_check_unavailable())).into_response()
-}
-
-/// The *could not check* fragment — one keyed sentence, and the write is untouched.
-fn render_check_unavailable() -> String {
-    AddressCheck {
-        lines: vec![rust_i18n::t!("ipam.check.unavailable").to_string()],
-        sightings: String::new(),
-        triage_href: None,
-        claimed_note: String::new(),
-        triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
-    }
-    .render()
-    .unwrap_or_default()
-}
-
-/// Read what the address check needs and render it.
-///
-/// # Errors
-///
-/// The store's own failure, classified.
-async fn address_check_data(
-    pool: &MySqlPool,
-    addr: Ipv4Addr,
-) -> Result<String, opencmdb_core::repo::RepositoryError> {
-    let plan = Plan {
-        subnets: ipam_repo::list_subnets(pool)
-            .await?
-            .into_iter()
-            .map(|planned| planned.subnet)
-            .collect(),
-        ranges: ipam_repo::plan_ranges(pool).await?,
-        defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
-    };
-    let network = ipam_audit::read_the_network(pool).await?;
-    Ok(render_address_check(addr, &plan, &network))
-}
-
-/// Where the RANGE form asks, before the write, how much of the network its range would cover
-/// (Guy's decision of 2026-09-15, at the code review).
-///
-/// 🔴 **It was deferred by the implementer and not by Guy**, which the acceptance layer caught: §1(e)
-/// said decision 7 covered the range form, and it did not. The address form warns about one address;
-/// this warns about a stretch of them — *n addresses already seen would fall inside this static
-/// range* — and, like the other, it **refuses nothing**.
-pub(crate) const RANGE_CHECK_PATH: &str = "/ipam/range-check";
-
-/// The query the range check accepts — the range form's own three fields.
-#[derive(Debug, Default, serde::Deserialize)]
-pub(crate) struct RangeCheckQuery {
-    /// The first address, as typed so far.
-    pub(crate) first: Option<String>,
-    /// The last address, as typed so far.
-    pub(crate) last: Option<String>,
-    /// The policy token the form's `<select>` carries.
-    pub(crate) policy: Option<String>,
-}
-
-/// Warn about a range before it is defined — and never refuse it.
-async fn range_check(
-    State(state): State<IpamState>,
-    Query(query): Query<RangeCheckQuery>,
-) -> Response {
-    let parse = |typed: &Option<String>| {
-        typed
-            .as_deref()
-            .and_then(|text| text.trim().parse::<Ipv4Addr>().ok())
-    };
-    let (Some(first), Some(last)) = (parse(&query.first), parse(&query.last)) else {
-        return Html(String::new()).into_response();
-    };
-    // 🔑 **`static` ALONE, which is Guy's wording and not a shortcut**: the warning is that the
-    // operator is about to promise addresses by hand that something already answers on. Inside a
-    // `dhcp-pool` the occupant changes by design (decision 1), and a `reserved` or `infrastructure`
-    // range takes the addresses out of the offer anyway, so the sentence would be noise there.
-    let is_static = query.policy.as_deref() == Some(IpPolicy::Static.as_str());
-    if first > last || !is_static {
-        return Html(String::new()).into_response();
-    }
-    answer_a_check(
-        crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
-            range_check_data(&state.pool, first, last)
-                .await
-                .map_err(|error| {
-                    tracing::error!(%error, "checking a range against the network");
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                })
-        })
-        .await,
-    )
-}
-
-/// Read what the range check needs and render it.
-///
-/// # Errors
-///
-/// The store's own failure, classified.
-async fn range_check_data(
-    pool: &MySqlPool,
-    first: Ipv4Addr,
-    last: Ipv4Addr,
-) -> Result<String, opencmdb_core::repo::RepositoryError> {
-    let network = ipam_audit::read_the_network(pool).await?;
-    Ok(render_range_check(first, last, &network))
-}
-
-/// Render what is worth knowing about a `static` range before it is defined — the empty string when
-/// the network has been seen on none of its addresses.
-pub(crate) fn render_range_check(first: Ipv4Addr, last: Ipv4Addr, network: &Network) -> String {
-    let count = Plan::seen_inside(&network.seen, first, last);
-    if count == 0 {
-        return String::new();
-    }
-    AddressCheck {
-        lines: vec![
-            counted(
-                "ipam.check.range_seen_one",
-                "ipam.check.range_seen_many",
-                count,
-            ),
-            rust_i18n::t!("ipam.check.still_writes").to_string(),
-        ],
-        sightings: String::new(),
-        triage_href: None,
-        claimed_note: String::new(),
-        triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
-    }
-    .render()
-    .unwrap_or_else(|_| crate::page::render_error_body())
-}
-
-/// Where a removal control asks, BEFORE it fires, what the deletion would change (decision 3,
-/// 2026-09-16: a delete warns before it fires, for BOTH deletes).
-///
-/// 🔴 **A GET route that is neither a write route nor a `Screen`**, so neither perimeter guard walks
-/// it by default — story 6b.2's defect. `main.rs` names it in its own perimeter test and in the
-/// page-budget guard, beside the other two checks.
-pub(crate) const DELETE_CHECK_PATH: &str = "/ipam/delete-check";
-
-/// The query the delete check accepts.
-///
-/// 🔑 **The bounds travel with the request instead of being looked up by id**, which is what lets
-/// ONE route serve both deletions: with `subnet` alone it is the subnet's own removal, and with the
-/// range's bounds beside it, that range's. The rail already renders both, so nothing is read back to
-/// learn what the operator is looking at.
-// ⚠️ No `Default`: the review found it derived and constructed nowhere. Every field is an
-// `Option<String>`, which `serde` fills without it — including for an empty query string — so the
-// derive was carrying nothing. If a caller ever needs one, it can come back with that caller.
-#[derive(Debug, serde::Deserialize)]
-pub(crate) struct DeleteCheckQuery {
-    /// The subnet in force, always.
-    pub(crate) subnet: Option<String>,
-    /// The first address of the range being removed, when it is a range.
-    pub(crate) first: Option<String>,
-    /// Its last address.
-    pub(crate) last: Option<String>,
-    /// The address being removed, when it is one defined address.
-    ///
-    /// 🔴 **Without this the three removals could not be told apart**, and the defect was caught
-    /// while wiring the control rather than after: `subnet` alone means the SUBNET's own removal,
-    /// so an address row asking with `subnet` alone would have been answered *"this subnet still
-    /// holds 5 records"* — a true sentence about the wrong gesture, which is worse than none.
-    pub(crate) addr: Option<String>,
-}
-
-/// Warn about a removal before it fires — and never refuse it.
-///
-/// ⚠️ **Budgeted like the screen, and focus is NOT moved**: the region is `aria-live`, so the
-/// warning is announced where the operator already is. A store failure renders the keyed *could not
-/// check* sentence at 200, because htmx does not swap a 5xx and the region would otherwise keep
-/// showing the previous answer under a new question (story 14.3b's measured defect).
-async fn delete_check(
-    State(state): State<IpamState>,
-    // 🔴 **A REJECTED QUERY ANSWERS AN EMPTY REGION, not axum's English sentence.** With
-    // `Query<…>` extracted directly, `?subnet=a&subnet=b` served `Failed to deserialize query
-    // string: duplicate field 'subnet'` with status 400 — and htmx DOES swap a 4xx, so a framework
-    // sentence in English landed in the `aria-live` region of a French page. Story 6b.10's
-    // arbitration 2(a′) puts the bodies served at these addresses inside the copy perimeter, and
-    // this handler's own doc already says a failure must not leave the region under a new question.
-    query: Result<Query<DeleteCheckQuery>, axum::extract::rejection::QueryRejection>,
-) -> Response {
-    let Ok(Query(query)) = query else {
-        // 🔑 **THE KEYED SENTENCE, not silence** (my decision, delegated 2026-09-18, recorded as mine
-        // so it can be reversed at the right cost). `ipam.check.unavailable` says *the plan could not
-        // be checked just now; the write does not depend on this check* — worded about the CHECK, so
-        // it is as true of a request this build cannot read as of a store it cannot reach, and
-        // reusing it states nothing false. ⚠️ An empty region made *I could not ask* indistinguishable
-        // from *nothing here is worth saying*, immediately before an irreversible gesture. Refused:
-        // minting a second sentence for the malformed case, which buys a distinction the operator
-        // cannot act on differently.
-        return Html(render_check_unavailable()).into_response();
-    };
-    let Some(subnet_id) = query
-        .subnet
-        .as_deref()
-        .map(str::trim)
-        .filter(|id| !id.is_empty())
-        .map(str::to_string)
-    else {
-        return Html(String::new()).into_response();
-    };
-    // 🔴 **AN UNPARSEABLE QUALIFIER ANSWERS NOTHING — never the enclosing gesture's sentence.**
-    // Both reads used `.ok()` and dropped the failure, so `?subnet=…&addr=nonsense` fell through to
-    // the arm for a subnet's own removal and answered *"this subnet still holds 2 records"* over a
-    // control asking about one address. That is exactly what [`DeleteCheckQuery::addr`]'s own doc
-    // says this route was shaped to avoid — *a true sentence about the wrong gesture, which is worse
-    // than none* — reached through the one channel the shape does not close. ⚠️ Measured live by the
-    // review, including on the store's OWN canonical spelling (`192.000.002.015`, which
-    // `Ipv4Addr::from_str` refuses for its leading zeros): today the rail renders dotted, so this
-    // was latent rather than live, and any future producer passing the stored form would have
-    // degraded every range and address control into the subnet's warning in silence.
-    // 🔑 A qualifier this build cannot read earns the *could not be checked* sentence, for the
-    // reason given at the extractor above — never the enclosing gesture's sentence, and never
-    // silence. ⚠️ The ABSENT case is different and stays silent: a control that sends no bounds and
-    // no address is asking about the subnet, which the arms below answer.
-    let bounds = match (query.first.as_deref(), query.last.as_deref()) {
-        (None, None) => None,
-        (Some(first), Some(last)) => {
-            let (Ok(first), Ok(last)) = (
-                first.trim().parse::<Ipv4Addr>(),
-                last.trim().parse::<Ipv4Addr>(),
-            ) else {
-                return Html(render_check_unavailable()).into_response();
-            };
-            if last < first {
-                return Html(render_check_unavailable()).into_response();
-            }
-            Some((first, last))
-        }
-        // One bound without the other names no interval, and a range control always sends both.
-        _ => return Html(render_check_unavailable()).into_response(),
-    };
-    let addr = match query.addr.as_deref() {
-        None => None,
-        Some(typed) => {
-            let Ok(addr) = typed.trim().parse::<Ipv4Addr>() else {
-                return Html(render_check_unavailable()).into_response();
-            };
-            Some(addr)
-        }
-    };
-    answer_a_check(
-        crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
-            delete_check_data(&state.pool, &subnet_id, bounds, addr)
-                .await
-                .map_err(|error| {
-                    tracing::error!(%error, "checking what a removal would change");
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                })
-        })
-        .await,
-    )
-}
-
-/// Read what the delete check needs and render it.
-///
-/// # Errors
-///
-/// The store's own failure, classified.
-async fn delete_check_data(
-    pool: &MySqlPool,
-    subnet_id: &str,
-    bounds: Option<(Ipv4Addr, Ipv4Addr)>,
-    addr: Option<Ipv4Addr>,
-) -> Result<String, opencmdb_core::repo::RepositoryError> {
-    let subnets = ipam_repo::list_subnets(pool).await?;
-    let Some(here) = subnets
-        .iter()
-        .find(|planned| planned.id == subnet_id)
-        .cloned()
-    else {
-        // An id the plan does not carry warns about nothing: the control that sent it is stale, and
-        // a sentence invented for it would describe a record that is not there.
-        return Ok(String::new());
-    };
-    let plan = Plan {
-        subnets: subnets.iter().map(|planned| planned.subnet).collect(),
-        ranges: ipam_repo::plan_ranges(pool).await?,
-        defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
-    };
-    let subnet = here.subnet;
-    let network = ipam_audit::read_the_network(pool).await?;
-    // 🔑 **THIS SUBNET'S OWN RECORDS, which this function already read for its `held` count.** The
-    // check now asks the same questions the WRITE path asks, and asking them needs the same scope:
-    // `delete_range` refuses by scanning `ip_address WHERE subnet_id = ?` and comparing in Rust, so
-    // the warning that predicts that refusal compares the same rows the same way. Nothing plan-wide
-    // can answer it — the review measured a warning computed over every range in the plan.
-    let ranges_here: Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)> =
-        ipam_repo::correctable_ranges_in(pool, subnet_id)
-            .await?
-            .into_iter()
-            .map(|(_, first, last, policy, _)| (first, last, policy))
-            .collect();
-    let defined_here: Vec<Ipv4Addr> = ipam_repo::correctable_addresses_in(pool, subnet_id)
-        .await?
-        .into_iter()
-        .map(|(_, addr, _)| addr)
-        .collect();
-    Ok(render_delete_check(
-        subnet,
-        bounds,
-        addr,
-        &plan,
-        &network,
-        &ranges_here,
-        &defined_here,
-    ))
-}
-
-/// Render what a removal would change — the empty string when it would change nothing worth saying.
-///
-/// 🔑 **It refuses nothing — and it no longer promises that the gesture will succeed when the
-/// product is about to refuse it** (my decision, delegated 2026-09-18, recorded as mine so it can be
-/// reversed at the right cost).
-///
-/// 🔴 **Until the slice-C review this function appended *"the removal is still possible — not a
-/// refusal"* to EVERY non-empty answer**, including the subnet's own, whose sentence one line above
-/// reads *"removing it will be refused until they are gone"*. Two sentences contradicting each other
-/// in one `aria-live` region, in both languages, measured on a booted binary — and the 409 the press
-/// then earns settles which one was false. ⚠️ The range arm was worse: it consulted the network and
-/// the offer and never asked the one question that decides whether the gesture happens at all, so the
-/// gesture this story's own arbitration REFUSES was the one told it would go through.
-///
-/// 🔑 **So the check now asks the same rules the write path asks**, in the same scope — a range is
-/// refused while it holds an address defined inside it (`delete_range`'s computed refusal), a subnet
-/// while anything points at it (a foreign key) — and `still_removes` is appended only when no
-/// refusal is coming. The alternatives were refused and are named rather than implied: deleting the
-/// closing sentence outright (it is true and useful for every gesture that really will go through),
-/// and patching only the contradiction (which leaves the range arm silent about its own refusal).
-///
-/// ⚠️ **Bounds that name no range of THIS subnet answer nothing.** They used to fabricate a warning
-/// about a range that does not exist — measured, `first=0.0.0.0&last=255.255.255.255` reported ten
-/// addresses — and a stale control whose range was removed in another tab reaches exactly that.
-/// `delete_check_data` already refuses an unknown SUBNET id for this reason, in a comment saying so.
-pub(crate) fn render_delete_check(
-    subnet: Subnet,
-    bounds: Option<(Ipv4Addr, Ipv4Addr)>,
-    addr: Option<Ipv4Addr>,
-    plan: &Plan,
-    network: &Network,
-    ranges_here: &[(Ipv4Addr, Ipv4Addr, IpPolicy)],
-    defined_here: &[Ipv4Addr],
-) -> String {
-    let mut lines = Vec::new();
-    // Whether the product is about to REFUSE the gesture this warning is about.
-    let mut refused = false;
-    // 🔑 One address's removal is asked about FIRST, because a row carries its subnet too: without
-    // this arm an address control would be answered with the subnet's sentence — true, and about
-    // the wrong gesture.
-    if let Some(addr) = addr {
-        if network.seen.contains_key(&addr) {
-            lines.push(rust_i18n::t!("ipam.check.delete_address_seen").to_string());
-        }
-        if lines.is_empty() {
-            return String::new();
-        }
-        lines.push(rust_i18n::t!("ipam.check.still_removes").to_string());
-        return AddressCheck {
-            lines,
-            sightings: String::new(),
-            triage_href: None,
-            claimed_note: String::new(),
-            triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
-        }
-        .render()
-        .unwrap_or_else(|_| crate::page::render_error_body());
-    }
-    let held = ranges_here.len() + defined_here.len();
-    match bounds {
-        Some((first, last)) => {
-            // ⚠️ **BOUNDS THAT NAME NO RANGE OF THIS SUBNET WARN ABOUT NOTHING**, and this is the
-            // same rule `delete_check_data` applies to an unknown subnet id one function up. It
-            // closes two measured holes at once: a fabricated warning for an interval no range
-            // carries, and a warning computed for THIS subnet out of ANOTHER subnet's bounds.
-            if !ranges_here
-                .iter()
-                .any(|(range_first, range_last, _)| *range_first == first && *range_last == last)
-            {
-                return String::new();
-            }
-            // 🔴 **THE REFUSAL FIRST, because it decides whether the gesture happens at all.** Same
-            // rule and same scope as `ipam_repo::delete_range`: an address defined inside the
-            // interval, compared in Rust (D10), over THIS subnet's rows.
-            let holds = defined_here
-                .iter()
-                .filter(|addr| **addr >= first && **addr <= last)
-                .count();
-            if holds > 0 {
-                refused = true;
-                lines.push(counted(
-                    "ipam.check.delete_range_holds_one",
-                    "ipam.check.delete_range_holds_many",
-                    holds,
-                ));
-            }
-            // What the range explains today and would stop explaining.
-            let seen = Plan::seen_inside(&network.seen, first, last);
-            if seen > 0 {
-                lines.push(counted(
-                    "ipam.check.delete_range_seen_one",
-                    "ipam.check.delete_range_seen_many",
-                    seen,
-                ));
-            }
-            // 🔑 Whether the offer survives: this SUBNET's ranges minus this one, asked the same
-            // question the screen asks. ⚠️ It filtered the PLAN-WIDE set by VALUE until the review —
-            // and the overlap rule is scoped per subnet (`WHERE subnet_id = ?`), so two subnets may
-            // legally carry ranges with identical bounds and both were struck, computing the answer
-            // about a plan the deletion would never produce.
-            let without: Vec<_> = ranges_here
-                .iter()
-                .copied()
-                .filter(|(range_first, range_last, _)| *range_first != first || *range_last != last)
-                .collect();
-            let here = Plan {
-                subnets: plan.subnets.clone(),
-                ranges: ranges_here.to_vec(),
-                defined: plan.defined.clone(),
-            };
-            let remaining = Plan {
-                subnets: plan.subnets.clone(),
-                ranges: without,
-                defined: plan.defined.clone(),
-            };
-            if here.has_static_range(subnet) && !remaining.has_static_range(subnet) {
-                lines.push(rust_i18n::t!("ipam.check.delete_empties_offer").to_string());
-            }
-        }
-        // The subnet's own removal: the database refuses it while anything points at it, so the
-        // warning says the refusal is coming rather than letting the operator meet it blind.
-        None if held > 0 => {
-            refused = true;
-            lines.push(counted(
-                "ipam.check.delete_subnet_holds_one",
-                "ipam.check.delete_subnet_holds_many",
-                held,
-            ));
-        }
-        None => {}
-    }
-    if lines.is_empty() {
-        return String::new();
-    }
-    // 🔴 **ONLY WHEN NO REFUSAL IS COMING.** Appended unconditionally, it told an operator the
-    // removal was still possible directly under a sentence saying it would be refused.
-    if !refused {
-        lines.push(rust_i18n::t!("ipam.check.still_removes").to_string());
-    }
-    AddressCheck {
-        lines,
-        sightings: String::new(),
-        triage_href: None,
-        claimed_note: String::new(),
-        triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
-    }
-    .render()
-    .unwrap_or_else(|_| crate::page::render_error_body())
-}
-
-/// One sentence per count, and NEVER a parenthetical plural.
-///
-/// 🔴 Story 6b.10's review found `1 field(s)` on this product's primary screen and fixed it **as a
-/// class**, with a property guarding the whole locale file — *a parenthetical plural is a perfectly
-/// resolvable key*. Every count this story renders goes through here, so the class stays closed.
-fn counted(one: &str, many: &str, count: usize) -> String {
-    if count == 1 {
-        rust_i18n::t!(one, count = count).to_string()
-    } else {
-        rust_i18n::t!(many, count = count).to_string()
-    }
-}
-
-/// The address check's fragment.
-#[derive(askama::Template)]
-#[template(path = "_ipam_address_check.html")]
-pub(crate) struct AddressCheck {
-    /// One sentence per thing worth knowing, or none.
-    lines: Vec<String>,
-    /// Each hardware address seen on it with its absolute last sighting, joined.
-    sightings: String,
-    /// The triage question for it, when it was seen and no declared record claims it.
-    triage_href: Option<String>,
-    /// Why there is no triage question, when the address was seen and a declared record claims it —
-    /// the empty string when there is nothing to say.
-    ///
-    /// 🔴 **The findings list said this and the check did not**, which the acceptance layer caught:
-    /// the same address, warned about in two places, linked to its question in one and said nothing
-    /// about it in the other. A missing link is indistinguishable from a forgotten one.
-    claimed_note: String,
-    /// The link's words.
-    triage_link: String,
-}
-
-/// Render what is worth knowing about `addr` before it is defined — the empty string when nothing is.
-pub(crate) fn render_address_check(addr: Ipv4Addr, plan: &Plan, network: &Network) -> String {
-    let address = addr.to_string();
-    let mut lines = Vec::new();
-    let mut sightings = String::new();
-    let mut triage_href = None;
-    let mut claimed_note = String::new();
-    let is_documented = network.documented.contains(&addr);
-    // Triage's own comparison, verbatim — see `ipam_audit::AddressFinding::claimed`.
-    let is_claimed = network.claimed.contains(&address);
-    if let Some(seen) = network.seen.get(&addr) {
-        lines.push(rust_i18n::t!("ipam.check.seen", address = address.as_str()).to_string());
-        sightings = capped_sighting_lines(seen).join("; ");
-        if is_claimed {
-            claimed_note = rust_i18n::t!("ipam.finding.documented").to_string();
-        } else {
-            triage_href = Some(format!("/triage?sel=nouveau:{addr}"));
-        }
-    }
-    if is_documented {
-        lines.push(rust_i18n::t!("ipam.check.documented", address = address.as_str()).to_string());
-    }
-    if plan.defines(addr) {
-        lines.push(rust_i18n::t!("ipam.check.defined", address = address.as_str()).to_string());
-    }
-    if plan.covered_by_a_pool(addr) {
-        lines.push(rust_i18n::t!("ipam.check.in_pool", address = address.as_str()).to_string());
-    }
-    if lines.is_empty() {
-        return String::new();
-    }
-    lines.push(rust_i18n::t!("ipam.check.still_writes").to_string());
-    AddressCheck {
-        lines,
-        sightings,
-        triage_href,
-        claimed_note,
-        triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
-    }
-    .render()
-    .unwrap_or_else(|_| crate::page::render_error_body())
 }
 
 /// Serve the plan.
@@ -1004,6 +418,31 @@ async fn plan_data(
         network: &network,
         subnet: Some(subnet),
     };
+    // 🔴 **THE FAMILY IS CHECKED BEFORE THE SIZE, AND THE ORDER IS THE WHOLE OF AC3** (story 14.6,
+    // Guy's decision of 2026-09-21). An IPv6 subnet gets no grid, no occupancy line, no offer and no
+    // audit of its own, **whatever its prefix length** — because the product cannot observe IPv6 and
+    // has nothing to compare its plan against.
+    //
+    // ⚠️ **The ceiling does NOT deliver that, which the story's validation measured by building it.**
+    // *Every IPv6 subnet an operator really has is larger than a /118* is a claim about DEPLOYMENTS,
+    // not a property of this product: with the widening built and a `2001:db8:0:43::/120` in the
+    // store — 256 addresses, under `MAX_DRAWN_ADDRESSES` — `/ipam` drew the full IPv4 machinery on
+    // it, a 256-cell grid, an occupancy line and **an offer** (`Next address the plan can offer
+    // 2001:db8:0:43::10`). Nothing refuses a `/120`, a `/124` or a `/128`, and an operator splitting
+    // a `/64` into `/112`s is ordinary.
+    //
+    // ⚠️ And the *too large to draw* branch could not carry it either: its own sentence is about
+    // SIZE, which is a true sentence about the wrong reason for a `/64`, and Decision 14 makes it
+    // render the findings — the all-clear AC4 exists to forbid.
+    if subnet.is_v6() {
+        let ranges = ipam_repo::ranges_in(pool, &id).await?;
+        let rail = RailLists::new(
+            &chosen,
+            &ipam_repo::correctable_ranges_in(pool, &id).await?,
+            &ipam_repo::correctable_addresses_in(pool, &id).await?,
+        );
+        return Ok(render_unobservable(&subnets, &id, &ranges, &audit, rail));
+    }
     // 🔴 THE CEILING IS CHECKED BEFORE THE CELLS ARE MATERIALISED. Checking after would mean
     // paying 2 GB to learn the page should not have been drawn — see `MAX_DRAWN_ADDRESSES`.
     if subnet.size() > MAX_DRAWN_ADDRESSES {
@@ -1023,7 +462,7 @@ async fn plan_data(
     // doc): the subnet's own were what it read until the code review, and a nested subnet's page
     // then drew as *not covered* an address a parent's `reserved` range protects — while the offer
     // and the findings list, both plan-wide, said otherwise on the same screen.
-    let defined: Vec<Ipv4Addr> = plan.defined.iter().copied().collect();
+    let defined: Vec<IpAddr> = plan.defined.iter().copied().collect();
     let view = PlanView::derive(subnet, &plan.ranges, &defined);
     // 🔑 The rail's lists are the SUBNET's own records, where the grid is drawn from the plan-wide
     // ranges and addresses — and the difference is deliberate. The grid must show a nested subnet
@@ -1098,6 +537,24 @@ pub(crate) struct AuditRender {
     outside_more: String,
     /// The subnet's addresses defined inside a `dhcp-pool` (decision 13).
     pool_warnings: Vec<String>,
+    /// The sentence that REPLACES the findings for a subnet the product cannot observe — the empty
+    /// string for every other subnet (story 14.6, Guy's decision §0.2).
+    ///
+    /// 🔴 **It replaces rather than accompanies, and the validation measured why.** With no findings
+    /// the template renders `ipam.findings.none` — *"Nothing the network has shown contradicts this
+    /// subnet's plan."* — which on an IPv6 subnet is the product ASSERTING CONCORDANCE about a plan
+    /// its only connector will never look at. Not an absence the operator has to interpret: a
+    /// positive, false claim. *An empty list reads as **nothing is wrong** where the truth is
+    /// **nothing was checked***, which is this project's own `AXE_REQUIRE_*` distinction — *the gate
+    /// could not run* is not a pass — reaching the operator's screen for the first time.
+    ///
+    /// ⚠️ **And it bounds its own scope, because the OUTSIDE list keeps rendering beside it**
+    /// (decision §0.7): that list belongs to the PLAN, not to the subnet, so hiding it would cost
+    /// the operator a true finding for having selected another tab. Measured on the prototype, an
+    /// IPv6 page carried observed IPv4 addresses with a LIVE release control on each, under the
+    /// all-clear above — claim and refutation in one viewport, the class story 14.4's third round
+    /// paid for. The sentence says *this subnet*, so the two do not contradict each other.
+    unobservable: String,
 }
 
 /// How many hardware addresses a CELL's accessible name carries before it says *and N others*.
@@ -1119,7 +576,7 @@ fn absolute(at: opencmdb_core::observation::Timestamp) -> String {
 
 /// One line per hardware address seen on an address, with its last sighting, and one for a sighting
 /// without a hardware address.
-fn sighting_lines(seen: &Seen) -> Vec<String> {
+pub(crate) fn sighting_lines(seen: &Seen) -> Vec<String> {
     let mut lines: Vec<String> = seen
         .macs
         .iter()
@@ -1144,7 +601,7 @@ fn sighting_lines(seen: &Seen) -> Vec<String> {
 /// 🔑 Ordered by RECENCY here and by hardware address in the findings list, deliberately: a bound has
 /// to choose what it keeps, and the most recent sighting is the one an operator acts on. The list
 /// under the grid keeps every one of them in a stable order.
-fn capped_sighting_lines(seen: &Seen) -> Vec<String> {
+pub(crate) fn capped_sighting_lines(seen: &Seen) -> Vec<String> {
     let mut by_recency: Vec<(opencmdb_core::observation::Timestamp, String)> = seen
         .macs
         .iter()
@@ -1176,7 +633,7 @@ fn capped_sighting_lines(seen: &Seen) -> Vec<String> {
         .map(|(_, line)| line)
         .collect();
     if total > MAX_CELL_MACS {
-        lines.push(counted(
+        lines.push(crate::ipam_checks::counted(
             "ipam.finding.more_one",
             "ipam.finding.more_many",
             total - MAX_CELL_MACS,
@@ -1214,7 +671,15 @@ fn finding_row(
 /// Everything the audit shows for the subnet in force — and, on the two pages where no subnet is,
 /// what the network shows outside the plan.
 fn audit_render(audit: &Audit) -> AuditRender {
+    // 🔴 A subnet the product cannot observe has NO findings and does not pretend to: the audit is
+    // not run at all, so the empty vector below is an absence the sentence explains rather than the
+    // all-clear `ipam.findings.none` would render over it.
+    let unobservable = match audit.subnet {
+        Some(subnet) if subnet.is_v6() => rust_i18n::t!("ipam.audit.unobservable").to_string(),
+        _ => String::new(),
+    };
     let findings = match audit.subnet {
+        Some(subnet) if subnet.is_v6() => Vec::new(),
         Some(subnet) => audit
             .plan
             .audit(subnet, &audit.network.seen, &audit.network.claimed)
@@ -1248,7 +713,7 @@ fn audit_render(audit: &Audit) -> AuditRender {
             })
             .collect(),
         outside_more: if total_outside > MAX_OUTSIDE {
-            counted(
+            crate::ipam_checks::counted(
                 "ipam.outside.more_one",
                 "ipam.outside.more_many",
                 total_outside - MAX_OUTSIDE,
@@ -1267,6 +732,7 @@ fn audit_render(audit: &Audit) -> AuditRender {
                 .collect(),
             None => Vec::new(),
         },
+        unobservable,
     }
 }
 
@@ -1421,15 +887,15 @@ impl IpamForms {
             subnet_route: route_of(WriteRoute::Subnet),
             range_route: route_of(WriteRoute::Range),
             address_route: route_of(WriteRoute::Address),
-            address_check_route: ADDRESS_CHECK_PATH,
-            range_check_route: RANGE_CHECK_PATH,
+            address_check_route: crate::ipam_checks::ADDRESS_CHECK_PATH,
+            range_check_route: crate::ipam_checks::RANGE_CHECK_PATH,
             delete_subnet_route: route_of(WriteRoute::DeleteSubnet),
             delete_range_route: route_of(WriteRoute::DeleteRange),
             delete_address_route: route_of(WriteRoute::DeleteAddress),
             edit_range_route: route_of(WriteRoute::EditRange),
             edit_address_route: route_of(WriteRoute::EditAddress),
             edit_subnet_route: route_of(WriteRoute::EditSubnet),
-            delete_check_route: DELETE_CHECK_PATH,
+            delete_check_route: crate::ipam_checks::DELETE_CHECK_PATH,
             release_route: route_of(WriteRoute::Release),
             subnet_id,
             plan_is_empty,
@@ -1617,13 +1083,37 @@ pub(crate) fn tab_label(planned: &ipam_repo::PlannedSubnet) -> String {
     name
 }
 
+/// Swap the three address fields' EXAMPLES for the IPv6 family (story 14.6, AC11).
+///
+/// 🔴 **A resolvable key rendering a correct string in the WRONG CONTEXT is invisible to every guard
+/// this project has** — story 6b.6's `role_key` defect, where a real key from the wrong namespace
+/// left all tests, all gates and clippy green while the page read *"Exemple"* where *"Stockage"*
+/// belonged. Measured here by the gap-hunt on a booted binary: every form on an IPv6 subnet's page
+/// told the operator to type *"for example 192.0.2.10"*.
+///
+/// 🔑 **The carrier is this function plus its test**, and that is stated rather than implied: no
+/// browser gate can see it either, because the served string is a correct translation of a real key.
+fn family_examples(s: &mut IpamStrings) {
+    s.form_first = rust_i18n::t!("ipam.form.first_v6").to_string();
+    s.form_last = rust_i18n::t!("ipam.form.last_v6").to_string();
+    s.form_addr = rust_i18n::t!("ipam.form.addr_v6").to_string();
+    // ⚠️ **`form_cidr` IS DELIBERATELY NOT HERE, and the reason is which subnet each form is
+    // about.** The edge layer of story 14.6's second review round measured the *Define a subnet*
+    // placeholder still reading `192.0.2.0/24` on an IPv6 subnet's page and reported it as an
+    // inconsistency. It is not one: the range and address forms write INSIDE the subnet in force,
+    // so their examples are a function of its family, while the subnet form creates a NEW subnet of
+    // either family — switching its example with the tab would suggest the operator must match the
+    // tab they happen to be looking at. 🔑 *Three of four examples following the tab is the shape
+    // that looks wrong; what decides it is what each form writes into, not how many follow.*
+}
+
 /// Resolve every string, with the occupancy and next-free lines when there is a plan.
 ///
 /// `no_static` says the subnet in force is reached by NO `static` range at all, which is a different
 /// state from an exhausted offer and now has its own sentence.
 fn strings(
     counts: Option<(usize, usize, usize, usize)>,
-    next: Option<Ipv4Addr>,
+    next: Option<IpAddr>,
     no_static: bool,
 ) -> IpamStrings {
     let occupancy = match counts {
@@ -1704,6 +1194,59 @@ fn strings(
     }
 }
 
+/// Render a subnet the product cannot OBSERVE: its declared ranges, and the sentence saying so.
+///
+/// 🔴 **STORY 14.6's AC3, and the family is what routes here — never the size.** An IPv6 subnet gets
+/// no grid, no occupancy line, no offer and no audit of its own, *whatever its prefix length*. The
+/// validation measured that the ceiling delivers none of the three: with the widening built and a
+/// `2001:db8:0:43::/120` in the store — 256 addresses, under `MAX_DRAWN_ADDRESSES` — `/ipam` drew a
+/// 256-cell grid, an occupancy line and an OFFER. *Every IPv6 subnet an operator really has is
+/// larger than a /118* is a claim about deployments, not a property of this product.
+///
+/// 🔑 **It reuses the *too large to draw* BODY and not its reason.** The same `IpamBody` shape shows
+/// the declared ranges, which is what the plan actually holds for a subnet nothing can be drawn
+/// about — but that branch's own sentence is about SIZE, which is true about the wrong reason here,
+/// and Decision 14 makes it render the findings, which is the all-clear AC4 exists to forbid. So the
+/// strings and the audit differ even though the layout does not.
+fn render_unobservable(
+    subnets: &[ipam_repo::PlannedSubnet],
+    selected: &str,
+    ranges: &[(IpAddr, IpAddr, IpPolicy, String)],
+    audit: &Audit,
+    rail: RailLists,
+) -> String {
+    let rows = ranges
+        .iter()
+        .map(|(first, last, policy, label)| RangeRow {
+            bounds: format!("{first} – {last}"),
+            policy: rust_i18n::t!(policy_key(*policy)).to_string(),
+            label: label.clone(),
+        })
+        .collect();
+    let mut s = strings(None, None, false);
+    family_examples(&mut s);
+    // 🔴 **BOTH SIZE SENTENCES ARE REPLACED, and the second was caught by LOOKING at the page.** The
+    // body is the *too large to draw* one, so it came with that branch's copy — and on a `/120`, 256
+    // addresses, the screen read *"This subnet holds more than 1024 addresses, so its grid is not
+    // drawn"*. A false sentence, rendered under a correct structure: *a true sentence about the
+    // wrong reason* is this project's recurring class, and the structure being right is exactly what
+    // makes it invisible to a test that checks the branch rather than the words.
+    s.too_large = rust_i18n::t!("ipam.unobservable.heading").to_string();
+    s.too_large_no_offer = rust_i18n::t!("ipam.unobservable.no_offer").to_string();
+    let body = IpamBody {
+        s,
+        tabs: tabs_for(subnets, selected),
+        any_vlan: declares_a_vlan(subnets),
+        plan: None,
+        too_large: Some(rows),
+        rail: Some(rail),
+        forms: IpamForms::new(Some(selected.to_string()), false),
+        audit: Some(audit_render(audit)),
+    };
+    body.render()
+        .unwrap_or_else(|_| crate::page::render_error_body())
+}
+
 /// Render a subnet the screen refuses to draw, as the list of ranges the operator declared.
 ///
 /// 🔑 It shows what the PLAN holds rather than an apology: a `/16` has at most a handful of ranges,
@@ -1716,7 +1259,7 @@ fn strings(
 fn render_too_large(
     subnets: &[ipam_repo::PlannedSubnet],
     selected: &str,
-    ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy, String)],
+    ranges: &[(IpAddr, IpAddr, IpPolicy, String)],
     audit: &Audit,
     rail: RailLists,
 ) -> String {
@@ -1903,7 +1446,7 @@ mod tests {
     }
 
     /// What the network says, from sightings and the declared values TRIAGE compares (verbatim).
-    fn network_of(seen: BTreeMap<Ipv4Addr, Seen>, declared: &[&str]) -> Network {
+    fn network_of(seen: BTreeMap<IpAddr, Seen>, declared: &[&str]) -> Network {
         Network {
             seen,
             documented: crate::ipam_audit::documented_addresses(
@@ -1972,13 +1515,22 @@ mod tests {
         )
     }
 
-    fn v4(text: &str) -> Ipv4Addr {
+    /// A literal address for the tests.
+    ///
+    /// ⚠️ **It answers `IpAddr` since story 14.6, which means it no longer PINS the family** — and
+    /// the first version of this sentence claimed the opposite, that *"a test that means one cannot
+    /// silently get the other"*. The reverse is true: before the widening `v4("2001:db8::1")`
+    /// panicked, and now it returns a V6, which is how `an_ipv6_row_is_read_back_rather_than_skipped`
+    /// uses it. **The name is kept and it no longer means anything**, because renaming four hundred
+    /// call sites would bury the story's real diff — a cost accepted and stated rather than hidden
+    /// behind a sentence that reads like a guarantee.
+    fn v4(text: &str) -> IpAddr {
         text.parse().expect("a v4 address")
     }
 
     /// The office subnet's plan, whole, for the offer — since story 14.3b the offer is the AUDIT's
     /// answer (`ipam_audit::Plan::offerable`), not a cell's.
-    fn offer_of(ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy)], defined: &[Ipv4Addr]) -> Plan {
+    fn offer_of(ranges: &[(IpAddr, IpAddr, IpPolicy)], defined: &[IpAddr]) -> Plan {
         Plan {
             subnets: vec![office()],
             ranges: ranges.to_vec(),
@@ -1988,7 +1540,7 @@ mod tests {
 
     /// Every address of the office subnet the plan would offer, with no sighting and nothing
     /// documented.
-    fn offered(plan: &Plan) -> Vec<Ipv4Addr> {
+    fn offered(plan: &Plan) -> Vec<IpAddr> {
         office()
             .addresses()
             .filter(|addr| plan.offerable(*addr, &BTreeMap::new(), &BTreeSet::new()))
@@ -2557,6 +2109,8 @@ mod tests {
             found,
             [
                 "ipam_audit.rs",
+                // Story 14.6's split: the three GET checks, on 14.5's registered measurement.
+                "ipam_checks.rs",
                 "ipam_page.rs",
                 // Story 14.5's code review split the rail out, on `CLAUDE.md`'s *split, not grown*
                 // rule: `ipam_page.rs` had reached 1992 code lines of the 2000 the gate allows.
@@ -3098,7 +2652,9 @@ mod tests {
     /// One sighting with a hardware address ending in `mac_octet`.
     fn sighted(addr: &str, mac_octet: u8, last: &str) -> crate::sighting_repo::Sighting {
         crate::sighting_repo::Sighting {
-            addr: v4(addr),
+            // ⚠️ A SIGHTING is observed, so it is IPv4 by type (story 14.6's decision §0.3) — the
+            // test helper narrows here rather than at every call site.
+            addr: addr.parse().expect("an observed v4 address"),
             l2_domain: opencmdb_core::observation::L2DomainId::from_uuid(uuid::Uuid::nil()),
             mac: Some(opencmdb_core::observation::MacAddr([
                 2, 0, 0, 0, 0, mac_octet,
@@ -3246,6 +2802,173 @@ mod tests {
             tab_labels(&ordinary),
             ordinary.iter().map(tab_label).collect::<Vec<_>>(),
             "a plan whose tabs already differ must read exactly as it did before"
+        );
+    }
+
+    /// **AC3 — the FAMILY routes the page, measured THROUGH `plan_data` and not through the
+    /// renderer.**
+    ///
+    /// 🔴 **ITS FIRST VERSION WAS A GUARD PLACED WHERE THE DEFECT CANNOT OCCUR, and the mutation
+    /// pass said so.** `an_ipv6_subnets_page_offers_ipv6_examples` calls `render_unobservable`
+    /// DIRECTLY, so replacing `if subnet.is_v6()` with `if false` in `plan_data` left the whole
+    /// suite **GREEN** — the branch that decides which renderer runs was carried by nothing, in the
+    /// story whose central criterion it is. *A test that calls the renderer measures the renderer.*
+    ///
+    /// 🔑 So this one goes through the store and the handler's own read, and asserts the two things
+    /// the family decides: **no grid** whatever the size — the `/120` below is 256 addresses, UNDER
+    /// `MAX_DRAWN_ADDRESSES`, which is what refutes the ceiling as the mechanism — and the sentence
+    /// that says nothing was checked.
+    #[tokio::test]
+    async fn the_family_and_not_the_size_decides_what_an_ipv6_subnet_renders() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for id in ["t-fam4", "t-fam6", "t-fam6s", "t-fam6t", "t-fam6o"] {
+            crate::ipam_repo::tests::forget_subnet(&pool, id).await;
+        }
+        let mut conn = pool.acquire().await.expect("a connection");
+        let v4 = crate::ipam_repo::Subnet::new("100.70.0.0".parse().expect("a literal"), 24)
+            .expect("a /24");
+        // 🔑 A `/120` — **256 addresses, under the ceiling**. If the size decided, this would draw a
+        // grid exactly as the /24 does, which is what the gap-hunt measured before the family check.
+        let small6 =
+            crate::ipam_repo::Subnet::new("2001:db8:1463:1::".parse().expect("a literal"), 120)
+                .expect("a /120");
+        let big6 =
+            crate::ipam_repo::Subnet::new("2001:db8:1463:2::".parse().expect("a literal"), 64)
+                .expect("a /64");
+        // 🔑 **AC3 NAMES THREE PREFIX LENGTHS AND THE FIRST ROUND SHIPPED TWO**, which the
+        // acceptance layer measured rather than read past. The `/124` and the `/128` are the two
+        // the criterion asks for and the shape where the ceiling is least plausible as the
+        // mechanism: a `/128` is ONE address, so a size test would draw it without hesitating.
+        let tiny6 =
+            crate::ipam_repo::Subnet::new("2001:db8:1463:3::".parse().expect("a literal"), 124)
+                .expect("a /124");
+        let one6 =
+            crate::ipam_repo::Subnet::new("2001:db8:1463:4::".parse().expect("a literal"), 128)
+                .expect("a /128");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-fam6t", tiny6, "tiny v6", 0)
+            .await
+            .expect("the /124");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-fam6o", one6, "one v6", 0)
+            .await
+            .expect("the /128");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-fam4", v4, "v4", 0)
+            .await
+            .expect("the IPv4 subnet");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-fam6s", small6, "small v6", 0)
+            .await
+            .expect("the small IPv6 subnet");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-fam6", big6, "big v6", 0)
+            .await
+            .expect("the large IPv6 subnet");
+        drop(conn);
+
+        // 🔴 **THE THREE ORACLES BELOW NAME A CLASS, AND THE SECOND REVIEW ROUND IS WHY.** They
+        // read `rust_i18n::t!` before: the presence check happened to hold, and the ABSENCE check
+        // — `!page.contains(t!("ipam.findings.none"))` — was **true of every page that exists**,
+        // because Askama escapes the apostrophe in *this subnet's plan* and the needle carries `\'`
+        // where the page carries `&#39;`. The edge layer planted the exact defect the criterion
+        // forbids (the all-clear rendered BESIDE the unobservable sentence) and measured 1 043
+        // tests and ten gates GREEN. *A negative assertion over a translated sentence cannot fail;
+        // the positive twin beside it would have reddened the day it was written, which is what
+        // makes the negative form the dangerous one.* Fourth occurrence of that escape in this
+        // project, and the first where the story's own record names the class and the remedy was
+        // applied to the browser gate and not to the Rust test written for the same criterion.
+        let v4page = plan_data(&pool, Some("t-fam4")).await.expect("the v4 plan");
+        assert!(
+            v4page.contains("ipam-cell") && !v4page.contains("ipam-unobservable"),
+            "an IPv4 subnet keeps its grid and says nothing about being unobservable"
+        );
+
+        for (id, what) in [
+            ("t-fam6s", "a /120, UNDER the ceiling"),
+            ("t-fam6", "a /64"),
+            ("t-fam6t", "a /124"),
+            ("t-fam6o", "a /128, ONE address"),
+        ] {
+            let page = plan_data(&pool, Some(id)).await.expect("the v6 plan");
+            assert!(
+                !page.contains("ipam-cell"),
+                "{what} drew a GRID — the size decided where the family should have"
+            );
+            assert!(
+                page.contains("ipam-unobservable"),
+                "{what} did not say that nothing was checked"
+            );
+            assert!(
+                !page.contains("ipam-all-clear"),
+                "{what} rendered the ALL-CLEAR — the product asserting concordance about a plan \
+                 its only connector will never look at"
+            );
+        }
+        for id in ["t-fam4", "t-fam6", "t-fam6s", "t-fam6t", "t-fam6o"] {
+            crate::ipam_repo::tests::forget_subnet(&pool, id).await;
+        }
+    }
+
+    /// **AC11 — an IPv6 subnet's page speaks IPv6, and this is the ONLY thing that can say so.**
+    ///
+    /// 🔴 **A resolvable key rendering a correct string in the WRONG CONTEXT is invisible to every
+    /// guard this project has.** Story 6b.6 met it as `role_key`: a real key from the wrong
+    /// namespace left all tests, all gates and clippy GREEN while the page rendered *"Exemple"*
+    /// where *"Stockage"* belonged. Story 14.6's gap-hunt met it again on a booted binary — every
+    /// form on an IPv6 subnet's page told the operator *"First address — for example 192.0.2.10"*.
+    ///
+    /// ⚠️ **Neither browser gate can see it either**, because what is served is a correct
+    /// translation of a real key. *The carrier is this test and nothing else*, which is why it
+    /// asserts the SERVED string rather than the key's name.
+    #[test]
+    fn an_ipv6_subnets_page_offers_ipv6_examples() {
+        let v6 = ipam_repo::Subnet::new("2001:db8:1462::".parse().expect("a literal"), 64)
+            .expect("an IPv6 subnet");
+        let declared = [ipam_repo::PlannedSubnet {
+            id: "s6".to_string(),
+            subnet: v6,
+            label: "v6".to_string(),
+            vlan: 0,
+        }];
+        let whole = offer_of(&[], &[]);
+        let quiet = quiet();
+        let audit = Audit {
+            plan: &whole,
+            network: &quiet,
+            subnet: Some(v6),
+        };
+        let body = render_unobservable(&declared, "s6", &[], &audit, no_rail());
+        for v6_example in ["2001:db8::10", "2001:db8::20", "2001:db8::9"] {
+            assert!(
+                body.contains(v6_example),
+                "an IPv6 subnet's form must show an IPv6 example, not a v4 one: `{v6_example}` is \
+                 absent"
+            );
+        }
+        for v4_example in ["192.0.2.10", "192.0.2.20", "192.0.2.9"] {
+            assert!(
+                !body.contains(v4_example),
+                "`{v4_example}` is on an IPv6 subnet's page — a correct string in the wrong context, \
+                 which no gate and no browser check can see"
+            );
+        }
+        // ⚠️ THE CONTROL: an IPv4 page is untouched, so the swap is not a global rename.
+        let v4net =
+            ipam_repo::Subnet::new("192.0.2.0".parse().expect("a literal"), 24).expect("a /24");
+        let v4declared = [planned("s4", v4net, "v4", 0)];
+        let v4audit = Audit {
+            plan: &whole,
+            network: &quiet,
+            subnet: Some(v4net),
+        };
+        let v4body = render_too_large(&v4declared, "s4", &[], &v4audit, no_rail());
+        assert!(
+            v4body.contains("192.0.2.10") && !v4body.contains("2001:db8::10"),
+            "an IPv4 page keeps its own examples"
         );
     }
 
@@ -3468,7 +3191,7 @@ mod tests {
         let network = network_of(seen, &["192.0.2.140"]);
         let still = rust_i18n::t!("ipam.check.still_writes").to_string();
 
-        let fresh = render_address_check(v4("192.0.2.20"), &plan, &network);
+        let fresh = crate::ipam_checks::render_address_check(v4("192.0.2.20"), &plan, &network);
         assert!(
             fresh.contains(&rust_i18n::t!("ipam.check.seen", address = "192.0.2.20").to_string()),
             "a seen address is named as seen: {fresh}"
@@ -3483,7 +3206,7 @@ mod tests {
         );
         assert!(fresh.contains(&still), "the form warns and STILL writes");
 
-        let known = render_address_check(v4("192.0.2.140"), &plan, &network);
+        let known = crate::ipam_checks::render_address_check(v4("192.0.2.140"), &plan, &network);
         assert!(
             known.contains(
                 &rust_i18n::t!("ipam.check.documented", address = "192.0.2.140").to_string()
@@ -3495,19 +3218,19 @@ mod tests {
             "and links to no triage question, because triage asks none"
         );
 
-        let defined = render_address_check(v4("192.0.2.9"), &plan, &quiet());
+        let defined = crate::ipam_checks::render_address_check(v4("192.0.2.9"), &plan, &quiet());
         assert!(
             defined
                 .contains(&rust_i18n::t!("ipam.check.defined", address = "192.0.2.9").to_string())
         );
-        let pooled = render_address_check(v4("192.0.2.85"), &plan, &quiet());
+        let pooled = crate::ipam_checks::render_address_check(v4("192.0.2.85"), &plan, &quiet());
         assert!(
             pooled
                 .contains(&rust_i18n::t!("ipam.check.in_pool", address = "192.0.2.85").to_string()),
             "decision 13's warning, before the write too"
         );
         assert_eq!(
-            render_address_check(v4("192.0.2.30"), &plan, &quiet()),
+            crate::ipam_checks::render_address_check(v4("192.0.2.30"), &plan, &quiet()),
             "",
             "nothing worth knowing is an empty region, which announces nothing"
         );
@@ -3530,7 +3253,8 @@ mod tests {
             },
             no_rail(),
         );
-        assert!(body.contains(&format!("hx-get=\"{ADDRESS_CHECK_PATH}\"")));
+        let address_check_path = crate::ipam_checks::ADDRESS_CHECK_PATH;
+        assert!(body.contains(&format!("hx-get=\"{address_check_path}\"")));
         assert!(body.contains("aria-describedby=\"ipam-addr-warning\""));
         assert!(body.contains("id=\"ipam-addr-warning\" class=\"ipam-check-region\" role=\"status\" aria-live=\"polite\""));
     }
@@ -3976,7 +3700,8 @@ mod tests {
             ]),
             &[],
         );
-        let two = render_range_check(v4("192.0.2.1"), v4("192.0.2.40"), &network);
+        let two =
+            crate::ipam_checks::render_range_check(v4("192.0.2.1"), v4("192.0.2.40"), &network);
         assert!(
             two.contains(&rust_i18n::t!("ipam.check.range_seen_many", count = 2).to_string()),
             "two of the three fall inside: {two}"
@@ -3985,14 +3710,15 @@ mod tests {
             two.contains(&rust_i18n::t!("ipam.check.still_writes").to_string()),
             "and it warns without refusing — the write is untouched"
         );
-        let one = render_range_check(v4("192.0.2.85"), v4("192.0.2.95"), &network);
+        let one =
+            crate::ipam_checks::render_range_check(v4("192.0.2.85"), v4("192.0.2.95"), &network);
         assert!(
             one.contains(&rust_i18n::t!("ipam.check.range_seen_one", count = 1).to_string()),
             "one address is ONE sentence and never `1 address(es)` — story 6b.10 closed that as a \
              class and a new parenthetical plural here would reopen it: {one}"
         );
         assert_eq!(
-            render_range_check(v4("192.0.2.200"), v4("192.0.2.210"), &network),
+            crate::ipam_checks::render_range_check(v4("192.0.2.200"), v4("192.0.2.210"), &network),
             "",
             "a range over nothing the network shows says nothing at all"
         );
@@ -4004,7 +3730,7 @@ mod tests {
     /// operator was no longer writing. A render failure put a whole error page in the live region.
     #[test]
     fn a_check_that_cannot_read_the_store_says_so_rather_than_keeping_the_last_answer() {
-        let body = render_check_unavailable();
+        let body = crate::ipam_checks::render_check_unavailable();
         assert!(
             body.contains(&rust_i18n::t!("ipam.check.unavailable").to_string()),
             "the keyed sentence: {body}"
@@ -4041,7 +3767,7 @@ mod tests {
         let response = router(pool, None)
             .oneshot(
                 axum::http::Request::builder()
-                    .uri(format!("{DELETE_CHECK_PATH}?{query}"))
+                    .uri(format!("{}?{query}", crate::ipam_checks::DELETE_CHECK_PATH))
                     .body(axum::body::Body::empty())
                     .expect("a well-formed request"),
             )
@@ -4071,7 +3797,7 @@ mod tests {
     /// sentence** — which is what the four queries below are for, and what the shape did not close.
     ///
     /// ⚠️ **`192.000.002.015` is in the list because the STORE holds addresses in that spelling**
-    /// (story 14.1's zero-padded canonical form), and `Ipv4Addr::from_str` refuses leading zeros.
+    /// (story 14.1's zero-padded canonical form), and `IpAddr::from_str` refuses leading zeros.
     /// The rail renders dotted today, so this was latent rather than live; any future producer
     /// passing the stored form would have degraded every range and address control into the
     /// subnet's warning, in silence.
@@ -4364,7 +4090,7 @@ mod tests {
         // same rules the write path asks, and `delete_range` asks them over `subnet_id = ?`.
         let only_static_ranges = [(v4("192.0.2.10"), v4("192.0.2.20"), IpPolicy::Static)];
         let only_static = offer_of(&only_static_ranges, &[]);
-        let warning = render_delete_check(
+        let warning = crate::ipam_checks::render_delete_check(
             office(),
             Some((v4("192.0.2.10"), v4("192.0.2.20"))),
             None,
@@ -4401,7 +4127,7 @@ mod tests {
             (v4("192.0.2.10"), v4("192.0.2.20"), IpPolicy::Static),
             (v4("192.0.2.30"), v4("192.0.2.40"), IpPolicy::Static),
         ];
-        let survives = render_delete_check(
+        let survives = crate::ipam_checks::render_delete_check(
             office(),
             Some((v4("192.0.2.10"), v4("192.0.2.20"))),
             None,
@@ -4416,7 +4142,7 @@ mod tests {
         );
 
         // The subnet's own removal, which the database will refuse while it holds anything.
-        let holds = render_delete_check(
+        let holds = crate::ipam_checks::render_delete_check(
             office(),
             None,
             None,
@@ -4440,12 +4166,21 @@ mod tests {
             "the subnet's warning announced a refusal and then denied there was one: {holds}"
         );
         assert!(
-            render_delete_check(office(), None, None, &two_static, &network, &[], &[]).is_empty(),
+            crate::ipam_checks::render_delete_check(
+                office(),
+                None,
+                None,
+                &two_static,
+                &network,
+                &[],
+                &[]
+            )
+            .is_empty(),
             "and an empty subnet's removal changes nothing worth a sentence"
         );
 
         // One address: warned when the network still shows it, silent when it does not.
-        let stranded = render_delete_check(
+        let stranded = crate::ipam_checks::render_delete_check(
             office(),
             None,
             Some(v4("192.0.2.15")),
@@ -4466,7 +4201,7 @@ mod tests {
              gesture, which is the defect this branch exists for: {stranded}"
         );
         assert!(
-            render_delete_check(
+            crate::ipam_checks::render_delete_check(
                 office(),
                 None,
                 Some(v4("192.0.2.16")),
@@ -4485,7 +4220,7 @@ mod tests {
         // this story's own arbitration — and the warning consulted the network and the offer while
         // never asking that question, then promised the removal was still possible over a press the
         // adapter answers 409. Measured live by the review before the repair.
-        let abandons = render_delete_check(
+        let abandons = crate::ipam_checks::render_delete_check(
             office(),
             Some((v4("192.0.2.10"), v4("192.0.2.20"))),
             None,
@@ -4507,7 +4242,7 @@ mod tests {
 
         // 🔑 THE CONTROL: the same range holding no defined address IS removable, so the closing
         // sentence comes back. Without this half, a check that simply never said it would pass.
-        let removable = render_delete_check(
+        let removable = crate::ipam_checks::render_delete_check(
             office(),
             Some((v4("192.0.2.10"), v4("192.0.2.20"))),
             None,
@@ -4534,7 +4269,7 @@ mod tests {
         // found it, and caught only because the driver contradicted a prediction. `.14–.16` holds
         // the seen `.15`, so without the check it emits the *addresses seen inside this range* line.
         assert!(
-            render_delete_check(
+            crate::ipam_checks::render_delete_check(
                 office(),
                 Some((v4("192.0.2.14"), v4("192.0.2.16"))),
                 None,
@@ -4606,9 +4341,15 @@ mod tests {
         // gesture's word on a finding's control; 76 → 77 at its code review: `ipam.released_note`, the
         // confirmation that rides in the URL; **77 → 80 at story 14.5**, read off the list this
         // assertion prints: `ipam.form.vlan`, `ipam.vlan_tab` and `ipam.vlan_note`.
+        // 🔴 **80 → 84 at story 14.6, and this line was MISSING until its second review round** —
+        // both the acceptance and the edge layer found the trail recording every earlier bump with
+        // its keys and silent about the one that had just moved it. Read off the printed list:
+        // `ipam.audit.unobservable`, `ipam.unobservable.heading`, `ipam.unobservable.no_offer` and
+        // `ipam.form.addr_v6`. ⚠️ `ipam.form.first_v6` and `…last_v6` are NOT a fifth and sixth:
+        // they were already named by `family_examples` before this count was taken.
         assert_eq!(
             keys.len(),
-            80,
+            84,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );

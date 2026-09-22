@@ -48,7 +48,7 @@
 //! `auth_deny` like every other non-public path. ⚠️ A fresh install therefore gains a live write
 //! surface with no opt-in, which the release notes owe a sentence.
 
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -679,8 +679,8 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn define_range(
         &self,
         subnet_id: String,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
+        first: IpAddr,
+        last: IpAddr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
@@ -694,7 +694,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn define_address(
         &self,
         subnet_id: String,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
@@ -733,8 +733,8 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn edit_range(
         &self,
         id: String,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
+        first: IpAddr,
+        last: IpAddr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
@@ -748,7 +748,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn edit_address(
         &self,
         id: String,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
@@ -775,7 +775,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
     /// decision 4, 2026-09-19), or a backend failure.
     fn release_address(
         &self,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         until: opencmdb_core::observation::Timestamp,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 }
@@ -825,8 +825,8 @@ impl IpamWritePort for StoreIpamWrite {
     fn define_range(
         &self,
         subnet_id: String,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
+        first: IpAddr,
+        last: IpAddr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -851,7 +851,7 @@ impl IpamWritePort for StoreIpamWrite {
     fn define_address(
         &self,
         subnet_id: String,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
@@ -920,8 +920,8 @@ impl IpamWritePort for StoreIpamWrite {
     fn edit_range(
         &self,
         id: String,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
+        first: IpAddr,
+        last: IpAddr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -937,7 +937,7 @@ impl IpamWritePort for StoreIpamWrite {
     fn edit_address(
         &self,
         id: String,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
@@ -970,7 +970,7 @@ impl IpamWritePort for StoreIpamWrite {
 
     fn release_address(
         &self,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         until: opencmdb_core::observation::Timestamp,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
@@ -1111,8 +1111,8 @@ async fn define_range(
         Err(refusal) => return refusal.into_response(),
     };
     let (first, last) = match (
-        request.first.trim().parse::<Ipv4Addr>(),
-        request.last.trim().parse::<Ipv4Addr>(),
+        request.first.trim().parse::<IpAddr>(),
+        request.last.trim().parse::<IpAddr>(),
     ) {
         (Ok(first), Ok(last)) => (first, last),
         _ => return route.malformed().into_response(),
@@ -1150,7 +1150,7 @@ async fn define_address(
         Ok(id) => id,
         Err(refusal) => return refusal.into_response(),
     };
-    let Ok(addr) = request.addr.trim().parse::<Ipv4Addr>() else {
+    let Ok(addr) = request.addr.trim().parse::<IpAddr>() else {
         return route.malformed().into_response();
     };
     let label = match checked_label(&request.label) {
@@ -1294,9 +1294,24 @@ async fn release_address(
     let Ok(Form(request)) = form else {
         return route.malformed().into_response();
     };
-    let Ok(addr) = request.addr.trim().parse::<Ipv4Addr>() else {
+    let Ok(addr) = request.addr.trim().parse::<IpAddr>() else {
         return route.malformed().into_response();
     };
+    // 🔴 **AN IPv6 ADDRESS IS REFUSED BY NAME, BEFORE THE STORE, and story 14.6's validation
+    // measured what happens without this.** The plan may hold IPv6 since `0011`, but
+    // `address_release` stays IPv4-only BY DECISION — it is the observed side, and there is nothing
+    // observed to forget on an IPv6 address. Without this arm the write reached the store, `0009`'s
+    // canonical CHECK refused it, and the operator got **500** with *"The write did not go through,
+    // or its answer was lost: reload the plan…"* — on a route reachable by hand-editing a URL, for a
+    // gesture that is meaningless for IPv6 by construction.
+    //
+    // 🔑 A refusal the operator can READ, with its own status, on `ReleaseOfADefinedAddress`'s shape:
+    // nothing is wrong with the REQUEST's form, it is the STATE OF THE WORLD — the product never saw
+    // this address and cannot forget what it never saw.
+    if addr.is_ipv6() {
+        return Refusal::new(StatusCode::CONFLICT, "ipam.refusal.release_of_unobservable")
+            .into_response();
+    }
     let Ok(until) = chrono::DateTime::parse_from_rfc3339(request.seen_until.trim()) else {
         return route.malformed().into_response();
     };
@@ -1333,8 +1348,8 @@ async fn edit_range(
         Err(refusal) => return refusal.into_response(),
     };
     let (first, last) = match (
-        request.first.trim().parse::<Ipv4Addr>(),
-        request.last.trim().parse::<Ipv4Addr>(),
+        request.first.trim().parse::<IpAddr>(),
+        request.last.trim().parse::<IpAddr>(),
     ) {
         (Ok(first), Ok(last)) => (first, last),
         _ => return route.malformed().into_response(),
@@ -1368,7 +1383,7 @@ async fn edit_address(
         Ok(id) => id,
         Err(refusal) => return refusal.into_response(),
     };
-    let Ok(addr) = request.addr.trim().parse::<Ipv4Addr>() else {
+    let Ok(addr) = request.addr.trim().parse::<IpAddr>() else {
         return route.malformed().into_response();
     };
     let label = match checked_label(&request.label) {
@@ -1604,12 +1619,38 @@ const fn breaks_the_line_or_its_direction(glyph: char) -> bool {
 fn parse_cidr(raw: &str) -> Result<Subnet, Refusal> {
     let malformed = || WriteRoute::Subnet.malformed();
     let (base, prefix) = raw.trim().split_once('/').ok_or_else(malformed)?;
-    let base: Ipv4Addr = base.parse().map_err(|_| malformed())?;
+    let base: IpAddr = base.parse().map_err(|_| malformed())?;
     // ⚠️ A prefix that does not fit a `u8` — `/999` — is MALFORMED, while one that fits and cannot
     // belong to IPv4 — `/64` — gets `PrefixLengthNotInFamily`, which names the real rule. Two
     // sentences for what looks like one mistake, and the distinction is the honest one: the product
     // can only name a rule it can evaluate.
     let prefix: u8 = prefix.parse().map_err(|_| malformed())?;
+    // 🔴 **AN IPv4-MAPPED BASE IS REFUSED, AND THE EDGE LAYER MEASURED WHY.** `::ffff:192.0.2.0/120`
+    // parsed, stored and served a page reading *"the product cannot observe IPv6"* over
+    // `192.0.2.0–192.0.2.255`, **which the shipped connector sweeps every five minutes** — Rust maps
+    // that spelling to `IpAddr::V6`, so `is_v6()` is true and story 14.6's whole family branch fires
+    // over an IPv4 space. *The product denying it can see what it is looking at is worse than
+    // refusing to hold the record at all.*
+    //
+    // 🔑 **Decision taken by me on delegation and recorded as mine so it can be reversed at the
+    // right cost** (2026-09-22). Refused: NORMALISING to IPv4, which reads well on a `/120` and has
+    // no meaning at all on a mapped `/64`, and would silently turn one CIDR the operator typed into
+    // another; and stating it as a limit, which leaves a false sentence on a served page. The
+    // operator writes the space as IPv4, which is what it is.
+    //
+    // ⚠️ **Scoped to the SUBNET, and the residual is written rather than implied**: a range or an
+    // address is parsed inside a subnet the plan already holds, so a mapped bound can only be
+    // reached under a genuine IPv6 subnet wide enough to contain the mapped block — and the page it
+    // renders is then about that genuine IPv6 subnet, which the sentence is true of.
+    if matches!(base, IpAddr::V6(v6) if v6.to_ipv4_mapped().is_some()) {
+        // Built here rather than as a `WriteRoute` method: this parser has ONE caller by decision,
+        // and a per-route constructor would be an enumeration over ten routes nine of which cannot
+        // reach it — which is the shape this project keeps finding green.
+        return Err(Refusal::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.ipv4_mapped_base",
+        ));
+    }
     // The subnet route is the only caller of this parser, and it is the gesture whose sentence this
     // refusal will carry.
     Subnet::new(base, prefix).map_err(|error| ipam_refusal(&error, WriteRoute::Subnet))
@@ -1895,8 +1936,8 @@ mod tests {
         fn define_range(
             &self,
             subnet_id: String,
-            first: Ipv4Addr,
-            last: Ipv4Addr,
+            first: IpAddr,
+            last: IpAddr,
             _policy: opencmdb_core::ipam::IpPolicy,
             label: String,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -1911,7 +1952,7 @@ mod tests {
         fn define_address(
             &self,
             subnet_id: String,
-            addr: Ipv4Addr,
+            addr: IpAddr,
             label: String,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
@@ -1957,8 +1998,8 @@ mod tests {
         fn edit_range(
             &self,
             id: String,
-            first: Ipv4Addr,
-            last: Ipv4Addr,
+            first: IpAddr,
+            last: IpAddr,
             _policy: opencmdb_core::ipam::IpPolicy,
             label: String,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -1973,7 +2014,7 @@ mod tests {
         fn edit_address(
             &self,
             id: String,
-            addr: Ipv4Addr,
+            addr: IpAddr,
             label: String,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
@@ -1986,7 +2027,7 @@ mod tests {
 
         fn release_address(
             &self,
-            addr: Ipv4Addr,
+            addr: IpAddr,
             until: opencmdb_core::observation::Timestamp,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
@@ -2150,12 +2191,153 @@ mod tests {
         );
     }
 
-    /// **AC3 — the correction is held to the SAME VLAN rules as the definition.**
+    /// **AC7 — what EVERY write route answers to an IPv6 argument, enumerated rather than assumed.**
     ///
-    /// ⚠️ Driven through the ROUTE and not through `parse_vlan`, for this file's standing reason: a
-    /// handler that parses the field and forgets to refuse on it leaves a unit test of the parser
-    /// perfectly green. The port is asserted UNREACHED, which is what says the refusal happened
-    /// before the write rather than after it.
+    /// 🔴 **The release answered 500 before story 14.6, and the gap-hunt measured it on a booted
+    /// binary**: the plan may hold IPv6 since `0011`, `address_release` stays IPv4-only by decision,
+    /// so the write reached the store and `0009`'s canonical CHECK refused it — *"The write did not
+    /// go through, or its answer was lost: reload the plan…"*, on a route reachable by hand-editing
+    /// a URL, for a gesture meaningless for IPv6 by construction. It is a keyed 409 now: nothing is
+    /// wrong with the REQUEST, it is the state of the world that refuses it.
+    ///
+    /// 🔑 **The other nine are enumerated with what each answers, because *the plan speaks IPv6* is
+    /// a sentence about ten routes and this is the only place that says which.** The three
+    /// definitions ACCEPT IPv6 — that is the story — the three deletes address a record by id and
+    /// carry no address at all, and **three of the corrections DO parse one**: `EditRange` reads
+    /// `first` and `last`, `EditAddress` reads `addr`, and `EditSubnet` goes through `parse_cidr`.
+    ///
+    /// 🔴 **This paragraph read *"the five corrections … never parse an address of their own except
+    /// `EditAddress`"* until the second review round, and the loop below asserted the same thing
+    /// about six routes while measuring only their membership in `WriteRoute::ALL`.** The one route
+    /// the exception named was the one the criterion's value depends on being enumerated honestly,
+    /// and the sentence undercounted the other two on top of that. *An enumeration that carries its
+    /// own exception is an enumeration that has stopped being read.*
+    #[tokio::test]
+    async fn every_write_route_says_what_it_does_with_an_ipv6_argument() {
+        let subnet = "01900000-0000-7000-8000-0000000000aa";
+        let cases: [(WriteRoute, &str, StatusCode, &str); 4] = [
+            // ✅ The three definitions take IPv6: this is FR25.
+            (
+                WriteRoute::Subnet,
+                "cidr=2001:db8:1461::/64&label=v6&vlan=",
+                StatusCode::CREATED,
+                "",
+            ),
+            (
+                WriteRoute::Range,
+                &format!(
+                    "subnet_id={subnet}&first=2001:db8:1461::10&last=2001:db8:1461::2f&policy=static&label=v6"
+                ),
+                StatusCode::CREATED,
+                "",
+            ),
+            (
+                WriteRoute::Address,
+                &format!("subnet_id={subnet}&addr=2001:db8:1461::100&label=v6"),
+                StatusCode::CREATED,
+                "",
+            ),
+            // 🔴 The release does NOT, and says why rather than failing at the store.
+            (
+                WriteRoute::Release,
+                "addr=2001:db8:1461::100&seen_until=2026-09-01T10:00:00.000000Z",
+                StatusCode::CONFLICT,
+                "ipam.refusal.release_of_unobservable",
+            ),
+        ];
+        for (route, body, expected, key_name) in cases {
+            let port = FakePort::answering(Ok("01900000-0000-7000-8000-000000000009".to_string()));
+            let (status, answer) = drive(port.clone(), form_post_to(route, body)).await;
+            assert_eq!(
+                status,
+                expected,
+                "`{}` answered the wrong status to an IPv6 argument",
+                route.path()
+            );
+            if key_name.is_empty() {
+                assert!(
+                    !port.asked.lock().expect("the log").is_empty(),
+                    "`{}` must REACH the store with an IPv6 argument — that is FR25",
+                    route.path()
+                );
+            } else {
+                assert_eq!(answer, key(key_name), "at `{}`", route.path());
+                assert!(
+                    port.asked.lock().expect("the log").is_empty(),
+                    "`{}` must refuse BEFORE the store, never let `0009`'s CHECK answer 500",
+                    route.path()
+                );
+            }
+        }
+
+        // 🔴 **THREE MORE ROUTES DO PARSE AN ADDRESS, and this loop asserted the opposite while
+        // measuring nothing.** Its first version listed six routes and checked they were members of
+        // `WriteRoute::ALL` — a tautology under a test named for IPv6 arguments — under a comment
+        // reading *"the six that take no address of their own"*. The blind review layer refuted it
+        // from the diff: `edit_range` parses `first` and `last`, `edit_address` parses `addr`, and
+        // `EditSubnet` goes through `parse_cidr`, all widened to `IpAddr` by this very story. ⚠️ The
+        // test's own doc half-said so (*"except `EditAddress`"*) and was contradicted by its
+        // assertion two screens below, inside one test.
+        //
+        // 🔑 What they answer is a CONSEQUENCE of §0.3 rather than a new decision: the record's own
+        // id is checked first, so an unknown id is a 404 before any address is read — which is why
+        // these press a well-formed id and read what the ADDRESS did.
+        let record = "01900000-0000-7000-8000-0000000000bb";
+        let carrying: [(WriteRoute, String); 3] = [
+            (
+                WriteRoute::EditRange,
+                format!(
+                    "id={record}&first=2001:db8:1461::10&last=2001:db8:1461::2f&policy=static&label=v6"
+                ),
+            ),
+            (
+                WriteRoute::EditAddress,
+                format!("id={record}&addr=2001:db8:1461::100&label=v6"),
+            ),
+            (
+                WriteRoute::EditSubnet,
+                format!("id={record}&label=v6&vlan="),
+            ),
+        ];
+        for (route, body) in carrying {
+            let port = FakePort::answering(Ok("01900000-0000-7000-8000-00000000000a".to_string()));
+            let (status, _) = drive(port.clone(), form_post_to(route, &body)).await;
+            assert_eq!(
+                status,
+                StatusCode::OK,
+                "`{}` parses an address and must ACCEPT an IPv6 one — the plan holds IPv6 since \
+                 `0011`, and a correction the definition allows is a correction the edit must allow",
+                route.path()
+            );
+            assert!(
+                !port.asked.lock().expect("the log").is_empty(),
+                "`{}` refused an IPv6 argument before the store",
+                route.path()
+            );
+        }
+
+        // ⚠️ The three that carry NO address at all — the deletes address a record by its id.
+        for route in [
+            WriteRoute::DeleteSubnet,
+            WriteRoute::DeleteRange,
+            WriteRoute::DeleteAddress,
+        ] {
+            assert!(
+                !WriteRoute::ALL
+                    .iter()
+                    .any(|r| *r == route && r.carries_label()),
+                "`{}` gained a field; re-read what it does with an IPv6 one",
+                route.path()
+            );
+        }
+        assert_eq!(
+            WriteRoute::ALL.len(),
+            10,
+            "this enumeration covers TEN routes: four that carry an address and six that do not. A \
+             route added tomorrow must be added here, and this is what says so."
+        );
+    }
+
     /// 🔴 **BOTH ROUTES THAT ASK FOR A VLAN, and it was ONE until the mutation pass said so.**
     /// Mutation M2 (`1..=4094` → `1..=4095`) was predicted to red two tests and reddened one:
     /// `ipam.refusal.not_a_vlan` was asserted at exactly one site in the whole file, and it was the
@@ -2163,6 +2345,12 @@ mod tests {
     /// test for its VLAN refusal at all. *A divergence between a prediction and a measurement is
     /// the finding*, and here the measurement was right and the prediction described a test that
     /// did not exist.
+    /// **AC3 — the correction is held to the SAME VLAN rules as the definition.**
+    ///
+    /// ⚠️ Driven through the ROUTE and not through `parse_vlan`, for this file's standing reason: a
+    /// handler that parses the field and forgets to refuse on it leaves a unit test of the parser
+    /// perfectly green. The port is asserted UNREACHED, which is what says the refusal happened
+    /// before the write rather than after it.
     #[tokio::test]
     async fn every_route_that_asks_for_a_vlan_refuses_one_outside_the_domain() {
         // ⚠️ `+1` is NOT here and was measured rather than reasoned about: Rust's `u16::from_str`
@@ -2368,10 +2556,63 @@ mod tests {
         // MALFORMED, `/64` fits and cannot belong to IPv4. The product names only a rule it can
         // evaluate. ⚠️ And this one is a REFUSAL rather than a lint because `Subnet::last` would
         // compute `32 - 64` and panic on subtract-with-overflow (story 14.1's measurement).
-        let port = FakePort::answering(Ok("unreached".to_string()));
-        let (status, body) = drive(port, form_post("cidr=192.0.2.0/64&label=Office")).await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(body, key("ipam.refusal.prefix_not_in_family"));
+        //
+        // 🔴 **AND IT IS DRIVEN FROM BOTH FAMILIES SINCE STORY 14.6's SECOND ROUND.** It drove the
+        // IPv4 side alone, which is how the shipped sentence — *"cannot belong to an IPv4 subnet:
+        // 32 at most"* — survived the commit that made `/129` reachable: the one case the copy was
+        // wrong about was the one case no test asked for. The body is the same key on both sides,
+        // so this test pins the ROUTING and not the wording; what pins the wording is that the key
+        // no longer names a family the error cannot know.
+        for spelling in ["192.0.2.0/64", "2001:db8:9::/129"] {
+            let port = FakePort::answering(Ok("unreached".to_string()));
+            let (status, body) =
+                drive(port, form_post(&format!("cidr={spelling}&label=Office"))).await;
+            assert_eq!(
+                status,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "`{spelling}` names a prefix length its family cannot carry"
+            );
+            assert_eq!(
+                body,
+                key("ipam.refusal.prefix_not_in_family"),
+                "for `{spelling}`"
+            );
+        }
+    }
+
+    /// 🔴 **An IPv4 space written in IPv6 form is REFUSED, and the page it used to serve is why.**
+    /// The edge layer of story 14.6's second review round defined `::ffff:192.0.2.0/120`, got a
+    /// `201`, and read back a page saying *"the product cannot observe IPv6"* over an address range
+    /// the shipped connector sweeps every five minutes. Rust parses that spelling as `IpAddr::V6`,
+    /// so the family branch fires and the product denies seeing what it is looking at.
+    ///
+    /// ⚠️ The control is the third row: the genuine IPv6 subnet must still be ACCEPTED, or the
+    /// refusal would be indistinguishable from FR25 being reverted.
+    #[tokio::test]
+    async fn an_ipv4_space_written_in_ipv6_form_is_refused_and_ipv6_proper_is_not() {
+        for spelling in ["::ffff:192.0.2.0/120", "::ffff:0.0.0.0/96"] {
+            let port = FakePort::answering(Ok("unreached".to_string()));
+            let (status, body) =
+                drive(port, form_post(&format!("cidr={spelling}&label=Office"))).await;
+            assert_eq!(
+                status,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "`{spelling}` is an IPv4 space and the plan must not hold it as IPv6"
+            );
+            assert_eq!(
+                body,
+                key("ipam.refusal.ipv4_mapped_base"),
+                "for `{spelling}`"
+            );
+        }
+        let port = FakePort::answering(Ok("defined".to_string()));
+        let (status, _) = drive(port, form_post("cidr=2001:db8:1466::/120&label=Lab")).await;
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "a genuine IPv6 subnet is still accepted — without this row the refusal above would \
+             read the same as FR25 being reverted"
+        );
     }
 
     #[tokio::test]
@@ -2622,9 +2863,16 @@ mod tests {
         // 🔑 42 → 45 at story 14.5, read off the list this prints: `ipam.refusal.not_a_vlan`, then
         // the tenth route's two — `ipam.refusal.malformed_edit_subnet` and `ipam.done.edit_subnet`.
         // ⚠️ The re-entry sentence is NOT a fourth: the correction shares the definition's key.
+        // 🔑 45 → 46 at story 14.6: `ipam.refusal.release_of_unobservable`, the release refused on
+        // an address the product cannot observe.
+        // 🔴 **46 → 47 at 14.6's SECOND REVIEW ROUND**: `ipam.refusal.ipv4_mapped_base`. ⚠️ Both
+        // lines are written here because the round found this trail — which records every earlier
+        // bump with the key read off the printed list — silent about the story that moved it, in
+        // its twin in `ipam_page.rs` as well. *A trail that stops being written is a trail that
+        // says the last person to touch the file was someone else.*
         assert_eq!(
             keys.len(),
-            45,
+            47,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );
@@ -2800,8 +3048,8 @@ mod tests {
             fn define_range(
                 &self,
                 _subnet_id: String,
-                _first: Ipv4Addr,
-                _last: Ipv4Addr,
+                _first: IpAddr,
+                _last: IpAddr,
                 _policy: opencmdb_core::ipam::IpPolicy,
                 _label: String,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -2810,7 +3058,7 @@ mod tests {
             fn define_address(
                 &self,
                 _subnet_id: String,
-                _addr: Ipv4Addr,
+                _addr: IpAddr,
                 _label: String,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
@@ -2833,8 +3081,8 @@ mod tests {
             fn edit_range(
                 &self,
                 _id: String,
-                _first: Ipv4Addr,
-                _last: Ipv4Addr,
+                _first: IpAddr,
+                _last: IpAddr,
                 _policy: opencmdb_core::ipam::IpPolicy,
                 _label: String,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -2843,14 +3091,14 @@ mod tests {
             fn edit_address(
                 &self,
                 _id: String,
-                _addr: Ipv4Addr,
+                _addr: IpAddr,
                 _label: String,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
             fn release_address(
                 &self,
-                _addr: Ipv4Addr,
+                _addr: IpAddr,
                 _until: opencmdb_core::observation::Timestamp,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())

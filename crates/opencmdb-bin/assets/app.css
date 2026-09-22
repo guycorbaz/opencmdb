@@ -837,6 +837,16 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
    and a gate must not look for a word. */
 .ipam-vlan-note { margin: 8px 0 0; }
 
+/* The sentence that replaces the audit for a subnet the product cannot observe (story 14.6). It
+   inherits `.empty`'s italic and neutral colour — it IS an absence — and gets room of its own,
+   because what follows it is a list about the whole plan and the two must not read as one block. */
+.ipam-unobservable { margin: 0 0 16px; }
+/* Its sibling, and the reason it has a name: the all-clear is the sentence the unobservable one
+   REPLACES, so a guard and a browser gate must be able to ask whether it is on the page. Asking in
+   words means quoting a translated sentence through an HTML escaper, which story 14.6's second
+   review round measured leaving the criterion carried by nothing. The spacing is its sibling's. */
+.ipam-all-clear { margin: 0 0 16px; }
+
 .record-back { margin: 0 0 16px; font-size: 0.875rem; }
 .record-head { margin: 0 0 24px; }
 .record-head h2 { margin: 0 0 4px; }

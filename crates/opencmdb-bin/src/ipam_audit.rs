@@ -35,7 +35,7 @@
 //! no finding` is a test, and the derivation takes no instant to read.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 
 use opencmdb_core::ipam::IpPolicy;
 use opencmdb_core::observation::{MacAddr, Timestamp};
@@ -51,7 +51,7 @@ use crate::sighting_repo::Sighting;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Seen {
     /// The address.
-    pub(crate) addr: Ipv4Addr,
+    pub(crate) addr: IpAddr,
     /// Each hardware address seen on it, with the LAST instant it was seen (decision 9).
     pub(crate) macs: BTreeMap<MacAddr, Timestamp>,
     /// The last instant it was seen with no hardware address, if ever.
@@ -95,11 +95,17 @@ impl Seen {
 /// `l2_domain`, the nil UUID, so the second domain needs a second connector. What would change this
 /// is a connector that reads a tag — then the observed side has a segment of its own and the join
 /// stops being a guess. Registered rather than left to be rediscovered on a real network.
-pub(crate) fn merge_sightings(sightings: &[Sighting]) -> BTreeMap<Ipv4Addr, Seen> {
-    let mut seen: BTreeMap<Ipv4Addr, Seen> = BTreeMap::new();
+pub(crate) fn merge_sightings(sightings: &[Sighting]) -> BTreeMap<IpAddr, Seen> {
+    let mut seen: BTreeMap<IpAddr, Seen> = BTreeMap::new();
     for sighting in sightings {
-        let entry = seen.entry(sighting.addr).or_insert_with(|| Seen {
-            addr: sighting.addr,
+        // 🔑 **THE SEAM, and it is one line wide.** The PLAN speaks `IpAddr` since story 14.6 and the
+        // SIGHTINGS speak `Ipv4Addr` — Guy's decision §0.3 — so this is the ONE place the two meet,
+        // and it is a widening that cannot fail rather than a narrowing that could. The audit
+        // therefore compares an IPv6 plan entry against nothing, which is the honest answer: the
+        // connector emits IPv4 only and `Fact` carries no IPv6 variant at all.
+        let observed = IpAddr::V4(sighting.addr);
+        let entry = seen.entry(observed).or_insert_with(|| Seen {
+            addr: observed,
             macs: BTreeMap::new(),
             without_mac: None,
         });
@@ -143,9 +149,9 @@ pub(crate) fn merge_sightings(sightings: &[Sighting]) -> BTreeMap<Ipv4Addr, Seen
 /// Applying it at each consumer would make agreement a discipline; here it is a property of the only
 /// door.
 pub(crate) fn forget_released(
-    mut seen: BTreeMap<Ipv4Addr, Seen>,
-    released: &BTreeMap<Ipv4Addr, Timestamp>,
-) -> BTreeMap<Ipv4Addr, Seen> {
+    mut seen: BTreeMap<IpAddr, Seen>,
+    released: &BTreeMap<IpAddr, Timestamp>,
+) -> BTreeMap<IpAddr, Seen> {
     for (addr, at) in released {
         let Some(entry) = seen.get_mut(addr) else {
             continue;
@@ -168,9 +174,9 @@ pub(crate) struct Plan {
     /// Every subnet the plan holds.
     pub(crate) subnets: Vec<Subnet>,
     /// Every range, in any subnet, as `(first, last, policy)`.
-    pub(crate) ranges: Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)>,
+    pub(crate) ranges: Vec<(IpAddr, IpAddr, IpPolicy)>,
     /// Every address an `ip_address` row names, in any subnet.
-    pub(crate) defined: BTreeSet<Ipv4Addr>,
+    pub(crate) defined: BTreeSet<IpAddr>,
 }
 
 /// What an observed address is, as the audit words it.
@@ -215,7 +221,7 @@ pub(crate) struct AddressFinding {
 
 impl Plan {
     /// The policies of every range covering `addr`, in any subnet.
-    fn covering(&self, addr: Ipv4Addr) -> impl Iterator<Item = IpPolicy> + '_ {
+    fn covering(&self, addr: IpAddr) -> impl Iterator<Item = IpPolicy> + '_ {
         self.ranges
             .iter()
             .filter(move |(first, last, _)| addr >= *first && addr <= *last)
@@ -223,12 +229,12 @@ impl Plan {
     }
 
     /// Whether any subnet of the plan contains `addr`.
-    pub(crate) fn contains(&self, addr: Ipv4Addr) -> bool {
+    pub(crate) fn contains(&self, addr: IpAddr) -> bool {
         self.subnets.iter().any(|subnet| subnet.contains(addr))
     }
 
     /// Whether `addr` is the network or broadcast address of ANY subnet containing it.
-    fn is_edge(&self, addr: Ipv4Addr) -> bool {
+    fn is_edge(&self, addr: IpAddr) -> bool {
         self.subnets
             .iter()
             .any(|subnet| subnet.contains(addr) && subnet.is_edge(addr))
@@ -236,7 +242,7 @@ impl Plan {
 
     /// Whether the PLAN alone would offer `addr` (decisions 2 and 3): inside a subnet, not an edge,
     /// not defined, covered by at least one range, and every covering range `static`.
-    fn plan_would_offer(&self, addr: Ipv4Addr) -> bool {
+    fn plan_would_offer(&self, addr: IpAddr) -> bool {
         let mut covered = false;
         for policy in self.covering(addr) {
             if policy != IpPolicy::Static {
@@ -251,15 +257,15 @@ impl Plan {
     /// has never been seen on it, and no declared record documents it (decisions 3 and 4).
     pub(crate) fn offerable(
         &self,
-        addr: Ipv4Addr,
-        seen: &BTreeMap<Ipv4Addr, Seen>,
-        documented: &BTreeSet<Ipv4Addr>,
+        addr: IpAddr,
+        seen: &BTreeMap<IpAddr, Seen>,
+        documented: &BTreeSet<IpAddr>,
     ) -> bool {
         self.plan_would_offer(addr) && !seen.contains_key(&addr) && !documented.contains(&addr)
     }
 
     /// The verdict on an address the network has been seen on, inside the plan (decisions 1 and 2).
-    fn verdict(&self, addr: Ipv4Addr) -> Option<FindingKind> {
+    fn verdict(&self, addr: IpAddr) -> Option<FindingKind> {
         if self.defined.contains(&addr) {
             return None;
         }
@@ -293,7 +299,7 @@ impl Plan {
     pub(crate) fn audit(
         &self,
         subnet: Subnet,
-        seen: &BTreeMap<Ipv4Addr, Seen>,
+        seen: &BTreeMap<IpAddr, Seen>,
         claimed: &BTreeSet<String>,
     ) -> Vec<AddressFinding> {
         seen.values()
@@ -312,13 +318,13 @@ impl Plan {
     }
 
     /// Every observed address outside every subnet of the plan (decision 11), in numeric order.
-    pub(crate) fn outside<'a>(&self, seen: &'a BTreeMap<Ipv4Addr, Seen>) -> Vec<&'a Seen> {
+    pub(crate) fn outside<'a>(&self, seen: &'a BTreeMap<IpAddr, Seen>) -> Vec<&'a Seen> {
         seen.values().filter(|s| !self.contains(s.addr)).collect()
     }
 
     /// The addresses of `subnet` defined inside a `dhcp-pool` range (decision 13): a warning, never a
     /// conflict, and the write that made them still succeeds.
-    pub(crate) fn defined_inside_a_pool(&self, subnet: Subnet) -> Vec<Ipv4Addr> {
+    pub(crate) fn defined_inside_a_pool(&self, subnet: Subnet) -> Vec<IpAddr> {
         self.defined
             .iter()
             .copied()
@@ -329,12 +335,12 @@ impl Plan {
 
     /// Whether a `dhcp-pool` range covers `addr`, in any subnet — the address check's warning that
     /// the pool may hand the address to another machine (decision 13).
-    pub(crate) fn covered_by_a_pool(&self, addr: Ipv4Addr) -> bool {
+    pub(crate) fn covered_by_a_pool(&self, addr: IpAddr) -> bool {
         self.covering(addr).any(|p| p == IpPolicy::DhcpPool)
     }
 
     /// Whether an `ip_address` row names `addr`, in any subnet.
-    pub(crate) fn defines(&self, addr: Ipv4Addr) -> bool {
+    pub(crate) fn defines(&self, addr: IpAddr) -> bool {
         self.defined.contains(&addr)
     }
 
@@ -359,11 +365,7 @@ impl Plan {
     ///
     /// The range form's warning before the write (Guy, 2026-09-15): *n addresses seen would fall in
     /// this static range*. It refuses nothing — the write is untouched, like the address form's.
-    pub(crate) fn seen_inside(
-        seen: &BTreeMap<Ipv4Addr, Seen>,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
-    ) -> usize {
+    pub(crate) fn seen_inside(seen: &BTreeMap<IpAddr, Seen>, first: IpAddr, last: IpAddr) -> usize {
         seen.keys()
             .filter(|addr| **addr >= first && **addr <= last)
             .count()
@@ -373,9 +375,9 @@ impl Plan {
     pub(crate) fn next_offerable(
         &self,
         subnet: Subnet,
-        seen: &BTreeMap<Ipv4Addr, Seen>,
-        documented: &BTreeSet<Ipv4Addr>,
-    ) -> Option<Ipv4Addr> {
+        seen: &BTreeMap<IpAddr, Seen>,
+        documented: &BTreeSet<IpAddr>,
+    ) -> Option<IpAddr> {
         subnet
             .addresses()
             .find(|addr| self.offerable(*addr, seen, documented))
@@ -410,7 +412,7 @@ pub(crate) async fn read_the_network(
     // 🔴 **A release on an address the plan DEFINES is ignored** (Guy, code review 2026-09-19): it
     // could only hide a « Conflit d'adresse », and it can exist — 31 of 61 concurrent define/release
     // pairs left one, measured. Ignoring it here holds whatever order the two writes landed in.
-    let defined: BTreeSet<Ipv4Addr> = crate::ipam_repo::plan_addresses(pool)
+    let defined: BTreeSet<IpAddr> = crate::ipam_repo::plan_addresses(pool)
         .await?
         .into_iter()
         .collect();
@@ -427,9 +429,9 @@ pub(crate) async fn read_the_network(
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Network {
     /// What the network has shown, merged per address.
-    pub(crate) seen: BTreeMap<Ipv4Addr, Seen>,
+    pub(crate) seen: BTreeMap<IpAddr, Seen>,
     /// The documented addresses, PARSED — the offer's question (decision 4).
-    pub(crate) documented: BTreeSet<Ipv4Addr>,
+    pub(crate) documented: BTreeSet<IpAddr>,
     /// The declared `ipv4` values VERBATIM — triage's own comparison, and the only thing that says
     /// whether triage has a question to link to.
     pub(crate) claimed: BTreeSet<String>,
@@ -437,10 +439,24 @@ pub(crate) struct Network {
 
 /// Parse `declared_attribute.ipv4` values into addresses, skipping what does not parse — a declared
 /// value is operator text, and one that is not an address documents no address.
-pub(crate) fn documented_addresses(values: &[String]) -> BTreeSet<Ipv4Addr> {
+///
+/// 🔴 **IT TAKES BOTH FAMILIES SINCE STORY 14.6, and that was a CONSEQUENCE nobody decided until the
+/// blind review layer named it.** The field is `ipv4` by name; this is the DECLARED side, which is
+/// neither the plan nor the sightings, and §0.3's measured escape table named only `sighting_repo`.
+/// The widening happened because the set it feeds (`Network.documented`) is compared against plan
+/// addresses, which are now `IpAddr`.
+///
+/// 🔑 **The behaviour it buys is the one the operator would expect and it is stated rather than
+/// inherited**: an operator who documents `2001:db8::9` on a device gets that address excluded from
+/// the offer and marked *documented* in the audit, exactly as an IPv4 one is. Refusing it would mean
+/// the product reading a value the operator wrote and silently ignoring it because of the column's
+/// NAME. ⚠️ The column is still called `ipv4` — renaming it is a migration this story does not own —
+/// so the name and the contents have drifted apart, which is registered rather than left to be
+/// discovered by whoever next reads the schema.
+pub(crate) fn documented_addresses(values: &[String]) -> BTreeSet<IpAddr> {
     values
         .iter()
-        .filter_map(|value| value.trim().parse::<Ipv4Addr>().ok())
+        .filter_map(|value| value.trim().parse::<IpAddr>().ok())
         .collect()
 }
 
@@ -449,7 +465,22 @@ mod tests {
     use super::*;
     use opencmdb_core::observation::L2DomainId;
 
-    fn v4(text: &str) -> Ipv4Addr {
+    /// A literal address for the tests.
+    ///
+    /// ⚠️ **It answers `IpAddr` since story 14.6, which means it no longer PINS the family** — and
+    /// the first version of this sentence claimed the opposite, that *"a test that means one cannot
+    /// silently get the other"*. The reverse is true: before the widening `v4("2001:db8::1")`
+    /// panicked, and now it returns a V6, which is how `an_ipv6_row_is_read_back_rather_than_skipped`
+    /// uses it. **The name is kept and it no longer means anything**, because renaming four hundred
+    /// call sites would bury the story's real diff — a cost accepted and stated rather than hidden
+    /// behind a sentence that reads like a guarantee.
+    ///
+    /// ⚠️ **They are 356 and not *four hundred*, counted** (`grep -o '\bv4(' `, 110 here, 118 in
+    /// `ipam_page.rs`, 128 in `ipam_repo.rs`; the acceptance layer measured 352 before this round
+    /// added four). The decision is sound and the figure was not: it was written in flight in a
+    /// story whose own record warns about numbers written in flight, and a number nobody can
+    /// reproduce is what turns an announced decision into a claim.
+    fn v4(text: &str) -> IpAddr {
         text.parse().expect("a v4 address")
     }
 
@@ -465,7 +496,9 @@ mod tests {
 
     fn sighting(addr: &str, domain: u128, mac_octet: Option<u8>, last: &str) -> Sighting {
         Sighting {
-            addr: v4(addr),
+            // ⚠️ A SIGHTING is observed, so it is IPv4 by type (story 14.6's decision §0.3) — the
+            // test helper narrows here rather than at every call site.
+            addr: addr.parse().expect("an observed v4 address"),
             l2_domain: L2DomainId::from_uuid(uuid::Uuid::from_u128(domain)),
             mac: mac_octet.map(mac),
             first_seen_at: at("2026-01-01T00:00:00Z"),
@@ -500,7 +533,7 @@ mod tests {
         }
     }
 
-    fn seen_at(addrs: &[&str]) -> BTreeMap<Ipv4Addr, Seen> {
+    fn seen_at(addrs: &[&str]) -> BTreeMap<IpAddr, Seen> {
         let sightings: Vec<Sighting> = addrs
             .iter()
             .map(|addr| sighting(addr, 1, Some(1), "2026-09-01T10:00:00Z"))
@@ -508,7 +541,7 @@ mod tests {
         merge_sightings(&sightings)
     }
 
-    fn kinds(findings: &[AddressFinding]) -> Vec<(Ipv4Addr, Option<FindingKind>, bool)> {
+    fn kinds(findings: &[AddressFinding]) -> Vec<(IpAddr, Option<FindingKind>, bool)> {
         findings
             .iter()
             .map(|f| (f.seen.addr, f.kind, f.conflict))
@@ -605,7 +638,7 @@ mod tests {
     fn an_address_outside_every_subnet_is_listed_plan_wide() {
         let plan = plan();
         let seen = seen_at(&["10.9.9.9", "192.0.2.20"]);
-        let outside: Vec<Ipv4Addr> = plan.outside(&seen).iter().map(|s| s.addr).collect();
+        let outside: Vec<IpAddr> = plan.outside(&seen).iter().map(|s| s.addr).collect();
         assert_eq!(outside, vec![v4("10.9.9.9")]);
         assert!(
             plan.audit(office(), &seen, &BTreeSet::new())
@@ -641,7 +674,7 @@ mod tests {
         sightings.push(sighting("192.0.2.22", 1, Some(4), "2026-09-01T10:00:00Z"));
         sightings.push(sighting("192.0.2.22", 1, None, "2026-09-02T10:00:00Z"));
         let seen = merge_sightings(&sightings);
-        let conflicts: Vec<Ipv4Addr> = plan
+        let conflicts: Vec<IpAddr> = plan
             .audit(office(), &seen, &BTreeSet::new())
             .iter()
             .filter(|f| f.conflict)
@@ -880,7 +913,7 @@ mod tests {
         sightings.extend(two("192.0.2.255"));
         sightings.extend(two("192.0.2.20"));
         let seen = merge_sightings(&sightings);
-        let conflicts: Vec<Ipv4Addr> = plan
+        let conflicts: Vec<IpAddr> = plan
             .audit(office(), &seen, &BTreeSet::new())
             .iter()
             .filter(|f| f.conflict)
@@ -930,7 +963,7 @@ mod tests {
 
     // ── Story 14.4b: the release ────────────────────────────────────────────────────────────────
 
-    fn released(pairs: &[(&str, &str)]) -> BTreeMap<Ipv4Addr, Timestamp> {
+    fn released(pairs: &[(&str, &str)]) -> BTreeMap<IpAddr, Timestamp> {
         pairs
             .iter()
             .map(|(addr, when)| (v4(addr), at(when)))
@@ -1039,7 +1072,7 @@ mod tests {
     // ── Story 14.4b, against the store ──────────────────────────────────────────────────────────
 
     fn observed(
-        addr: Ipv4Addr,
+        addr: IpAddr,
         mac_octet: u8,
         when: &str,
     ) -> opencmdb_core::observation::Observation {
@@ -1053,7 +1086,14 @@ mod tests {
                 vantage: VantageId::from_uuid(uuid::Uuid::nil()),
             },
             facts: vec![
-                Fact::IpV4 { addr },
+                // ⚠️ `Fact` has NO IPv6 variant at all — the domain type is what makes the observed
+                // side IPv4, which is a stronger carrier than *"the connector emits IPv4 only"*.
+                Fact::IpV4 {
+                    addr: match addr {
+                        IpAddr::V4(addr) => addr,
+                        IpAddr::V6(addr) => panic!("nothing can observe {addr}"),
+                    },
+                },
                 Fact::Mac {
                     addr: mac(mac_octet),
                     locally_administered: true,
@@ -1065,7 +1105,7 @@ mod tests {
 
     /// Clear everything these tests write for one address and one subnet, so a re-run against a
     /// store that kept the last run's rows starts clean.
-    async fn forget_release_fixture(pool: &sqlx::MySqlPool, subnet_id: &str, addr: Ipv4Addr) {
+    async fn forget_release_fixture(pool: &sqlx::MySqlPool, subnet_id: &str, addr: IpAddr) {
         let canonical = crate::ipam_repo::canonical(addr);
         for statement in [
             "DELETE FROM address_release WHERE addr = ?",
@@ -1101,7 +1141,7 @@ mod tests {
     async fn cleaned_up(
         pool: &sqlx::MySqlPool,
         subnet_id: &str,
-        addrs: &[Ipv4Addr],
+        addrs: &[IpAddr],
         body: impl std::future::Future<Output = ()>,
     ) {
         let outcome =
@@ -1114,7 +1154,7 @@ mod tests {
         }
     }
 
-    async fn is_released(pool: &sqlx::MySqlPool, addr: Ipv4Addr) -> bool {
+    async fn is_released(pool: &sqlx::MySqlPool, addr: IpAddr) -> bool {
         crate::ipam_repo::plan_releases(pool)
             .await
             .expect("read")
@@ -1123,7 +1163,7 @@ mod tests {
 
     async fn release_at(
         pool: &sqlx::MySqlPool,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         when: &str,
     ) -> Result<Option<String>, opencmdb_core::repo::RepositoryError> {
         let mut conn = pool.acquire().await.expect("a connection");
@@ -1393,7 +1433,7 @@ mod tests {
             .await
             .expect("ingest");
 
-            let post = |addr: Ipv4Addr, until: &str| {
+            let post = |addr: IpAddr, until: &str| {
                 axum::http::Request::builder()
                     .method("POST")
                     .uri("/ipam/release")

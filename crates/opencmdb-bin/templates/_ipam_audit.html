@@ -30,8 +30,26 @@
        the only true thing this screen has to say. -#}
   {%- if audit.subnet_in_force %}
   <h3 id="ipam-findings-heading" class="panel-label">{{ s.findings_heading }}</h3>
-  {%- if audit.findings.is_empty() %}
-  <p class="empty">{{ s.no_findings }}</p>
+  {#- 🔴 **STORY 14.6: THIS SENTENCE REPLACES THE ALL-CLEAR, it does not sit beside it.** With no
+       findings the arm below renders `ipam.findings.none` — *"Nothing the network has shown
+       contradicts this subnet's plan"* — which on a subnet the product cannot observe is the product
+       ASSERTING CONCORDANCE about a plan its only connector will never look at. *An empty list reads
+       as **nothing is wrong** where the truth is **nothing was checked**.*
+       ⚠️ It says *this subnet* on purpose: the OUTSIDE list below belongs to the PLAN and keeps
+       rendering here, so without that scope the two would contradict each other in one viewport —
+       the class story 14.4's third round paid for. -#}
+  {%- if !audit.unobservable.is_empty() %}
+  <p class="empty ipam-unobservable">{{ audit.unobservable }}</p>
+  {%- else if audit.findings.is_empty() %}
+  {#- 🔴 **STORY 14.6, SECOND ROUND: `ipam-all-clear` EXISTS SO THAT A GUARD CAN NAME THIS
+       PARAGRAPH WITHOUT QUOTING IT.** The test written for the criterion above asserted
+       `!page.contains(t!("ipam.findings.none"))` — and Askama escapes the apostrophe in *this
+       subnet's plan*, so the needle carries `'` where the page carries `&#39;` and the negation was
+       **true of every page that exists**. The edge review measured it: the defect the criterion
+       forbids — the all-clear rendered BESIDE the unobservable sentence — left 1 043 tests and ten
+       gates green. *A negative assertion on a translated sentence cannot fail, and it is the
+       negative form that hides it: a positive one would have reddened the day it was written.* -#}
+  <p class="empty ipam-all-clear">{{ s.no_findings }}</p>
   {%- else %}
   <ul class="ipam-findings">
     {%- for row in audit.findings %}

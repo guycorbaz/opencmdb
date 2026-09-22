@@ -852,6 +852,32 @@ ipam.cell_label_seen:
 ipam.findings.heading:
   en: "What the network shows"
   fr: "Ce que montre le réseau"
+# 🔴 Story 14.6: the sentence that REPLACES the all-clear for a subnet the product cannot observe.
+# `ipam.findings.none` would assert concordance about a plan the only connector never looks at; this
+# says what is true and names THIS SUBNET, because the plan-wide *outside* list keeps rendering
+# beside it and the two must not contradict each other in one viewport.
+# 🔴 **IT SAID *"nothing here was checked"*, AND THE SECOND REVIEW ROUND REFUTED THAT TWICE OVER.**
+# The acceptance layer measured the closing clause — *"What it shows below is what you declared"* —
+# rendered directly above *Seen outside every subnet of the plan*, which is what the NETWORK showed:
+# claim and refutation in one viewport, the class story 14.4's third round paid for, reintroduced by
+# the sentence written to prevent it. And *nothing was checked* over-claimed on a second axis: the
+# **pool warnings** below it are a plan-internal check that needs no observation, and they render for
+# an IPv6 subnet — correctly, since an address defined inside a declared DHCP pool is a contradiction
+# in the plan alone. 🔑 *What is missing on an IPv6 subnet is the COMPARISON, never the checking* —
+# so the sentence names the comparison, claims nothing about what follows, and the pool warnings keep
+# their own heading. Refused: suppressing the pool warnings for IPv6, which would have cost the
+# operator a true and useful warning in order to save a sentence that was wrong.
+# The *no offer* line for an unobservable subnet: the shipped one names the SIZE, which is a true
+# sentence about the wrong reason for an IPv6 subnet of any prefix length.
+ipam.unobservable.heading:
+  en: "No grid is drawn for an IPv6 subnet: the product cannot observe IPv6, so a grid would show what you declared and nothing about the network. The ranges you declared are below."
+  fr: "Aucune grille n'est dessinée pour un sous-réseau IPv6 : le produit n'observe pas IPv6, donc une grille montrerait ce que vous avez déclaré et rien du réseau. Les plages que vous avez déclarées figurent ci-dessous."
+ipam.unobservable.no_offer:
+  en: "No address is offered here: the product cannot see what is in use on an IPv6 network."
+  fr: "Aucune adresse n'est proposée ici : le produit ne voit pas ce qui est utilisé sur un réseau IPv6."
+ipam.audit.unobservable:
+  en: "This subnet was not compared against the network: the scanner does not reach IPv6, so the product has no observation of it."
+  fr: "Ce sous-réseau n'a pas été comparé au réseau : le scanner n'atteint pas IPv6, donc le produit n'en a aucune observation."
 ipam.findings.none:
   en: "Nothing the network has shown contradicts this subnet's plan."
   fr: "Rien de ce que le réseau a montré ne contredit le plan de ce sous-réseau."
@@ -1043,18 +1069,30 @@ ipam.vlan_note:
   en: "The VLAN is what you declared: the scanner does not read tags. Nothing below this line uses it — the grid, the counts, the ranges, the findings and the offer are all computed across the whole plan — so two subnets sharing one address space show the same records and share one audit."
   fr: "Le VLAN est ce que vous avez déclaré : le scanner ne lit pas les étiquettes. Rien sous cette ligne ne s'en sert — la grille, les compteurs, les plages, les constats et l'offre se calculent sur tout le plan — si bien que deux sous-réseaux partageant un espace d'adressage montrent chacun les enregistrements de l'autre et partagent un audit."
 
+# 🔴 Story 14.6: the three address fields carry the example of the SUBNET IN FORCE's family. A
+# resolvable key rendering a correct string in the WRONG CONTEXT is story 6b.6's `role_key` defect,
+# and neither a test nor a browser gate can see it — the carrier is `family_examples` and this pair.
 ipam.form.first:
   en: "First address — for example 192.0.2.10"
   fr: "Première adresse — par exemple 192.0.2.10"
 ipam.form.last:
   en: "Last address — for example 192.0.2.20"
   fr: "Dernière adresse — par exemple 192.0.2.20"
+ipam.form.first_v6:
+  en: "First address — for example 2001:db8::10"
+  fr: "Première adresse — par exemple 2001:db8::10"
+ipam.form.last_v6:
+  en: "Last address — for example 2001:db8::20"
+  fr: "Dernière adresse — par exemple 2001:db8::20"
 ipam.form.policy:
   en: "What it is meant for"
   fr: "Ce à quoi elle est destinée"
 ipam.form.addr:
   en: "Address — for example 192.0.2.9"
   fr: "Adresse — par exemple 192.0.2.9"
+ipam.form.addr_v6:
+  en: "Address — for example 2001:db8::9"
+  fr: "Adresse — par exemple 2001:db8::9"
 ipam.form.submit:
   en: "Define"
   fr: "Définir"
@@ -1249,6 +1287,12 @@ ipam.refusal.malformed_edit_subnet:
 ipam.refusal.malformed_release:
   en: "Malformed request: the form must carry the address to release."
   fr: "Requête mal formée : le formulaire doit porter l'adresse à libérer."
+# 🔴 Story 14.6: releasing an IPv6 address is refused BY NAME rather than reaching `0009`'s CHECK and
+# answering 500. A release forgets what the network showed; the product never sees IPv6, so there is
+# nothing to forget — the request's form is fine and the state of the world is what refuses it.
+ipam.refusal.release_of_unobservable:
+  en: "There is nothing to release: the product does not observe IPv6, so it has never seen anything on this address."
+  fr: "Il n'y a rien à libérer : le produit n'observe pas IPv6, il n'a donc jamais rien vu sur cette adresse."
 ipam.refusal.release_of_defined:
   en: "This address is defined in the plan, so there is nothing to release. To stop the plan holding it, remove the address."
   fr: "Cette adresse est définie dans le plan : il n'y a rien à libérer. Pour que le plan cesse de la retenir, supprimez l'adresse."
@@ -1301,9 +1345,22 @@ ipam.refusal.address_outside_subnet:
 ipam.refusal.base_not_network:
   en: "A subnet is named by its network address: 192.0.2.5/24 is the subnet 192.0.2.0/24."
   fr: "Un sous-réseau se nomme par son adresse de réseau : 192.0.2.5/24, c'est le sous-réseau 192.0.2.0/24."
+# 🔴 **IT NAMED IPv4 AND 32 FOR AN IPv6 CIDR UNTIL STORY 14.6's SECOND REVIEW ROUND**, measured on
+# a booted binary: `2001:db8:9::/129` answered *"cannot belong to an IPv4 subnet: 32 at most"*. The
+# sentence was true when written — one family existed — and this is the commit that made the second
+# case reachable, which is exactly when an inherited sentence stops being right and nothing says so.
+# 🔑 The variant carries no family, so the sentence names BOTH bounds rather than guessing one: a
+# refusal that states the rule is readable under either reading, where a refusal that names the
+# wrong family sends the operator to check the half they got right.
 ipam.refusal.prefix_not_in_family:
-  en: "That prefix length cannot belong to an IPv4 subnet: 32 at most."
-  fr: "Cette longueur de préfixe ne peut pas appartenir à un sous-réseau IPv4 : 32 au maximum."
+  en: "That prefix length does not fit the address family: 32 at most for IPv4, 128 for IPv6."
+  fr: "Cette longueur de préfixe ne convient pas à la famille d'adresses : 32 au maximum pour IPv4, 128 pour IPv6."
+# 🔴 Story 14.6, second review round: the IPv4-mapped form, refused rather than held. It named a
+# space the scanner sweeps while the page called it unobservable; the sentence says which spelling
+# the plan wants instead, because a refusal the operator cannot act on is a dead end.
+ipam.refusal.ipv4_mapped_base:
+  en: "That is an IPv4 space written in IPv6 form. Enter it as IPv4 — the product observes it."
+  fr: "C'est un espace IPv4 écrit en forme IPv6. Saisissez-le en IPv4 : le produit l'observe."
 ipam.refusal.not_an_address:
   en: "That is not an address the plan can hold."
   fr: "Ce n'est pas une adresse que le plan sache porter."

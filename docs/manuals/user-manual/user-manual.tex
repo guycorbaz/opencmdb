@@ -284,10 +284,34 @@ way to change an address space is to define the subnet you want and remove the o
 Clearing the VLAN field means \emph{no VLAN}; a subnet cannot be moved onto a VLAN another entry of
 the same address space already holds.
 
-\begin{planned}
-IPv6 is not implemented yet. Editing, deleting and releasing are described above and ship with this
-release.
-\end{planned}
+\section{IPv6}
+opencmdb's plan holds IPv6 subnets, ranges and addresses. You write them as you write IPv4 ones ---
+\texttt{2001:db8::/64}, a first and a last address, a label --- and the selector lists them beside
+your IPv4 subnets.
+
+\textbf{What an IPv6 subnet's page shows, and why it shows less.} The scanner does not reach IPv6:
+it reads hardware addresses off the IPv4 neighbour table, and there is no IPv6 equivalent in this
+product. So for an IPv6 subnet there is nothing to compare your plan against, and the page says so
+rather than drawing an empty audit. You get the ranges and addresses you declared; you do not get a
+grid, an occupancy count, a free-address offer, or a list of findings.
+
+That is deliberate. An empty findings list reads as \emph{nothing is wrong}, where the truth is
+\emph{this subnet was not compared against the network} --- and the second sentence is the one you
+need. For the same reason, releasing an IPv6 address is refused: a release makes the plan forget what
+the network showed on an address, and the product has never seen anything on yours.
+
+What you do still get is every check that needs no observation. If you define an address inside a
+range you declared a DHCP pool, the warning appears on an IPv6 subnet exactly as it does on an IPv4
+one: that is a contradiction inside your plan, and reading the network would not help settle it.
+
+\textbf{The list of addresses seen outside every subnet of your plan still appears} on an IPv6
+subnet's page. It belongs to the plan rather than to the subnet you are looking at, so hiding it
+would cost you a true finding for having selected a tab. It carries its own heading saying so.
+
+\textbf{Write an IPv4 space as IPv4.} \texttt{::ffff:192.0.2.0/120} is a legal way to write
+\texttt{192.0.2.0/24} in IPv6 notation, and opencmdb refuses it: held as an IPv6 subnet it would
+tell you the product cannot observe a range the scanner sweeps every five minutes. Enter it as IPv4
+and you get the grid, the findings and the offer.
 
 \chapter{Applications and hosted software}
 Beyond the network layer, you can record software instances (name, version, listening ports)

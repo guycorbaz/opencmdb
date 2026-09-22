@@ -5186,6 +5186,23 @@ it re-derivable.*
   *red* — a measurement manufactured from an absence. It refuses both now. 🔑 *A debt three stories
   route around stops being a debt and becomes a practice* — and this is the third, so the sentence
   above is no longer a warning but a description.
+  🔴 **STORY 14.6 IS THE FOURTH, and its pass was recorded here only at its SECOND REVIEW ROUND.**
+  The story asserted compliance in three places — AC13, its mutation table and a ticked T7 — and
+  wrote nothing into this row; the acceptance layer established it with
+  `git diff <base>...HEAD -- deferred-work.md`, which touched line 6083 and the end of the file and
+  nothing near here. 🔑 **And `cargo xtask record` is STRUCTURALLY UNABLE to catch it**: it compares
+  the rows a branch ADDS, and this obligation is an EDIT to a row that already exists — story 6b.9's
+  class (*a section that says "registered" is not a registration*) in the one shape the tool built to
+  prevent it cannot see. **Owner of that gap: `cargo xtask record`'s next revision**, or the retro.
+  ⚠️ The pass itself: `0011`'s three mutations were driven by the purpose-built script again, and
+  with `--baseline` on a virgin store the DRIVER reported **162 reds** — changing a migration breaks
+  sqlx's checksum for the store the baseline had just migrated, so the number measures the checksum
+  and not the guard. **D1** (`0011` widens `address_sighting.addr` too) red 1 on
+  `the_observed_side_stays_narrow`, which is decision §0.3 written into the schema · **D2** (the
+  canonical CHECK narrowed back to IPv4 alone) red 1 on
+  `the_family_check_is_live_now_that_a_second_width_exists` · **D3** (`$` instead of `\z`) red 1 on
+  `one_address_has_exactly_one_spelling_in_the_store`, story 14.1's trap still carried after the
+  widening. *A debt four stories route around is a practice, and the fourth story forgot to say so.*
 - 🔴 **A DDL mutation that leaves INVALID SQL measures the parser, not the guard** — and it reports
   a red indistinguishable from a real one. Measured twice in this story's own pass: deleting a
   `CONSTRAINT` line left a trailing comma, the migration failed, and **101 tests reddened** on a
@@ -6083,6 +6100,17 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   shipped an unreviewed restructure to buy headroom a hundred lines already bought. 🔑 The
   measurement is recorded so the next story choosing where to cut does not re-take it. **Owner: the
   next story that grows `ipam_page.rs`.**
+  ✅ **CLOSED by story 14.6, which grew it to 1998 code lines against a 2000 ceiling.** The
+  three checks are `crates/opencmdb-bin/src/ipam_checks.rs` now (**629 lines left `ipam_page.rs`,
+  which now sits at 1437 code lines; the new module is 698 lines of which 632 are code**), and the cut cost
+  what this row said it would: the constants, the three handlers and the two shared helpers changed
+  visibility, the router still mounts the same three addresses, and nothing else moved. 🔑 *A
+  registered measurement is what let a story cross a ceiling mid-implementation and take the right
+  cut in one gesture rather than the smallest one twice.* ⚠️ And the split immediately produced a
+  finding of its own: `ipam_page`'s key guard reads `include_str!("ipam_page.rs")`, so nineteen keys
+  left its population **without reddening it** — a smaller list is not a failure. *A guard keyed on a
+  file measures the file, not the concept, and a split is exactly when the two come apart.* The new
+  module carries its own.
 - ⚠️ **Two segments of one CIDR: the GRID shows the other segment's records and the RAIL does not,
   and both halves are deliberate.** Measured by story 14.5's code review: with an address defined in
   segment A only, segment B's grid paints a cell named *defined* and its occupancy reads *1
@@ -6095,3 +6123,72 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   time in the other segment — two `ip_address` rows under two labels for one address in one
   broadcast domain — and the product reports no conflict. **Owner: Epic 14's final retrospective**,
   which should decide whether a per-segment rail over a plan-wide grid is the shape it wants.
+
+## Found while validating story 14.6
+
+- ⚠️ **`page.rs` is the tightest file in the tree at 1954 code lines — 46 of headroom — and it is
+  registered by nothing.** Surfaced by story 14.6's fact-check layer while checking a claim about
+  `ipam_page.rs`, whose 106 lines the story does record. 🔑 *The file everyone watches is not the file
+  closest to the ceiling*: `ipam_page.rs` has twice the room and all the attention, because story
+  14.5 nearly hit its ceiling and said so. `page.rs` holds the shell, the triage screen and the
+  budget, so any screen story touches it. **Owner: the next story that grows `page.rs`**, which
+  should split before it writes rather than after the gate says so — `CLAUDE.md`'s *split, not
+  grown*, applied before the growth as story 14.5 finally did.
+
+## Story 14.6 — IPv6, observation-only
+
+- ⚠️ **`ip_range_same_family` is LIVE since `0011`, and it is the SECOND carrier.** A range whose two
+  bounds are in different families is refused by the adapter's containment check FIRST — measured at
+  the route, `422 "That range falls outside its subnet."` — so the DDL CHECK never sees one through
+  the product. It guards a write that went around the adapter, which is what the constraint has
+  always been for; what changed is that it can now fire. **Owner: nobody — recorded so the next
+  reader does not take the CHECK for the only carrier.**
+- ⚠️ **The plan-wide address order is PER-FAMILY, not global.** Within a family the canonical
+  spelling makes lexicographic order numeric order (`::1 < ::a < ::10 < ::ff < ::1:0`, read back from
+  an `ascii_bin` column); across families it INTERLEAVES — `0000:…` sorts before `009.0.0.1` sorts
+  before `2001:db8:…` sorts before `255.255.255.255`. Three plan-wide `ORDER BY addr` readers exist
+  and nothing depends on a global order today. **Owner: the story that gives one of them a
+  cross-family consumer.**
+- 🔴 **`Plan.ranges` is NOT carried by the type, where `Plan.defined` is.** `BTreeSet<IpAddr>` refuses
+  a mixed lookup at the type (`Borrow` will not hand it a `&Ipv4Addr`); an interval comparison over
+  `Ipv4Addr` and `IpAddr` COMPILES, because std makes them cross-comparable. `Subnet::contains` and
+  `Subnet::overlaps` now refuse a foreign family in an EXPLICIT arm rather than relying on
+  `IpAddr`'s total order putting every V4 below every V6 — *an answer that is right by luck is one
+  nobody can rely on* — but the promise *observation-only expressed in the types* is a **tripwire on
+  one half**, on story 5.12's precedent. **Owner: the story that widens `Plan` further.**
+- ⚠️ **The workspace declares no `[profile]`, so the shipped image runs with `overflow-checks =
+  false`** — which is why story 14.6's `size()` saturates on `u128` rather than shifting. The general
+  hazard is not closed: any arithmetic this project writes has a debug behaviour (panic) and a
+  release behaviour (wrap) that differ, and the suite only ever measures the first. **Owner: whoever
+  decides whether this workspace wants `overflow-checks` in release.**
+- ⚠️ **The keyboard gate never opens an IPv6 subnet's tab**, so the rail's Correct and Remove
+  controls on an IPv6 page are measured by no browser. Story 14.6 taught `axe-gate.mjs` to follow
+  the selector and did NOT teach `kbd-probe.mjs`; AC12's letter said *both gates* and the story now
+  says one. 🔑 What is missing is small — the page renders the same rail partial — and saying so is
+  what stops *both browser gates* being read as a covered surface. **Owner: the next story that
+  touches `/ipam`'s rail.**
+- ⚠️ **`declared_attribute.ipv4` now holds IPv6 values, and the column's NAME has drifted from its
+  contents.** Story 14.6 widened `documented_addresses` so an operator who documents `2001:db8::9`
+  gets it excluded from the offer and marked *documented*, which is what they would expect; refusing
+  it would mean reading a value the operator wrote and ignoring it because of a column name. The
+  rename is a migration this story does not own. **Owner: the story that next writes a migration
+  touching `declared_attribute`.**
+- 🔴 **`cargo xtask record` is STRUCTURALLY UNABLE to see an obligation carried by an EDIT.** It
+  compares the rows a branch ADDS to this file, so the DDL row's standing request — *the next story
+  to write a migration must record its pass here* — is invisible to it: story 14.6 asserted
+  compliance in three places (AC13, its mutation table, a ticked T7), wrote nothing, and the tool
+  said `✅ the record matches the tree`. The acceptance layer found it with one `git diff` over this
+  file. 🔑 *A checker that reads only additions certifies a record that lost something.* ⚠️ Not fixed
+  here: teaching it to follow a row's obligations means giving a register row a machine-readable
+  owner, which is a subject of its own and 6.4b shows that is a whole story. **Owner: `cargo xtask
+  record`'s next revision**, or Epic 14's final retrospective.
+- ⚠️ **`Subnet::contains`'s family arm changes no answer for any input, and `Subnet::overlaps`'s
+  changes exactly one.** The edge layer ran both implementations side by side over every family
+  combination: `contains` is identical with and without its arm — `IpAddr`'s total order already
+  partitions the families — while `overlaps` differs on a STRADDLING interval (`first` V4, `last`
+  V6), where the bare form overlaps every subnet of the plan. So one arm is belt-and-braces that no
+  mutation can ever red, and the other is load-bearing against a row the schema refuses. Both are
+  kept, both now say which they are, and the straddling case has a test since this round. 🔑 *A guard
+  placed where the defect cannot occur reads as coverage and is none* — this project's dominant
+  class, in the pair of arms added to avoid it. **Owner: nobody — recorded so the next reader does
+  not take the two arms for one guarantee.**

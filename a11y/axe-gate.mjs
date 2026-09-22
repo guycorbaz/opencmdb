@@ -136,6 +136,14 @@ const REQUIRE_AUDIT = process.env.AXE_REQUIRE_AUDIT === "1";
 // is on the same page — is a property of `a11y/seed.sql` that this gate does not defend, and the
 // Rust render test is what carries it.
 const REQUIRE_VLAN = process.env.AXE_REQUIRE_VLAN === "1";
+// 🔴 **STORY 14.6's IPv6 PAGE IS A DIFFERENT BRANCH ENTIRELY** — no grid, no occupancy line, no
+// offer, and a sentence saying nothing was checked — so without a seeded IPv6 subnet this gate walks
+// the IPv4 screen twice and reports a pass over a surface it never opened. `a11y/seed.sql` carries a
+// `2001:db8:1466::/64`; `AXE_REQUIRE_V6=1` (CI sets it) turns a run that cannot reach it into *the
+// gate could not run*, which is `AXE_REQUIRE_PLAN`'s own shape a fourth time.
+const REQUIRE_V6 = process.env.AXE_REQUIRE_V6 === "1";
+// The class the unobservable sentence carries. A CLASS and not its text, for `VLAN_NOTE`'s reason.
+const UNOBSERVABLE = "p.ipam-unobservable";
 // The note's own class. A CLASS and not its text, because the text is translated and this gate runs
 // in the default locale — the rule `PLAN_CELL` and `GESTURE` already follow.
 const VLAN_NOTE = "p.ipam-vlan-note";
@@ -335,6 +343,9 @@ async function main() {
   // — the page renders two links a keyboard user cannot tell apart — so it joins `failing` rather
   // than answering 2.
   let tabNameClash = null;
+  // Story 14.6: the IPv6 page drew a grid, or asserted concordance. A product failure, not a
+  // harness one.
+  let v6Failure = null;
   // A product regression the warning state reveals: the form is there, the store holds the
   // sighting, and no warning arrives. 🔴 It was `cannotRun` (exit 2) until the code review — *the
   // gate could not run* and *the product stopped warning* are not the same answer, and the second
@@ -453,6 +464,109 @@ async function main() {
               : `   ${PLAN_ROUTE}: the VLAN note is on the page; the tab names are NOT distinct — ` +
                   `see the line above`,
           );
+        }
+
+        // ── Story 14.6: the IPv6 page, which is a branch no other state reaches ────────────
+        // 🔑 Found by FOLLOWING the selector rather than by naming an id: the gate opens each tab in
+        // turn and asks whether the page it lands on carries the unobservable sentence. A gate that
+        // named the seed's UUID would measure the seed; this measures the product.
+        // 🔴 **THE TAB IS FOUND BY ITS CIDR, NOT BY THE SENTENCE THE PRODUCT IS MEANT TO RENDER**,
+        // and the first version of this probe got that backwards. It walked the tabs looking for
+        // `p.ipam-unobservable`, so the product REMOVING that sentence — the family branch gone, the
+        // template arm gone, the key blanked — produced *no tab carries it*, exit **2**, and a
+        // message asserting *the plan holds no IPv6 subnet*: a cause the gate never checked, over a
+        // committed seed. That is this project's own rule broken (a cause needs a check) and the
+        // keyboard gate's recorded defect one file over (*a real failure converted into could not
+        // run*). ⚠️ Worse, it made the two product checks below UNREACHABLE: they only ever ran on a
+        // page that already carried the sentence, so the gate could never observe the state
+        // mutation T6 produced — an IPv6 page that drew a grid.
+        //
+        // 🔑 A colon in the tab's own name is what identifies an IPv6 subnet, and it comes from the
+        // ADDRESS rather than from any copy this story wrote.
+        const v6 = await (async () => {
+          const tabs = await page.evaluate(() =>
+            [...document.querySelectorAll("main nav.filters a.filter")].map((tab) => ({
+              href: tab.getAttribute("href") ?? "",
+              name: (tab.textContent ?? "").trim(),
+            })),
+          );
+          for (const { href, name } of tabs) {
+            if (!name.includes(":")) continue;
+            const probe = await openPage();
+            await goOrGiveUp(probe, href);
+            const found = await probe.evaluate((sel) => {
+              const note = document.querySelector(sel);
+              return {
+                unobservable: note !== null,
+                cells: document.querySelectorAll("ul.ipam-grid li.ipam-cell").length,
+                // 🔴 **`p.ipam-all-clear`, MINTED FOR THIS LINE.** It read
+                // `textContent.includes("contradicts")` at the first round's head — a fragment of a
+                // TRANSLATED sentence, in a file whose own comments say twice that a class is asked
+                // for and never its text. The edge layer measured the cost with a control: the same
+                // plant, the same seed, `EXIT=1` in English and `EXIT=0` in French, the gate
+                // printing a positive sentence over the live defect. Its first repair asked for
+                // `p.empty:not(.ipam-unobservable)`, which the *outside is truncated* paragraph
+                // also matches — a needle that reds on a big enough network.
+                allClear: document.querySelector(".ipam-audit p.ipam-all-clear") !== null,
+              };
+            }, UNOBSERVABLE);
+            {
+              // axe on the branch itself: its markup is not the grid's, so the seeded pass above
+              // measured none of it.
+              await probe.addScriptTag({ content: axeSource });
+              const run = await probe.evaluate(
+                async (tags) =>
+                  await window.axe.run(document, { runOnly: { type: "tag", values: tags } }),
+                TAGS,
+              );
+              const nodes = run.violations.reduce((sum, v) => sum + v.nodes.length, 0);
+              for (const violation of run.violations) {
+                console.log(
+                  `🔴 ${href} (IPv6)  ${violation.id}(${violation.nodes.length}, ${violation.impact})`,
+                );
+              }
+              await probe.close();
+              return { ...found, href, nodes };
+            }
+            await probe.close();
+          }
+          return null;
+        })();
+        if (v6 === null) {
+          if (REQUIRE_V6) {
+            cannotRun(
+              `no selector tab of ${PLAN_ROUTE} names an IPv6 subnet, so the branch story 14.6 ` +
+                `exists for was not measured. Seed one (a11y/seed.sql). ⚠️ This says the PLAN holds ` +
+                `no IPv6 subnet — which the tab names establish — and says nothing about whether ` +
+                `the product would render it correctly; that is the check below.`,
+            );
+          }
+          console.log(
+            `⚠️  ${PLAN_ROUTE} holds no IPv6 subnet: story 14.6's page was NOT measured. ` +
+              `Set AXE_REQUIRE_V6=1 to make that a refusal rather than a gap.`,
+          );
+        } else {
+          // 🔴 The two things the family decides, measured on the SERVED page rather than reasoned
+          // about: no grid at any size, and the all-clear REPLACED rather than accompanied.
+          if (!v6.unobservable) {
+            v6Failure =
+              `${v6.href} is an IPv6 subnet and carries no ${UNOBSERVABLE}: the page says nothing ` +
+              `about not having been checked, so an empty audit reads as *nothing is wrong*`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${v6Failure}`);
+          } else if (v6.cells > 0) {
+            v6Failure = `${v6.href} drew ${v6.cells} grid cell(s) on an IPv6 subnet`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${v6Failure}`);
+          } else if (v6.allClear) {
+            v6Failure =
+              `${v6.href} rendered the all-clear on an IPv6 subnet — the product asserting ` +
+              `concordance about a plan its only connector never looks at`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${v6Failure}`);
+          } else {
+            console.log(
+              `   ${v6.href}: the IPv6 page draws no grid, says nothing was checked, ` +
+                `${v6.nodes} violation node(s)`,
+            );
+          }
         }
 
         // ── Story 14.3b: the findings list, its words told apart WITHOUT colour ─────────────
@@ -728,6 +842,9 @@ async function main() {
   }
   if (tabNameClash !== null) {
     failing.push(`${PLAN_ROUTE} (two selector tabs share a name)`);
+  }
+  if (v6Failure !== null) {
+    failing.push(`${PLAN_ROUTE} (the IPv6 page)`);
   }
   if (warningFailure !== null) {
     failing.push(`${PLAN_ROUTE} (the address warning did not appear)`);

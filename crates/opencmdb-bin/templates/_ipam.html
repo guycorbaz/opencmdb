@@ -85,7 +85,15 @@
     <li><span class="mono">{{ row.bounds }}</span> · {{ row.policy }}{% if row.label != "" %} · {{ row.label }}{% endif %}</li>
     {%- endfor %}
   </ul>
-  {#- Decision 14: a subnet too large to draw offers nothing, says so, and still shows its findings. -#}
+  {#- Decision 14: a subnet too large to draw offers nothing, says so, and still shows its findings.
+       🔴 **STORY 14.6 CHANGED THAT SECOND HALF FOR ONE ADDRESS FAMILY, and this comment did not
+       move.** An IPv6 subnet reaches this same branch — `render_unobservable` reuses this body with
+       two strings replaced — and shows NO findings: a sentence saying nothing was compared stands
+       where the list would be, because the product has no observation of IPv6 to compare against.
+       ⚠️ The acceptance layer found this line still stating the old rule flatly, in the file its own
+       §0.1 had quoted as the thing the story would have to change; this file was in neither the diff
+       nor the File List, so no review slice was cut over it. *A slice is cut from the File List, so
+       a file absent from it is read by nobody* — the class story 14.4's fourth round paid for. -#}
   <p class="empty">{{ s.too_large_no_offer }}</p>
   {% include "_ipam_audit.html" %}
   {#- 🔑 **AC6: the rail's two lists render in THIS branch too.** The grid is skipped here because

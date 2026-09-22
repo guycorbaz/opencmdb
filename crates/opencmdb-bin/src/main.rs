@@ -24,6 +24,7 @@ mod fixtures;
 mod identity_view;
 mod inventory_view;
 mod ipam_audit;
+mod ipam_checks;
 mod ipam_page;
 mod ipam_rail;
 mod ipam_repo;
@@ -2005,16 +2006,19 @@ mod tests {
         };
         let (measured, address, range, removal) = tokio::join!(
             measured,
-            probe_check(format!("{}?addr=192.0.2.9", ipam_page::ADDRESS_CHECK_PATH)),
+            probe_check(format!(
+                "{}?addr=192.0.2.9",
+                ipam_checks::ADDRESS_CHECK_PATH
+            )),
             probe_check(format!(
                 "{}?first=192.0.2.1&last=192.0.2.9&policy=static",
-                ipam_page::RANGE_CHECK_PATH
+                ipam_checks::RANGE_CHECK_PATH
             )),
             // Story 14.4's delete warning: a THIRD unguarded GET route would be exactly the defect
             // this guard exists for, added by the task that closed another one.
             probe_check(format!(
                 "{}?subnet=01900000-0000-7000-8000-0000000000aa&first=192.0.2.1&last=192.0.2.9",
-                ipam_page::DELETE_CHECK_PATH
+                ipam_checks::DELETE_CHECK_PATH
             )),
         );
         // 🔴 **A CHECK REFUSES WITH A SENTENCE AND NOT WITH A STATUS, and this assertion read
@@ -2078,9 +2082,9 @@ mod tests {
     #[tokio::test]
     async fn the_address_check_is_refused_without_a_credential_and_exists() {
         for uri in [
-            format!("{}?addr=", ipam_page::ADDRESS_CHECK_PATH),
-            format!("{}?first=&last=&policy=", ipam_page::RANGE_CHECK_PATH),
-            format!("{}?subnet=", ipam_page::DELETE_CHECK_PATH),
+            format!("{}?addr=", ipam_checks::ADDRESS_CHECK_PATH),
+            format!("{}?first=&last=&policy=", ipam_checks::RANGE_CHECK_PATH),
+            format!("{}?subnet=", ipam_checks::DELETE_CHECK_PATH),
         ] {
             the_check_is_refused_without_a_credential_and_exists(&uri).await;
         }

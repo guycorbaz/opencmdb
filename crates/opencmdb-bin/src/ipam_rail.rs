@@ -21,7 +21,7 @@
 use crate::ipam_page::{policy_key, tab_label};
 use crate::ipam_repo;
 use opencmdb_core::ipam::IpPolicy;
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 
 /// One declared range in the rail, with the id its controls name.
 ///
@@ -87,8 +87,8 @@ impl RailLists {
     /// Build the rail's lists from what the adapter read.
     pub(crate) fn new(
         chosen: &ipam_repo::PlannedSubnet,
-        ranges: &[(String, Ipv4Addr, Ipv4Addr, IpPolicy, String)],
-        addresses: &[(String, Ipv4Addr, String)],
+        ranges: &[(String, IpAddr, IpAddr, IpPolicy, String)],
+        addresses: &[(String, IpAddr, String)],
     ) -> Self {
         Self {
             subnet_id: chosen.id.clone(),

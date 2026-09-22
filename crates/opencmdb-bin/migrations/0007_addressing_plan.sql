@@ -127,8 +127,15 @@ CREATE TABLE IF NOT EXISTS ip_range (
   -- the first pattern was to partially mask the newline hole above, catching a MISMATCHED pair of
   -- poisoned bounds and not a matched one; `\z` removes even that.
   -- It is KEPT rather than deleted because the family rule is real the day FR25 adds a 39-character
-  -- alternative to the pattern — and `the_family_check_is_implied_until_a_second_width_exists` pins
-  -- the implication, so the day it stops being vacuous, a test says so instead of nobody noticing.
+  -- alternative to the pattern — and a test pins the implication, so the day it stops being
+  -- vacuous, a test says so instead of nobody noticing.
+  -- ✅ **THAT DAY WAS 2026-09-22: `0011` ADDED THE 39-CHARACTER ALTERNATIVE AND THIS CHECK IS
+  -- LIVE.** The guard was INVERTED rather than deleted —
+  -- `the_family_check_is_live_now_that_a_second_width_exists` now drives a raw straddling insert
+  -- and asserts the refusal names this constraint. ⚠️ The paragraph above keeps the tense it was
+  -- written in; what would have been wrong is leaving it in the present, which is how a migration
+  -- header goes on describing a schema two migrations old. Its test-name citation was stale for
+  -- one story and was found by a review layer, not by any gate.
   CONSTRAINT ip_range_same_family CHECK (LENGTH(first_addr) = LENGTH(last_addr)),
   CONSTRAINT ip_range_first_canonical
     CHECK (first_addr RLIKE '^(00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])([.](00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){3}\\z'),

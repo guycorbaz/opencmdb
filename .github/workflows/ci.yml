@@ -151,6 +151,7 @@ jobs:
             AXE_REQUIRE_PLAN=1 \
             AXE_REQUIRE_AUDIT=1 \
             AXE_REQUIRE_VLAN=1 \
+            AXE_REQUIRE_V6=1 \
             node a11y/axe-gate.mjs
           # 🔴 **THE KEYBOARD LAYER'S ONLY CARRIER, and until story 6b.11's repair pass it
           # ran nowhere.** `crates/opencmdb-bin/assets/app.js` could be EMPTIED with 490
