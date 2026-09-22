@@ -431,8 +431,26 @@ beside the measurement and exits 1 when they disagree.
 | T6-bis | the same, after the test went through `plan_data` | red | 🔴 red 1 | `the_family_and_not_the_size_decides_what_an_ipv6_subnet_renders` |
 | **B1** | the seed's IPv6 subnet removed | axe 2 | 🔴 axe **2** (*the gate could not run*) | `AXE_REQUIRE_V6` |
 
-**Eleven rows: ten reds and one GREEN that is the finding.** Carriers named per row; no *"every red
-assertion-carried"* headline is claimed.
+| **R1** | the all-clear rendered BESIDE the unobservable sentence (the template's `else if` split in two) | red | 🔴 red 1 | `the_family_and_not_the_size_decides_what_an_ipv6_subnet_renders` — **and this exact mutation was measured GREEN by the edge layer against the first round's head** |
+| **R2** | `overlaps` loses both family arms | red | 🔴 red 1 | `a_subnet_never_contains_an_address_of_another_family`, on the straddling assertion this round added |
+| **R3** | `parse_cidr` loses the IPv4-mapped refusal | red | 🔴 red 1 | `an_ipv4_space_written_in_ipv6_form_is_refused_and_ipv6_proper_is_not` |
+| **R-fr** | the R1 plant, served in FRENCH, measured by `axe-gate.mjs` | red | 🔴 exit 1, naming the route | the gate's `p.ipam-all-clear` selector — **the control: `exit 0` on the same plant before this round, because the needle was an English text fragment** |
+
+**Fifteen rows: fourteen reds and one GREEN that is the finding.** Carriers named per row; no *"every
+red assertion-carried"* headline is claimed.
+
+🔴 **R1 IS THE SECOND ROUND'S HEADLINE AND IT IS A MEASUREMENT OF THE FIRST ROUND'S RECORD.** The
+mutation is the defect AC4 exists to forbid — the product asserting concordance about a plan its only
+connector never looks at, rendered BESIDE the sentence saying nothing was compared — and against the
+first round's head it left **1 043 tests, clippy and ten gates GREEN**, because the Rust oracle was
+`!page.contains(t!("ipam.findings.none"))` and Askama escapes the apostrophe in *this subnet's plan*.
+🔑 *The negative form is what hid it: the positive twin beside it would have reddened the day it was
+written.* The all-clear carries a class of its own now, and the Rust test and the browser gate both
+name it. ⚠️ **R-fr is the other half**, and it needed a CONTROL to mean anything: the browser carrier
+was `textContent.includes("contradicts")`, a fragment of a TRANSLATED sentence, so the same plant gave
+`exit 1` in English and `exit 0` in French — the gate printing a positive verdict over the live
+defect — in a file whose own comments say twice that a class is asked for and never its text. Planted
+and clean, both measured in French: **1** and **0**.
 
 🔴 **`cargo xtask mutate` STILL CANNOT DRIVE DDL — this is the FOURTH story to measure it**, and
 `deferred-work.md:5164` asks each one to record its pass there. With `--baseline` on a virgin store
@@ -542,6 +560,7 @@ Every IPv6 behaviour is exercised by fixtures, as story 14.5's VLAN was.
 - file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: a11y/axe-gate.mjs
 - file: a11y/seed.sql
+- file: CLAUDE.md
 - file: crates/opencmdb-bin/assets/app.css
 - file: crates/opencmdb-bin/locales/app.yml
 - file: crates/opencmdb-bin/migrations/0007_addressing_plan.sql
@@ -557,6 +576,7 @@ Every IPv6 behaviour is exercised by fixtures, as story 14.5's VLAN was.
 - file: crates/opencmdb-bin/templates/_ipam.html
 - file: crates/opencmdb-bin/templates/_ipam_audit.html
 - file: docs/manuals/user-manual/user-manual.tex
+- file: docs/project-context.md
 
 ### File List
 
