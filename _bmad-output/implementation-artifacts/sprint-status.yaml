@@ -5813,10 +5813,38 @@ development_status:
   #   ⚠️ The two inherited rows it was given are NOT both closed: the release now refuses IPv6 by name
   #   with a keyed 409, and `plan_releases` gained a narrowing arm at the review — but whether that
   #   discharges the whole-table read is a question for the FINAL retrospective, not a claim here.
-  epic-14-retrospective: required
+  epic-14-retrospective: done
   #   ⚠️ A PARTIAL retrospective was HELD 2026-09-19 (`epic-14-retro-2026-09-19.md`) over the seven
-  #   stories then done; Guy chose to add 14.5 and 14.6 before closing, so it stays `required` and the
-  #   FINAL retrospective follows 14.6, then the project review, then the release.
+  #   stories then done; Guy chose to add 14.5 and 14.6 before closing, so it stayed `required`.
+  #   ✅ The FINAL retrospective was HELD 2026-09-22 (`epic-14-retro-2026-09-22.md`), adding 14.4c,
+  #   14.5 and 14.6. TEN stories delivered, 859 → 1 045 tests, five migrations, 31 PRs, CI green on
+  #   every merged head commit ITSELF.
+  #   🔴 THE THREE DEFECT RATES DID NOT MOVE: record defects, guards that cannot fail and instruments
+  #   that lie are each 3 of 3 again, and a FOURTH class earned its name — a scripted edit detaching a
+  #   doc comment from its item, six occurrences in two stories, catchable by no gate because a doc
+  #   comment always compiles.
+  #   🔑 THE EPIC'S TRANSFERABLE LESSON, measured rather than argued: `cargo xtask record` (action A1)
+  #   made the ARITHMETIC right for the first time — not one number in either block could be falsified
+  #   — and the record defects MIGRATED to what it declines to read: `Status:` (stale in both stories
+  #   written after it), the Change Log (absent from 14.6), and the criteria themselves. Its own §3
+  #   predicted three of the four IN WRITING before either story ran. *Every instrument this project
+  #   builds measures a named region, and the defect moves to the region next to it.*
+  #   🔴 Its sharpest specimen: an insertion anchored on `## Record` — the heading 14.4c minted — cut
+  #   AC13 in half, and the checker answered ✅ printed inside the wreckage. *A checker that validates
+  #   a block cannot tell you the document around it was destroyed to make room for the block.*
+  #   ⚠️ The blind layer's streak ENDED (0 of 3 for the story's own headline, after ≥5 of 7), and the
+  #   reason is instructive rather than alarming: both headlines were *a guard that cannot fail*,
+  #   which is established by RUNNING, not by reading. The layer is kept.
+  #   ✅ Guy's four decisions (2026-09-22): widen `cargo xtask record` to its three blind spots · a
+  #   story created by a retrospective COUNTS in its epic (`epics.md` gains 14.4c with its provenance)
+  #   · the release UNDO stays open, owner Epic 17 · `/ipam/release`'s any-IPv4 acceptance and the
+  #   whole-table read stay open, owner Epic 17.
+  #   ⚠️ FOUR ACTION ITEMS: B1 widen the record checker · B2 the IPAM release notes, **BLOCKING**, and
+  #   they must correct `CHANGELOG.md`'s *"the COMING audit of the addressing plan"* as well as add
+  #   the gestures · B3 carry the DDL debt to a decision rather than a fifth routing · B4 write the
+  #   partial retrospective's closures INTO the register — DONE in the same act, because *a
+  #   retrospective that says "closed" is not a closure if the closure lives only in the retrospective*.
+  #   ⚠️ `epic-14` STAYS `in-progress`: the PROJECT REVIEW follows, then the release.
 
   # ── Epic 15: Applications & « Hosted here » (v0.13) ──────────────────────
   epic-15: backlog

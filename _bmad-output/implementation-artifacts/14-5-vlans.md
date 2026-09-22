@@ -1,6 +1,10 @@
 # Story 14.5: VLANs — the segment a subnet belongs to
 
-Status: in-progress
+Status: **done** — PR #193 squash-merged 2026-09-21 as `bf4b71e`, CI green on the head commit
+`03623e4` itself; the status flip is PR #194. ⚠️ It read `in-progress` until the FINAL
+retrospective's evidence pass found it — the defect the PARTIAL retrospective's §8 had fixed by hand
+two days before this story was written, recurring here and in 14.6. `cargo xtask record` does not
+read this line.
 
 🔑 **In NO epic file.** `epics.md`'s Epic 14 body stops at story 14.4; the Epic List entry (`:474-476`)
 names 14.5 and 14.6, added by the partial retrospective. So this story inherits **FR21's one sentence**
@@ -486,7 +490,13 @@ measurement and exits 1 when they disagree.
 | **R1** | the review's repair: `tab_labels` never disambiguates | red:1 | 🔴 red 1 | `the_selector_is_distinct_however_the_operator_labels_it` |
 | **R2** | `define_subnet(subnet, label, vlan)` → `…, 0)` | red:1 | 🔴 red 1 | `a_well_formed_definition…`, after the review added its non-zero half |
 
-**Twenty-three rows: nineteen reds, three greens (one of them a refutation), one driver refusal.**
+**Twenty-three rows: EIGHTEEN reds, four greens (one of them a refutation), one driver refusal.**
+🔴 **It read *nineteen reds, three greens* until the FINAL retrospective recounted the marks in
+the table itself** — 18 🔴, 4 ✅, 1 ⚠️, which sums to 23 with no row carrying two marks, so one row
+was classified two ways in the summary. ⚠️ *Story 6b.10's defect, cited two lines above this
+sentence, in the table the code review had just reconstructed BECAUSE the summary kept drifting.*
+🔑 The table is the record; this line is a convenience, and it is now derived by counting rather
+than by recollection.
 Carriers are MIXED and named per row; no *"every red assertion-carried"* headline is claimed, and one
 row is carried by a LINT rather than by a test, which is said rather than blended in.
 
@@ -544,3 +554,11 @@ The `## Record` block's `file:` lines are this story's File List (checked by `ca
 
 - 2026-09-21 — Contexted, on Guy's three decisions of 2026-09-21 (the word minted first, the VLAN on the
   subnet, a declared axis whose limit is said).
+- 2026-09-21 — Validated by two fresh-context layers, then implemented; code-reviewed by three
+  isolated layers and REPAIRED (21 distinct findings, four reached by two layers independently, none
+  in the write path). Merged as `bf4b71e` (PR #193); the status flip is PR #194.
+- 2026-09-22 — ⚠️ **Added at Epic 14's FINAL retrospective, which is the defect**: this log stopped at
+  *Contexted* while the story had been validated, implemented, reviewed, repaired and merged, and its
+  `Status:` field still read `in-progress`. The mutation summary is corrected the same day by counting
+  the table's own marks. *Neither the `Status:` line nor this section is inside the `## Record` block,
+  so `cargo xtask record` reads neither — and both drifted in the two stories written after it.*

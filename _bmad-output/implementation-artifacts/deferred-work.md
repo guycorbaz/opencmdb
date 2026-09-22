@@ -5467,7 +5467,7 @@ One row, and v0.3.0 is what made it live.
   row and names these two rather than fixing them, because widening a guard over enums it does not own
   is scope. **Owner: whichever story next touches `EntityState` or `EntityKind` — story 6.12 by name.**
 
-- ⚠️ **Epic 14 has FIVE stories and `epics.md` describes FOUR.** Story 14.2 was split at its
+- ⚠️ **Epic 14 has FIVE stories and `epics.md` describes FOUR.✅ **CLOSED by Epic 14's FINAL retrospective, 2026-09-22.** TEN delivered; `epics.md` carries all ten and 14.4c's provenance (Guy's decision 2).** Story 14.2 was split at its
   implementation on 2026-09-11 (Guy) into 14.2 *the screen* and **14.2b *the operator's hands***,
   after the mandatory validation grew it from two write routes to three and added a `free`
   treatment, an auth-perimeter property, a permanent concurrency harness and a `classify` repair.
@@ -5476,7 +5476,7 @@ One row, and v0.3.0 is what made it live.
   sighting summary (schema, ingest maintenance, backfill, no screen), and **14.3b**, the audit — because
   reading every observation row on each render measured 3.0–3.3 s at 1 M rows (≈ 75 days of sweeping).
 
-- ⚠️ **The UX spec asks for a grid this product does not render.**
+- ⚠️ **The UX spec asks for a grid this product does not render. ✅ **DECIDED by the partial retrospective, 2026-09-19: KEPT, owner Epic 19** with the accessibility residuals. (written here by the FINAL retrospective's action B4, 2026-09-22: the partial retrospective DECIDED this row and never edited it, and a decision that lives only in a retrospective is not one the next story can read.)**
   `ux-design-specification.md:1632-1634` prescribes `role="grid"` with keyboard navigation,
   `role="gridcell"` and an accessible *"jump to next free IP"*; story 6b.7 shipped `<ul
   role="list">` on a measured ARIA reason and story 14.2 rebuilt that grid without changing the
@@ -5621,13 +5621,13 @@ One row, and v0.3.0 is what made it live.
 
 ## Raised by story 14.3's validation and T0 (2026-09-15)
 
-- ⚠️ **The epic's AC1 names `static` among the places an observed address is `undeclared`; story 14.3b
+- ⚠️ **The epic's AC1 names `static` among the places an observed address is `undeclared` — ✅ **CLOSED by the partial retrospective, 2026-09-19**: the audit says `gap`, which is the BINDING word, and the criterion's letter yields to the vocabulary. (written here by the FINAL retrospective's action B4, 2026-09-22: the partial retrospective DECIDED this row and never edited it, and a decision that lives only in a retrospective is not one the next story can read.) Originally:; story 14.3b
   calls it `gap` there.** Guy's decision 1 (2026-09-15): `gap` = an observed address the plan WOULD
   OFFER (a free cell in a `static` range), `undeclared` = every other observed address with no row. The
   epic's AC1 and AC2 overlapped on exactly that cell, and read literally AC2 made every DHCP lease a
   `gap`; the letter of AC1 for `static` is the part given up. A story may not edit `epics.md`. **Owner:
   Epic 14's retrospective.**
-- ⚠️ **PRD FR24 counts *"a static-declared IP inside a DHCP range"* as an IP conflict (`prd.md:909`);
+- ⚠️ **PRD FR24 counts *"a static-declared IP inside a DHCP range"* as an IP conflict — ✅ **DECIDED by the partial retrospective, 2026-09-19: KEPT, owner the `prd.md:766` rewrite**, which is where PRD divergences belong. (written here by the FINAL retrospective's action B4, 2026-09-22: the partial retrospective DECIDED this row and never edited it, and a decision that lives only in a retrospective is not one the next story can read.) Originally: (`prd.md:909`);
   story 14.3b shows it as a WARNING, not a conflict** (Guy, decisions 10 and 13), on story 14.2b's
   finding that a static reservation inside a pool is *"ordinary and correct"*. And FR24's two-MAC half is
   scoped to `static`/`reserved` ranges because the neighbour table holds one MAC per address per sweep
@@ -5790,7 +5790,7 @@ One row, and v0.3.0 is what made it live.
 
 ## Raised by story 14.4's contexting and validation (2026-09-16)
 
-- ⚠️ **Epic 14 now has SEVEN stories where `epics.md` describes FOUR.** 14.2b was inserted at 14.2's
+- ⚠️ **Epic 14 now has SEVEN stories where `epics.md` describes FOUR.✅ **CLOSED by Epic 14's FINAL retrospective, 2026-09-22.** TEN delivered; `epics.md` updated. ⚠️ Note for the next epic: this row was written twice, a story apart, and neither writing fixed the file — *a register row that restates a discrepancy is not a correction of it*.** 14.2b was inserted at 14.2's
   implementation, 14.3 split into 14.3a/14.3b at its validation, and **14.4 split into 14.4 (the
   corrections) and 14.4b (the release) at its own**, on Guy's decision of 2026-09-16 taken on measured
   evidence: the two halves share no table, no module, no migration and no vocabulary. A story may not
@@ -5818,7 +5818,7 @@ One row, and v0.3.0 is what made it live.
   for one field errors 1062. *Whoever followed this row to 6b.10's arbitration would have found it
   saying the opposite.* Right about the conclusion, wrong about the cause — this file's own class.
 
-- ⚠️ **CITING A PLANNING DOCUMENT BY LINE NUMBER IS A STANDING DEBT, and it is nobody's story.**
+- ⚠️ **CITING A PLANNING DOCUMENT BY LINE NUMBER IS A STANDING DEBT — ✅ **CLOSED AS DECIDED by the partial retrospective, 2026-09-19**: the citations stay as DATED pointers and are not repaired; a line number with a date attached is honest, one without is a claim. (written here by the FINAL retrospective's action B4, 2026-09-22: the partial retrospective DECIDED this row and never edited it, and a decision that lives only in a retrospective is not one the next story can read.) Originally, it is nobody's story.**
   Measured 2026-09-18: roughly **thirty-five** `prd.md:<line>` / `ux-design-specification.md:<line>`
   citations sit across this repository, **five of them under `crates/` and `xtask/`**
   (`app.yml:501`, `main.rs:3491` and `:3795`, `repo.rs:290`, `observed_immutable.rs:5`). Any
@@ -5833,7 +5833,7 @@ One row, and v0.3.0 is what made it live.
   table or the sentence rather than the line**, which `BINDING_GESTURE_AXIS`'s doc now does.
   **Owner: Epic 14's retrospective**, which should decide whether the existing citations are worth
   repairing at all or simply left as the dated pointers they are.
-- ⚠️ **Story 6b.7's absent *Réserver* control is called *registered* and is in NO register row.** Its
+- ⚠️ **Story 6b.7's absent *Réserver* control — ✅ **CLOSED by the partial retrospective, 2026-09-19**: DEFINING an address IS reserving it, so `/ipam` owes no second gesture. (written here by the FINAL retrospective's action B4, 2026-09-22: the partial retrospective DECIDED this row and never edited it, and a decision that lives only in a retrospective is not one the next story can read.) Originally: called *registered* and in NO register row.** Its
   own file (`6b-7-applications-and-ipam.md:442`, `:805`) records the decision and no row was ever
   written here; no code site carries it either. It is this file's own class — *a section that says
   "registered" is not a registration* (`:4530`). Registered now, at second hand. **Owner: Epic 14's
@@ -5882,7 +5882,7 @@ three independently. These are the ones deferred rather than patched — each wi
   method-not-allowed body joins the keyed perimeter story 6b.10's arbitration 2(a′) drew around the
   bodies served at these addresses. **Owner: Epic 19**, which already carries Basic's closure and the
   other HTTP-surface residuals.
-- ⚠️ **The four record-addressed forms are now UN-PARENTED at the route, and a *move* gesture must
+- ⚠️ **The four record-addressed forms are UN-PARENTED at the route — ✅ **CLOSED by the partial retrospective, 2026-09-19**: there is no *move* gesture in Epic 14, and this row reopens only if one is asked for. (written here by the FINAL retrospective's action B4, 2026-09-22: the partial retrospective DECIDED this row and never edited it, and a decision that lives only in a retrospective is not one the next story can read.) Originally: and a *move* gesture must
   re-open that rather than inherit it.** Guy's decision 1 of 2026-09-16 removed `subnet_id` from the
   range and address corrections and deletions: the adapter reads the record's real parent off the row,
   so nothing the browser sends can name a subnet any more. That is right for every gesture the product
@@ -5952,13 +5952,22 @@ three independently. These are the ones deferred rather than patched — each wi
   that is asleep makes its address OFFERABLE until it wakes. The row can be removed by hand —
   ⚠️ **in the PADDED form**, `DELETE FROM address_release WHERE addr = '192.000.002.009'`: the
   unpadded `'192.0.2.9'` matches nothing and reports no error (the code review's acceptance layer
-  found this row silent about it). The Administrator Manual now carries it. **Owner: Epic 14's retrospective**, which decides
-  whether the Undo Toast (`ux-design-specification.md:1244`) or a rail list is owed.
+  found this row silent about it). The Administrator Manual now carries it.
+  ✅ **DECIDED by Epic 14's FINAL retrospective (Guy, decision 3, 2026-09-22): KEPT OPEN, owner
+  Epic 17** — *Retour après une absence*, whose subject IS a machine that was away, so the usage
+  evidence this row needs arrives there naturally. ⚠️ Closing it on the argument that the network
+  corrects a mistaken release was REFUSED: that is true only of a machine that ANSWERS, and the
+  exposed case is precisely the machine that is asleep. Whether the Undo Toast
+  (`ux-design-specification.md:1244`) or a rail list is owed is Epic 17's to decide.
 - ⚠️ **The OUTSIDE list offers no release** (decision 2 put the control on the SUBNET's findings). An
   address seen outside every subnet stays listed until a subnet contains it. The route itself accepts
-  one — measured, it redirects to `/ipam` — so what is missing is a control, not a rule. **Owner: Epic
-  14's retrospective.**
-- 🔴 **AC2's letter and decision 1 disagree, and the story ships decision 1.** AC2 reads *"ingests an
+  one — measured, it redirects to `/ipam` — so what is missing is a control, not a rule.
+  ✅ **CLOSED by story 14.5, 2026-09-21**: the outside list carries a live release form
+  (`_ipam_audit.html:134`), unconditional there because an address is *outside* when no subnet
+  contains it, so decision 4's refusal names a row this list cannot hold. Verified at the final
+  retrospective. ⚠️ The partial retrospective had re-owned this row to 14.5 in its §7 and **the row
+  itself was never edited** — which is the class action B4 exists to close.
+- 🔴 **AC2's letter and decision 1 disagree, and the story ships decision 1. ✅ **CLOSED by the partial retrospective, 2026-09-19**: decision 1 IS the rule — an address something answers on must never be offered — and `epics.md` was not edited. (written here by the FINAL retrospective's action B4, 2026-09-22: the partial retrospective DECIDED this row and never edited it, and a decision that lives only in a retrospective is not one the next story can read.)** AC2 reads *"ingests an
   observation of the released address afterwards and asserts the audit's answer is unchanged"*; under
   decision 1 an observation LATER than the release holds the address again — by design, since an
   address something answers on must never be offered. What the test asserts is the property the refused
@@ -5998,12 +6007,20 @@ three independently. These are the ones deferred rather than patched — each wi
 - ⚠️ **`/ipam/release` accepts any well-formed IPv4** — `0.0.0.0`, `255.255.255.255`, an address outside
   every subnet, all answer 200 and write a row (edge layer, measured) — and `plan_releases` reads the
   table WHOLE on every `read_the_network`, which includes the debounced per-keystroke address check.
-  Bounded only by what an authenticated client posts. **Owner: Epic 14's retrospective** (refuse
-  addresses outside every subnet, or index the read by the subnet in force).
+  Bounded only by what an authenticated client posts.
+  ✅ **DECIDED by Epic 14's FINAL retrospective (Guy, decision 4, 2026-09-22): KEPT OPEN, owner Epic
+  17** — the whole-table read is a RETENTION and HISTORY question, which is what Epic 17 already
+  carries for the observation summary, and no measurement today says it is a problem. ⚠️ Calling
+  story 14.6's narrowing arm a discharge was REFUSED, because **14.6 itself declined to claim it**:
+  *"whether that discharges the whole-table read is a question for the FINAL retrospective, not a
+  claim here"*. What 14.6 DID add is the IPv6 refusal (a keyed 409) and the narrowing arm; the
+  remedies this row names — refuse an address outside every subnet, or index the read by the subnet
+  in force — are untouched.
 - ⚠️ **Releasing from an OUTER subnet's findings sends the operator to the INNER subnet** — measured on
   `10.20.0.0/16` ⊃ `10.20.5.0/24`: the redirect names the `/24`. The address belongs to the inner
   subnet, whose view shows the same finding; what is lost is the page the operator pressed from.
-  **Owner: Epic 14's retrospective.**
+  ✅ **CLOSED by the partial retrospective (2026-09-19) as an ACCEPTED cost** — the address belongs to
+  the inner subnet — and the row is edited here rather than merely pointed at, which is action B4.
 
 ## Triaged by Epic 14's PARTIAL retrospective (2026-09-19)
 
