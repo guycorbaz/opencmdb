@@ -8,7 +8,7 @@ schema will move.
 
 ---
 
-## Unreleased — the identity engine runs on your network
+## 0.5.0 — the identity engine runs on your network, and you can write down your addressing plan
 
 🔑 **The sweep reads a hardware address, and that is the fact everything else was waiting for.**
 `identity::l1::join` keys on `(l2_domain, mac)`, so until now every sighting the product made stood
@@ -50,15 +50,71 @@ anchor; no rule reads that yet, and this release does not add one.
 
 A new table, `address_sighting`, keeps one row per address, L2 domain and hardware address ever
 seen, with the first and the last time it was seen. It is written in the same transaction as each
-observation, and it is what the coming audit of the addressing plan reads — instead of every
-observation ever recorded, which measured 3.0–3.3 s at a million rows. **Nothing on screen changes
-yet.**
+observation, and it is what the audit of the addressing plan reads — instead of every observation
+ever recorded, which measured 3.0–3.3 s at a million rows. **Nothing on screen changes for this
+table itself**; what reads it is the next section.
 
 ⚠️ **When you upgrade, the first start takes a moment before it answers.** It reads every stored
 observation once, before the web port opens, and records that it has done so: about 2 s for a
 million observations on a 32-core workstation (about 75 days of sweeping 46 hosts), the whole process
 peaking near 10 MB; slower on a NAS, and longer on a network with very many distinct addresses. An observation it cannot decode is skipped and named in the log. If you load
 `docker/seed-example.sql`, use this version's copy: it writes the sighting its observation implies.
+
+### You can write down your addressing plan, and the product audits it against the network
+
+🔑 **This is the largest thing in this release, and it is the first place where opencmdb PREVENTS a
+mistake instead of reporting one.** Until now `/ipam` drew an invented example network. It draws
+yours.
+
+**What you can do.** Declare subnets, ranges and individual addresses. A range carries a **policy** —
+`static`, `dhcp-pool`, `reserved` or `infrastructure` — and the policy is what decides whether a
+finding is a finding: an unclaimed address is an anomaly under `static` and perfectly normal inside a
+DHCP pool. Correct and remove any of them. And **release** an address: tell the plan to forget what
+the network showed on it.
+
+**What the product does with it.** It compares your plan against what the sweeps have seen, and lists
+every observed address as `gap` — the plan says free, the network shows it occupied —, `undeclared` —
+observed, and no entry claims it — or **Conflit d'adresse**. It warns you before a write, and writes
+anyway: as you type an address the plan already holds, and as you draw a `static` range over
+addresses the network is already using.
+
+🔑 **And the *next free address* panel excludes every address the network has shown**, not merely
+those your plan claims. *That is the whole point of the epic: the panel used to offer an address on
+the grounds that no record claimed it, which is exactly how two machines end up on one address.*
+
+⚠️ **A sighting protects an address until you release it, and the grid never empties by itself.** A
+laptop asleep, a machine off for the weekend, a monthly backup server — none answers a sweep, all
+keep their address, and **the product cannot tell *gone* from *silent***. One sweep of the reference
+network saw 46 hosts where 49 exist. Every held cell carries the date it was last seen; releasing one
+is a deliberate gesture, and it has **no undo on screen** — the row can be removed by hand, and the
+administrator manual says how (the address is stored zero-padded: `192.000.002.009`, not
+`192.0.2.9`).
+
+**VLANs.** A subnet can declare one, so the same CIDR can be held once per VLAN. ⚠️ **The audit
+ignores the VLAN, by decision, and the screen says so**: the plan's VLAN is something you DECLARE
+where an L2 domain is something the product OBSERVES, and nothing relates the two — joining them
+would be an identity claim no evidence supports. Two segments of one CIDR therefore share one audit,
+one grid and one offer.
+
+**IPv6, observation-only.** The plan holds IPv6 subnets, ranges and addresses, and you correct and
+remove them like any other. ⚠️ **An IPv6 subnet gets no grid, no occupancy count, no free-address
+offer and no findings, whatever its prefix length** — the scanner reads hardware addresses off the
+IPv4 neighbour table and there is no IPv6 equivalent in this product, so there is nothing to compare
+your plan against. The page says *this subnet was not compared against the network* rather than
+drawing an empty audit, because **an empty findings list reads as *nothing is wrong* where the truth
+is *nothing was checked***. Write an IPv4 space as IPv4: `::ffff:192.0.2.0/120` is refused, because
+held as IPv6 it would tell you the product cannot observe a range it sweeps every five minutes.
+
+🔴 **THE PLAN'S WRITE ROUTES CARRY NO OPT-IN.** `OPENCMDB_DOCUMENT_ENABLED` guards the *documenting*
+gesture because that one writes into the declared record on the product's own initiative; the IPAM
+routes carry no such hazard and are **live on a fresh install**, behind your HTTP credentials and
+nothing else. If your instance is reachable by anyone you would not trust with your addressing plan,
+that is now a decision you are making.
+
+⚠️ **When you upgrade, five migrations apply at boot** (`0007` to `0011`). They create the plan's
+three tables, the sighting summary and the release log, add the VLAN column and widen four
+constraints for IPv6. As always here, **no upgrade path is promised between `0.x` tags** — but these
+five are additive: nothing you had is dropped or rewritten.
 
 ### Security
 
@@ -74,6 +130,11 @@ were accepted in plaintext. A lockfile change only; nothing to do when you upgra
 It forms **interfaces**, not devices. Two network cards of one machine are now two interfaces the
 engine can see and reason about — and nothing yet says they are one machine. That rule is Epic 6's,
 and it is the next thing this product needs.
+
+On the addressing plan: it does not move a record from one subnet to another, it does not undo a
+release from the screen, and it does not observe IPv6. The audit does not read VLANs. And the
+keyboard shortcuts on `/ipam` are not exercised on an IPv6 subnet's page, so the correction and
+removal controls there are the one surface in this release no browser test walks.
 
 ---
 
