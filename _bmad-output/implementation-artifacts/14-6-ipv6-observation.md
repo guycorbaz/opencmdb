@@ -385,7 +385,23 @@ surface is *the gate could not run* rather than a pass — this project's own `A
 distinction. Any new key joins `ipam_page.rs`'s non-blank guard, and **a `.rs` is touched** because
 `app.yml` is invisible to Cargo's incremental build.
 
-**AC13 — THE LIVE COUNT lives in this story's `## Record` block**, checked by `cargo xtask record`,
+**AC13 — THE LIVE COUNT lives in this story's `## Second review round — verification (2026-09-22)
+
+Re-measured on the repaired tree, each command's status read from `$?` and never through a pipe:
+
+- `cargo fmt --all --check` ✅ · `cargo clippy --workspace --all-targets -- -D warnings` ✅ ·
+  `cargo xtask ci` **ten gates green** · `cargo deny check` ✅ · `cargo xtask record` ✅ · both
+  manuals build.
+- `RUSTFLAGS="-D warnings" cargo test --workspace --locked` against a **virgin** store:
+  **744 + 191 + 110 = 1 045**, 25.17 s. Without a store: the same counts in **5.04 s** — the clock is
+  the tell that the store-backed half genuinely executed.
+- Browser gates on a freshly seeded virgin store: axe **10 routes + 5 states, 0 violation nodes**
+  under all six `REQUIRE` flags (the IPv6 page reported by name), kbd **61 checks, 0 failed**.
+- **R1, R2, R3 and R-fr all conform to predictions written before the run** (`--baseline`, virgin
+  store). R1 is the one that matters: the mutation the edge layer measured GREEN against the first
+  round's head now reds, naming one test.
+
+## Record` block**, checked by `cargo xtask record`,
 with the DDL pass recorded into `deferred-work.md:5164`'s row as that row asks of the next migration
 story — story 14.5 was the third to route around the driver.
 
