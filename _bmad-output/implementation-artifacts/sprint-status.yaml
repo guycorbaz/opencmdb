@@ -5786,10 +5786,33 @@ development_status:
   #   file-size blindness; the kbd gate's focus coupling; `0007`'s uncorrectable prose; AC2/AC3's
   #   refusal-sentence divergences; the release redirect picking the lowest VLAN on a tie; the
   #   grid/rail asymmetry across two segments; and the three GET checks as the next split.
-  14-6-ipv6-observation: backlog
-  #   FR25, IPv6 observation-only. The schema already reserves the width (`VARCHAR(39)`, `prefix_len`
-  #   <= 128) and `ip_range_same_family` is dormant until now. Inherits: `/ipam/release` accepting any
-  #   well-formed IPv4 and `plan_releases` reading the whole table per audit read.
+  14-6-ipv6-observation: done
+  #   DONE 2026-09-22, PR #195 squash-merged as `1869af5`, CI green on the head commit `9260d07`
+  #   ITSELF (run 35709115118, 3m22, mergeStateStatus CLEAN) rather than inherited. The plan speaks
+  #   IPv6 and the product says what it cannot see: migration `0011` widens the FOUR plan-side
+  #   canonical CHECKs to the 39-character expanded form and leaves `address_sighting` and
+  #   `address_release` narrow BY DECISION — the plan may hold IPv6, the OBSERVED side may not,
+  #   because no connector reads it.
+  #   🔴 The story's central premise was REFUTED by the gap-hunt building it: the size ceiling does
+  #   not deliver the refusal (a `/120` drew a 256-cell grid, an occupancy line and an offer), so the
+  #   refusal is keyed on the FAMILY. `size()` saturates on `u128`, because `1_u64 << (128 - 64)`
+  #   panics in debug and RETURNS 1 in release and this workspace declares no `[profile]`.
+  #   🔴 CODE-REVIEWED by three isolated layers and REPAIRED. The headline: the test carrying AC4
+  #   COULD NOT FAIL — Askama escapes the apostrophe in *this subnet's plan*, so the negation was true
+  #   of every page that exists, and the edge layer planted the very defect the criterion forbids and
+  #   measured 1 043 tests and ten gates GREEN. The browser carrier was locale-fragile with a control
+  #   (`exit 1` in English, `exit 0` in French on the same plant). Both now name a CLASS.
+  #   🔴 Two product defects only a boot could show: the prefix-length refusal named IPv4 for an IPv6
+  #   `/129`, and an IPv4-mapped CIDR was accepted, serving a page that denied observing a space the
+  #   connector sweeps every five minutes.
+  #   ⚠️ AC13's DDL half was asserted in three places and written NOWHERE, which `cargo xtask record`
+  #   is structurally unable to catch: it compares the rows a branch ADDS and that obligation is an
+  #   EDIT. Both registered.
+  #   1 045 tests (744 + 191 + 110), ten gates, axe 0 violation nodes under all six REQUIRE flags,
+  #   kbd 61/0. Fifteen mutation rows: fourteen reds and one green that is the finding.
+  #   ⚠️ The two inherited rows it was given are NOT both closed: the release now refuses IPv6 by name
+  #   with a keyed 409, and `plan_releases` gained a narrowing arm at the review — but whether that
+  #   discharges the whole-table read is a question for the FINAL retrospective, not a claim here.
   epic-14-retrospective: required
   #   ⚠️ A PARTIAL retrospective was HELD 2026-09-19 (`epic-14-retro-2026-09-19.md`) over the seven
   #   stories then done; Guy chose to add 14.5 and 14.6 before closing, so it stays `required` and the
