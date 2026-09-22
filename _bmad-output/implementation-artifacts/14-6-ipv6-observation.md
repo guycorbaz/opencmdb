@@ -1,6 +1,9 @@
 # Story 14.6: IPv6, observation-only — the plan holds what the scanner will never see
 
-Status: **ready-for-dev** — contexted and VALIDATED 2026-09-21 by two fresh-context layers, with
+Status: **done** — PR #195 squash-merged 2026-09-22 as `1869af5`, CI green on the head commit
+`9260d07` itself. ⚠️ It read `ready-for-dev` until the FINAL retrospective's evidence pass found it,
+which is the defect the PARTIAL retrospective's §8 had just fixed by hand on another story file six
+days earlier — and `cargo xtask record` does not read this line. Contexted and VALIDATED 2026-09-21 by two fresh-context layers, with
 nine decisions taken by Guy and each recorded with the option refused.
 
 🔑 **In NO epic file.** `epics.md`'s Epic 14 body stops at story 14.4; `:474` carries the epic's FR scope and **`:476`** is
@@ -380,30 +383,29 @@ rather than claimed.** ⚠️ The criterion's letter says *both*, and only `axe-
 follow the selector to the IPv6 tab; `kbd-probe.mjs` now runs against a store that happens to hold
 one and nothing makes it open that tab. The blind review layer caught the over-claim. **What the
 keyboard gate would add is the rail's controls on an IPv6 subnet** — a real gap, registered rather
-than papered over, because the page carries no gesture the keyboard layer owns. `a11y/seed.sql` is IPv4-only, so an unseeded IPv6
+than papered over, because the page carries no gesture the keyboard layer owns. `a11y/seed.sql` WAS IPv4-only when this criterion was written — ⚠️ **and this story's own commit
+made that sentence false**, adding `2001:0db8:1466::/120` as the third subnet; its mutation B1 is
+*the seed's IPv6 subnet removed*. Corrected at the final retrospective rather than left in the
+present tense. An unseeded IPv6
 surface is *the gate could not run* rather than a pass — this project's own `AXE_REQUIRE_*`
 distinction. Any new key joins `ipam_page.rs`'s non-blank guard, and **a `.rs` is touched** because
 `app.yml` is invisible to Cargo's incremental build.
 
-**AC13 — THE LIVE COUNT lives in this story's `## Second review round — verification (2026-09-22)
-
-Re-measured on the repaired tree, each command's status read from `$?` and never through a pipe:
-
-- `cargo fmt --all --check` ✅ · `cargo clippy --workspace --all-targets -- -D warnings` ✅ ·
-  `cargo xtask ci` **ten gates green** · `cargo deny check` ✅ · `cargo xtask record` ✅ · both
-  manuals build.
-- `RUSTFLAGS="-D warnings" cargo test --workspace --locked` against a **virgin** store:
-  **744 + 191 + 110 = 1 045**, 25.17 s. Without a store: the same counts in **5.04 s** — the clock is
-  the tell that the store-backed half genuinely executed.
-- Browser gates on a freshly seeded virgin store: axe **10 routes + 5 states, 0 violation nodes**
-  under all six `REQUIRE` flags (the IPv6 page reported by name), kbd **61 checks, 0 failed**.
-- **R1, R2, R3 and R-fr all conform to predictions written before the run** (`--baseline`, virgin
-  store). R1 is the one that matters: the mutation the edge layer measured GREEN against the first
-  round's head now reds, naming one test.
-
-## Record` block**, checked by `cargo xtask record`,
+**AC13 — THE LIVE COUNT lives in this story's `## Record` block**, checked by `cargo xtask record`,
 with the DDL pass recorded into `deferred-work.md:5164`'s row as that row asks of the next migration
 story — story 14.5 was the third to route around the driver.
+⚠️ **NOT MET on its second half at the merge, and the criterion itself was DESTROYED by an anchor
+collision** — both found after the merge and repaired here, because a story file is the record and a
+record that lost its criterion is worse than one that failed it. The DDL half was asserted in three
+places and written nowhere; it is registered, together with the fact that `cargo xtask record`
+cannot see an obligation carried by an EDIT. 🔴 **And the criterion above was cut in half by an
+insertion anchored on the string `## Record`, which occurs inside AC13's own text** — the whole
+*Second review round* section landed between its two halves, and `cargo xtask record` answered
+**✅** over the wreckage, because exactly one line in the file equals `## Record` and the block it
+names was intact. 🔑 *A checker that validates a block cannot tell you the document around it was
+destroyed to make room for the block* — story 14.4c's own §3 limit, made concrete one story later,
+on the convention 14.4c minted.
+
 
 **AC14 — no regression**: ten gates, `clippy --all-targets`, `RUSTFLAGS="-D warnings"`, fmt,
 `cargo deny`, both store conditions, both browser gates, both manuals — and the user manual's IPAM
@@ -526,6 +528,10 @@ expanded, zero-padded, lower-case 39-character form and leaves the two OBSERVED-
 the audit joins the two only where both are IPv4. An IPv6 subnet's page draws no grid, no occupancy
 line and no offer **whatever its prefix length**, and says *nothing here was checked* in place of the
 all-clear. **1 032 → 1 043 tests** (742 bin + 191 core + 110 xtask), ten gates, both browser gates.
+⚠️ **That figure is the FIRST round's and it is dated**: the second review round took the tree to
+**744 + 191 + 110 = 1 045**, which the `## Record` block and the verification section both carry.
+Left standing with its date rather than silently updated, because a paragraph that narrates the
+first round should report what the first round measured.
 
 🔴 **THE VALIDATION EARNED ITS COST TWICE, AND THE SECOND TIME IT REFUTED THE STORY'S CENTRE.** The
 gap-hunt BUILT the widening and measured that a `2001:db8:0:43::/120` — 256 addresses, under the
@@ -557,6 +563,37 @@ cut was taken in ONE gesture because story 14.5's review had measured and regist
 ⚠️ **This story could not be verified against real IPv6, measured rather than assumed**: the
 developer machine carries ten link-local addresses, no global address and no default IPv6 route.
 Every IPv6 behaviour is exercised by fixtures, as story 14.5's VLAN was.
+
+## Second review round — verification (2026-09-22)
+
+Re-measured on the repaired tree, each command's status read from `$?` and never through a pipe:
+
+- `cargo fmt --all --check` ✅ · `cargo clippy --workspace --all-targets -- -D warnings` ✅ ·
+  `cargo xtask ci` **ten gates green** · `cargo deny check` ✅ · `cargo xtask record` ✅ · both
+  manuals build.
+- `RUSTFLAGS="-D warnings" cargo test --workspace --locked` against a **virgin** store:
+  **744 + 191 + 110 = 1 045**, 25.17 s. Without a store: the same counts in **5.04 s** — the clock is
+  the tell that the store-backed half genuinely executed.
+- Browser gates on a freshly seeded virgin store: axe **10 routes + 5 states, 0 violation nodes**
+  under all six `REQUIRE` flags (the IPv6 page reported by name), kbd **61 checks, 0 failed**.
+- **R1, R2, R3 and R-fr all conform to predictions written before the run** (`--baseline`, virgin
+  store). R1 is the one that matters: the mutation the edge layer measured GREEN against the first
+  round's head now reds, naming one test.
+
+
+### Change Log
+
+- 2026-09-21 — Contexted on Guy's first four decisions (§0.1–§0.4), then VALIDATED by two
+  fresh-context layers, whose gap-hunt REFUTED the story's central premise by building it: the size
+  ceiling does not deliver the IPv6 refusal. Four more decisions taken (§0.5–§0.8).
+- 2026-09-22 — Implemented; code-reviewed by three isolated layers and REPAIRED in two passes (the
+  blind layer's fifteen findings, then the acceptance and edge layers'). Merged as `1869af5`
+  (PR #195), CI green on the head commit `9260d07` itself; the status flip is PR #196.
+- 2026-09-22 — ⚠️ **This section was ADDED at Epic 14's FINAL retrospective, and its absence is the
+  finding**: the story shipped with NO change log at all and a `Status:` reading `ready-for-dev`,
+  while AC13's criterion had been cut in half by an insertion anchored on `## Record` — a string that
+  occurs inside AC13's own text. `cargo xtask record` answered ✅ over all three, because it reads the
+  block and nothing around it.
 
 ## Record
 
