@@ -8,7 +8,31 @@ schema will move.
 
 ---
 
+## 0.5.1 — the version the binary reports
+
+🔴 **`0.5.0`'s image reports `0.4.0`.** The tag was cut over a `crates/opencmdb-bin/Cargo.toml`
+still carrying the previous version, so `/diagnostic` and the Prometheus `build_info` metric both
+name **0.4.0** on an image tagged `0.5.0`. Nothing else differs between the two: same commit tree,
+same behaviour, same migrations. **If you are on `0.5.0`, upgrading changes only what the product
+calls itself** — and if you read a version off a running instance to decide anything, that is worth
+doing.
+
+⚠️ **`0.5.0` is NOT withdrawn.** Deleting a published tag would mean two different images having
+carried one name, which is worse than one image that misreports. It stays, and this entry is what
+says so.
+
+🔑 **The release workflow now refuses a tag whose version the crate does not carry**, which is the
+twin of the refusal it already had for a missing changelog section. *The version lives in two
+places and the release guarded one of them* — an instrument that measures a named region leaves the
+defect to the region beside it.
+
+**Everything below is `0.5.0`, unchanged.**
+
+---
+
 ## 0.5.0 — the identity engine runs on your network, and you can write down your addressing plan
+
+⚠️ **This image reports its version as `0.4.0`** — see `0.5.1`, which fixes only that.
 
 🔑 **The sweep reads a hardware address, and that is the fact everything else was waiting for.**
 `identity::l1::join` keys on `(l2_domain, mac)`, so until now every sighting the product made stood

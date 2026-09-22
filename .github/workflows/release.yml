@@ -43,6 +43,30 @@ jobs:
       # leaving **zero operators informed before they upgrade** — which for v0.2.0 means meeting a
       # product that answers 401 on every screen with no idea why.
       #
+      # 🔴 **THE TAG AND THE BINARY MUST AGREE, and this step exists because they did not.**
+      # `v0.5.0` was tagged, built and published on 2026-09-22 over a `Cargo.toml` still reading
+      # `0.4.0`, so the image reported **0.4.0** on `/diagnostic` and in its metrics — measured on
+      # the published image minutes after the tag. Every earlier tag happened to match; nothing
+      # checked that it did.
+      # 🔑 The step below refuses a changelog section that is missing, and this one is its twin:
+      # *the version lives in TWO places and the release guarded ONE of them.* An instrument that
+      # measures a named region leaves the defect to the region next to it — the lesson Epic 14's
+      # final retrospective recorded the same morning, met within the hour.
+      # ⚠️ In YAML rather than in `cargo xtask ci` (D56) for a reason that is not laziness: the
+      # comparison needs the TAG, which exists only at push time and which no local gate can see.
+      - name: The tag and the crate version agree
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          # The crate's own version line, first match, unquoted.
+          crate="$(awk -F'"' '/^version = "/ { print $2; exit }' crates/opencmdb-bin/Cargo.toml)"
+          if [ "$crate" != "$version" ]; then
+            echo "tag ${GITHUB_REF_NAME} names ${version}; crates/opencmdb-bin/Cargo.toml says ${crate}." >&2
+            echo "The image would report ${crate} on /diagnostic and in its metrics. Bump the crate before tagging." >&2
+            exit 1
+          fi
+          echo "tag ${version} == crate ${crate}"
+
       # 🔑 The notes come from `CHANGELOG.md`, committed, so the tag and the text are one artefact
       # and the section cannot drift from the version it describes.
       - name: Extract this version's changelog section
