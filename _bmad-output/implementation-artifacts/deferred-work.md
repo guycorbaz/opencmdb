@@ -6116,3 +6116,30 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   budget, so any screen story touches it. **Owner: the next story that grows `page.rs`**, which
   should split before it writes rather than after the gate says so — `CLAUDE.md`'s *split, not
   grown*, applied before the growth as story 14.5 finally did.
+
+## Story 14.6 — IPv6, observation-only
+
+- ⚠️ **`ip_range_same_family` is LIVE since `0011`, and it is the SECOND carrier.** A range whose two
+  bounds are in different families is refused by the adapter's containment check FIRST — measured at
+  the route, `422 "That range falls outside its subnet."` — so the DDL CHECK never sees one through
+  the product. It guards a write that went around the adapter, which is what the constraint has
+  always been for; what changed is that it can now fire. **Owner: nobody — recorded so the next
+  reader does not take the CHECK for the only carrier.**
+- ⚠️ **The plan-wide address order is PER-FAMILY, not global.** Within a family the canonical
+  spelling makes lexicographic order numeric order (`::1 < ::a < ::10 < ::ff < ::1:0`, read back from
+  an `ascii_bin` column); across families it INTERLEAVES — `0000:…` sorts before `009.0.0.1` sorts
+  before `2001:db8:…` sorts before `255.255.255.255`. Three plan-wide `ORDER BY addr` readers exist
+  and nothing depends on a global order today. **Owner: the story that gives one of them a
+  cross-family consumer.**
+- 🔴 **`Plan.ranges` is NOT carried by the type, where `Plan.defined` is.** `BTreeSet<IpAddr>` refuses
+  a mixed lookup at the type (`Borrow` will not hand it a `&Ipv4Addr`); an interval comparison over
+  `Ipv4Addr` and `IpAddr` COMPILES, because std makes them cross-comparable. `Subnet::contains` and
+  `Subnet::overlaps` now refuse a foreign family in an EXPLICIT arm rather than relying on
+  `IpAddr`'s total order putting every V4 below every V6 — *an answer that is right by luck is one
+  nobody can rely on* — but the promise *observation-only expressed in the types* is a **tripwire on
+  one half**, on story 5.12's precedent. **Owner: the story that widens `Plan` further.**
+- ⚠️ **The workspace declares no `[profile]`, so the shipped image runs with `overflow-checks =
+  false`** — which is why story 14.6's `size()` saturates on `u128` rather than shifting. The general
+  hazard is not closed: any arithmetic this project writes has a debug behaviour (panic) and a
+  release behaviour (wrap) that differ, and the suite only ever measures the first. **Owner: whoever
+  decides whether this workspace wants `overflow-checks` in release.**

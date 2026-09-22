@@ -270,9 +270,21 @@ INSERT INTO identity_link
 -- ⚠️ It is NOT here to dissolve a test collision — that was refused (§0.6): a seed shaped around a
 -- test's namespace is a fixture the next test reshapes again. The two collisions moved on the TEST
 -- side, and `0010` alone was measured to dissolve neither.
+--
+-- 🔑 **A THIRD SUBNET, AND IT IS IPv6** (story 14.6). Its page is a different branch of `/ipam`
+-- entirely — no grid, no occupancy line, no offer, and a sentence saying nothing was checked — so
+-- without a row here the browser gates would walk the IPv4 screen twice and report a pass over a
+-- surface they never opened. `AXE_REQUIRE_V6=1` (CI sets it) turns that into *the gate could not
+-- run*, which is `AXE_REQUIRE_PLAN`'s own shape a fourth time.
+--
+-- ⚠️ **`2001:db8::/32` is RFC 3849's documentation prefix**, the IPv6 twin of the RFC 5737 blocks
+-- every other address in this file comes from: a published screenshot names nobody's network.
+-- ⚠️ The stored form is the EXPANDED, zero-padded, lower-case one `0011` imposes — 39 characters —
+-- which is what the column accepts and NOT what the screen renders (`2001:db8:1466::/64`).
 INSERT INTO ip_subnet (id, base, prefix_len, label, vlan) VALUES
   ('22222222-0000-0000-0000-00000000a001', '192.000.002.000', 25, 'Office', 10),
-  ('22222222-0000-0000-0000-00000000a002', '198.051.100.128', 25, 'Workshop', 0);
+  ('22222222-0000-0000-0000-00000000a002', '198.051.100.128', 25, 'Workshop', 0),
+  ('22222222-0000-0000-0000-00000000a003', '2001:0db8:1466:0000:0000:0000:0000:0000', 64, 'Office v6', 0);
 
 INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) VALUES
   ('33333333-0000-0000-0000-00000000b001', '22222222-0000-0000-0000-00000000a001',
@@ -285,7 +297,11 @@ INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) VALUE
   -- ⚠️ .41–.45 only: the gap .46–.79 must stay covered by nothing, or the free-versus-blank pair the
   -- axe gate compares loses its blank cell.
   ('33333333-0000-0000-0000-00000000b004', '22222222-0000-0000-0000-00000000a001',
-   '192.000.002.041', '192.000.002.045', 'infrastructure', 'Switch management');
+   '192.000.002.041', '192.000.002.045', 'infrastructure', 'Switch management'),
+  -- The IPv6 subnet's own range: what its page shows INSTEAD of a grid.
+  ('33333333-0000-0000-0000-00000000b009', '22222222-0000-0000-0000-00000000a003',
+   '2001:0db8:1466:0000:0000:0000:0000:0010', '2001:0db8:1466:0000:0000:0000:0000:002f',
+   'static', 'Servers v6');
 
 INSERT INTO ip_address (id, subnet_id, addr, label) VALUES
   ('44444444-0000-0000-0000-00000000c001', '22222222-0000-0000-0000-00000000a001',
@@ -294,4 +310,6 @@ INSERT INTO ip_address (id, subnet_id, addr, label) VALUES
   -- decision 13's warning — legal, written, and warned about. Without this row the *Defined inside a
   -- DHCP pool* section existed on no page either browser gate opens.
   ('44444444-0000-0000-0000-00000000c002', '22222222-0000-0000-0000-00000000a001',
-   '192.000.002.090', 'printer-hp');
+   '192.000.002.090', 'printer-hp'),
+  ('44444444-0000-0000-0000-00000000c009', '22222222-0000-0000-0000-00000000a003',
+   '2001:0db8:1466:0000:0000:0000:0000:0100', 'NAS v6');

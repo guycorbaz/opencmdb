@@ -136,6 +136,14 @@ const REQUIRE_AUDIT = process.env.AXE_REQUIRE_AUDIT === "1";
 // is on the same page — is a property of `a11y/seed.sql` that this gate does not defend, and the
 // Rust render test is what carries it.
 const REQUIRE_VLAN = process.env.AXE_REQUIRE_VLAN === "1";
+// 🔴 **STORY 14.6's IPv6 PAGE IS A DIFFERENT BRANCH ENTIRELY** — no grid, no occupancy line, no
+// offer, and a sentence saying nothing was checked — so without a seeded IPv6 subnet this gate walks
+// the IPv4 screen twice and reports a pass over a surface it never opened. `a11y/seed.sql` carries a
+// `2001:db8:1466::/64`; `AXE_REQUIRE_V6=1` (CI sets it) turns a run that cannot reach it into *the
+// gate could not run*, which is `AXE_REQUIRE_PLAN`'s own shape a fourth time.
+const REQUIRE_V6 = process.env.AXE_REQUIRE_V6 === "1";
+// The class the unobservable sentence carries. A CLASS and not its text, for `VLAN_NOTE`'s reason.
+const UNOBSERVABLE = "p.ipam-unobservable";
 // The note's own class. A CLASS and not its text, because the text is translated and this gate runs
 // in the default locale — the rule `PLAN_CELL` and `GESTURE` already follow.
 const VLAN_NOTE = "p.ipam-vlan-note";
@@ -335,6 +343,9 @@ async function main() {
   // — the page renders two links a keyboard user cannot tell apart — so it joins `failing` rather
   // than answering 2.
   let tabNameClash = null;
+  // Story 14.6: the IPv6 page drew a grid, or asserted concordance. A product failure, not a
+  // harness one.
+  let v6Failure = null;
   // A product regression the warning state reveals: the form is there, the store holds the
   // sighting, and no warning arrives. 🔴 It was `cannotRun` (exit 2) until the code review — *the
   // gate could not run* and *the product stopped warning* are not the same answer, and the second
@@ -453,6 +464,81 @@ async function main() {
               : `   ${PLAN_ROUTE}: the VLAN note is on the page; the tab names are NOT distinct — ` +
                   `see the line above`,
           );
+        }
+
+        // ── Story 14.6: the IPv6 page, which is a branch no other state reaches ────────────
+        // 🔑 Found by FOLLOWING the selector rather than by naming an id: the gate opens each tab in
+        // turn and asks whether the page it lands on carries the unobservable sentence. A gate that
+        // named the seed's UUID would measure the seed; this measures the product.
+        const v6 = await (async () => {
+          const hrefs = await page.evaluate(() =>
+            [...document.querySelectorAll("main nav.filters a.filter")].map(
+              (tab) => tab.getAttribute("href") ?? "",
+            ),
+          );
+          for (const href of hrefs) {
+            const probe = await openPage();
+            await goOrGiveUp(probe, href);
+            const found = await probe.evaluate((sel) => {
+              const note = document.querySelector(sel);
+              return {
+                unobservable: note !== null,
+                cells: document.querySelectorAll("ul.ipam-grid li.ipam-cell").length,
+                allClear: (document.body.textContent ?? "").includes(
+                  "contradicts",
+                ),
+              };
+            }, UNOBSERVABLE);
+            if (found.unobservable) {
+              // axe on the branch itself: its markup is not the grid's, so the seeded pass above
+              // measured none of it.
+              await probe.addScriptTag({ content: axeSource });
+              const run = await probe.evaluate(
+                async (tags) =>
+                  await window.axe.run(document, { runOnly: { type: "tag", values: tags } }),
+                TAGS,
+              );
+              const nodes = run.violations.reduce((sum, v) => sum + v.nodes.length, 0);
+              for (const violation of run.violations) {
+                console.log(
+                  `🔴 ${href} (IPv6)  ${violation.id}(${violation.nodes.length}, ${violation.impact})`,
+                );
+              }
+              await probe.close();
+              return { ...found, href, nodes };
+            }
+            await probe.close();
+          }
+          return null;
+        })();
+        if (v6 === null) {
+          if (REQUIRE_V6) {
+            cannotRun(
+              `no tab of ${PLAN_ROUTE} carries ${UNOBSERVABLE}: the plan holds no IPv6 subnet, so ` +
+                `the branch story 14.6 exists for was not measured. Seed one (a11y/seed.sql).`,
+            );
+          }
+          console.log(
+            `⚠️  ${PLAN_ROUTE} holds no IPv6 subnet: story 14.6's page was NOT measured. ` +
+              `Set AXE_REQUIRE_V6=1 to make that a refusal rather than a gap.`,
+          );
+        } else {
+          // 🔴 The two things the family decides, measured on the SERVED page rather than reasoned
+          // about: no grid at any size, and the all-clear REPLACED rather than accompanied.
+          if (v6.cells > 0) {
+            v6Failure = `${v6.href} drew ${v6.cells} grid cell(s) on an IPv6 subnet`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${v6Failure}`);
+          } else if (v6.allClear) {
+            v6Failure =
+              `${v6.href} rendered the all-clear on an IPv6 subnet — the product asserting ` +
+              `concordance about a plan its only connector never looks at`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${v6Failure}`);
+          } else {
+            console.log(
+              `   ${v6.href}: the IPv6 page draws no grid, says nothing was checked, ` +
+                `${v6.nodes} violation node(s)`,
+            );
+          }
         }
 
         // ── Story 14.3b: the findings list, its words told apart WITHOUT colour ─────────────
@@ -728,6 +814,9 @@ async function main() {
   }
   if (tabNameClash !== null) {
     failing.push(`${PLAN_ROUTE} (two selector tabs share a name)`);
+  }
+  if (v6Failure !== null) {
+    failing.push(`${PLAN_ROUTE} (the IPv6 page)`);
   }
   if (warningFailure !== null) {
     failing.push(`${PLAN_ROUTE} (the address warning did not appear)`);
