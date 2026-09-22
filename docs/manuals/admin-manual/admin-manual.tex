@@ -396,6 +396,22 @@ deliberate posture of a fresh instance, not a fault --- and it is what an upgrad
 supplied. A cross-site \texttt{POST} is refused by an Origin check; behind a reverse proxy,
 \texttt{proxy\_set\_header Host} must be correct for that check to hold.
 
+\section{What an authenticated caller can change}
+\textbf{Authentication is the only barrier in front of the addressing plan.} From
+\texttt{v0.5.0}, anyone who can sign in can declare, correct, remove and release subnets,
+ranges and addresses in \texttt{/ipam}. There is no second switch: the routes are live on a
+fresh install.
+
+That is deliberate and it is narrower than it sounds. The \emph{documenting} gesture on
+\texttt{/triage} --- which copies an observed value into the declared record --- \emph{is}
+behind a switch, \texttt{OPENCMDB\_DOCUMENT\_ENABLED}, because it lets the product write into
+the declared side on its own initiative, which is the hazard \texttt{FR13} is careful about.
+The addressing plan carries no such hazard: every one of its rows is something a human typed.
+
+\textbf{What follows for you.} If your instance is reachable by anyone you would not trust
+with your addressing plan, that is now a decision you are making rather than one the product
+makes for you. The plan is data an operator owns; treat the credential accordingly.
+
 \begin{planned}
 One shared credential authenticates a caller, not a person: there are no user accounts, no
 revocation and no login form. Epic~19 builds real sessions.

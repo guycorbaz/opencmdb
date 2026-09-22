@@ -5355,7 +5355,28 @@ development_status:
   # 🔑 THE REASON IS THE DELIVERABLE, NOT THE HIGHLIGHT: the audit exists to stop the operator
   #   ALLOCATING an address already in use. That makes the "next free address" panel an
   #   EXCLUSION -- the only place the product prevents the duplicate rather than reporting it.
-  epic-14: in-progress
+  epic-14: done
+  #   ✅ CLOSED 2026-09-22 by the PROJECT REVIEW that follows the final retrospective — the two steps
+  #   an epic needs, in that order. TEN stories, 859 → 1 045 tests, five migrations, 31 PRs.
+  #   🔴 What the project review found is what the epic did to the project's own record, and it was
+  #   silence: the project journal stopped on 2026-08-30 and twenty-three days were missing from it —
+  #   the return from ten days unattended, `v0.4.0`, the MAC connector that ended the structural zero,
+  #   an entire axis of the binding vocabulary, and this epic. The milestone register carried
+  #   `E14 — IPAM: aucune story écrite, non commencé` while ten stories had merged, and `E6` read
+  #   3 done where 8 are. ⚠️ The silence has a dated cause: work resumed IN THE REPOSITORY, which
+  #   records itself very well, and the project folder has no automatic gate.
+  #   🔑 J3 — *a real gap detected AND corrected* — is ATTAINABLE since 2026-08-26 and NOT REACHED
+  #   (established with Guy). Epic 5's project review had called it unreachable by construction, for
+  #   want of a write surface; story 6.4 put the gesture on a screen and `v0.4.0` runs on the NAS.
+  #   *The obstacle was technical and is now one of USE, and both read "à faire" in a status column.*
+  #   ⚠️ And the review caught ITSELF: it had written that `derniere_activite: 2026-08-13` was forty
+  #   days stale, then measured that the field is CORRECT under the method's own rule — which reads
+  #   files outside `gestion/`, and this folder's only one is a mock-up. *A field that is right and
+  #   blind is worse than one that is wrong: a wrong field gets corrected, a right one gets believed.*
+  #   The question was NOT opened as a new issue — it has been `gestion_projets` I33 since 2026-08-12;
+  #   what it lacked was a treatment, not a registration, and this review gave it a second specimen.
+  #   ⚠️ NEXT, and no amount of code produces it: open `/triage` on the NAS and document a machine.
+  #   That is J3 and the closure of R1. Then the release, whose IPAM notes are BLOCKING (action B2).
   14-1-plan-schema-and-no-producer: done
   #   🔴 THIS ENTRY CARRIED THREE CONTRADICTIONS UNTIL 2026-09-11, ALL BY ACCRETION: the review
   #   annotation was PREPENDED and the validation annotation was never removed, so the file said
