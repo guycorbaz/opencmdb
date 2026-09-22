@@ -6143,3 +6143,15 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   hazard is not closed: any arithmetic this project writes has a debug behaviour (panic) and a
   release behaviour (wrap) that differ, and the suite only ever measures the first. **Owner: whoever
   decides whether this workspace wants `overflow-checks` in release.**
+- ⚠️ **The keyboard gate never opens an IPv6 subnet's tab**, so the rail's Correct and Remove
+  controls on an IPv6 page are measured by no browser. Story 14.6 taught `axe-gate.mjs` to follow
+  the selector and did NOT teach `kbd-probe.mjs`; AC12's letter said *both gates* and the story now
+  says one. 🔑 What is missing is small — the page renders the same rail partial — and saying so is
+  what stops *both browser gates* being read as a covered surface. **Owner: the next story that
+  touches `/ipam`'s rail.**
+- ⚠️ **`declared_attribute.ipv4` now holds IPv6 values, and the column's NAME has drifted from its
+  contents.** Story 14.6 widened `documented_addresses` so an operator who documents `2001:db8::9`
+  gets it excluded from the offer and marked *documented*, which is what they would expect; refusing
+  it would mean reading a value the operator wrote and ignoring it because of a column name. The
+  rename is a migration this story does not own. **Owner: the story that next writes a migration
+  touching `declared_attribute`.**

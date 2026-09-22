@@ -470,13 +470,28 @@ async function main() {
         // 🔑 Found by FOLLOWING the selector rather than by naming an id: the gate opens each tab in
         // turn and asks whether the page it lands on carries the unobservable sentence. A gate that
         // named the seed's UUID would measure the seed; this measures the product.
+        // 🔴 **THE TAB IS FOUND BY ITS CIDR, NOT BY THE SENTENCE THE PRODUCT IS MEANT TO RENDER**,
+        // and the first version of this probe got that backwards. It walked the tabs looking for
+        // `p.ipam-unobservable`, so the product REMOVING that sentence — the family branch gone, the
+        // template arm gone, the key blanked — produced *no tab carries it*, exit **2**, and a
+        // message asserting *the plan holds no IPv6 subnet*: a cause the gate never checked, over a
+        // committed seed. That is this project's own rule broken (a cause needs a check) and the
+        // keyboard gate's recorded defect one file over (*a real failure converted into could not
+        // run*). ⚠️ Worse, it made the two product checks below UNREACHABLE: they only ever ran on a
+        // page that already carried the sentence, so the gate could never observe the state
+        // mutation T6 produced — an IPv6 page that drew a grid.
+        //
+        // 🔑 A colon in the tab's own name is what identifies an IPv6 subnet, and it comes from the
+        // ADDRESS rather than from any copy this story wrote.
         const v6 = await (async () => {
-          const hrefs = await page.evaluate(() =>
-            [...document.querySelectorAll("main nav.filters a.filter")].map(
-              (tab) => tab.getAttribute("href") ?? "",
-            ),
+          const tabs = await page.evaluate(() =>
+            [...document.querySelectorAll("main nav.filters a.filter")].map((tab) => ({
+              href: tab.getAttribute("href") ?? "",
+              name: (tab.textContent ?? "").trim(),
+            })),
           );
-          for (const href of hrefs) {
+          for (const { href, name } of tabs) {
+            if (!name.includes(":")) continue;
             const probe = await openPage();
             await goOrGiveUp(probe, href);
             const found = await probe.evaluate((sel) => {
@@ -484,12 +499,10 @@ async function main() {
               return {
                 unobservable: note !== null,
                 cells: document.querySelectorAll("ul.ipam-grid li.ipam-cell").length,
-                allClear: (document.body.textContent ?? "").includes(
-                  "contradicts",
-                ),
+                allClear: document.querySelector(".ipam-audit p.empty:not(.ipam-unobservable)") !== null,
               };
             }, UNOBSERVABLE);
-            if (found.unobservable) {
+            {
               // axe on the branch itself: its markup is not the grid's, so the seeded pass above
               // measured none of it.
               await probe.addScriptTag({ content: axeSource });
@@ -514,8 +527,10 @@ async function main() {
         if (v6 === null) {
           if (REQUIRE_V6) {
             cannotRun(
-              `no tab of ${PLAN_ROUTE} carries ${UNOBSERVABLE}: the plan holds no IPv6 subnet, so ` +
-                `the branch story 14.6 exists for was not measured. Seed one (a11y/seed.sql).`,
+              `no selector tab of ${PLAN_ROUTE} names an IPv6 subnet, so the branch story 14.6 ` +
+                `exists for was not measured. Seed one (a11y/seed.sql). ⚠️ This says the PLAN holds ` +
+                `no IPv6 subnet — which the tab names establish — and says nothing about whether ` +
+                `the product would render it correctly; that is the check below.`,
             );
           }
           console.log(
@@ -525,7 +540,12 @@ async function main() {
         } else {
           // 🔴 The two things the family decides, measured on the SERVED page rather than reasoned
           // about: no grid at any size, and the all-clear REPLACED rather than accompanied.
-          if (v6.cells > 0) {
+          if (!v6.unobservable) {
+            v6Failure =
+              `${v6.href} is an IPv6 subnet and carries no ${UNOBSERVABLE}: the page says nothing ` +
+              `about not having been checked, so an empty audit reads as *nothing is wrong*`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${v6Failure}`);
+          } else if (v6.cells > 0) {
             v6Failure = `${v6.href} drew ${v6.cells} grid cell(s) on an IPv6 subnet`;
             console.log(`🔴 ${PLAN_ROUTE}  ${v6Failure}`);
           } else if (v6.allClear) {

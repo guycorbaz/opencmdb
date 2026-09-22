@@ -1083,10 +1083,6 @@ pub(crate) fn tab_label(planned: &ipam_repo::PlannedSubnet) -> String {
     name
 }
 
-/// Resolve every string, with the occupancy and next-free lines when there is a plan.
-///
-/// `no_static` says the subnet in force is reached by NO `static` range at all, which is a different
-/// state from an exhausted offer and now has its own sentence.
 /// Swap the three address fields' EXAMPLES for the IPv6 family (story 14.6, AC11).
 ///
 /// 🔴 **A resolvable key rendering a correct string in the WRONG CONTEXT is invisible to every guard
@@ -1103,6 +1099,10 @@ fn family_examples(s: &mut IpamStrings) {
     s.form_addr = rust_i18n::t!("ipam.form.addr_v6").to_string();
 }
 
+/// Resolve every string, with the occupancy and next-free lines when there is a plan.
+///
+/// `no_static` says the subnet in force is reached by NO `static` range at all, which is a different
+/// state from an exhausted offer and now has its own sentence.
 fn strings(
     counts: Option<(usize, usize, usize, usize)>,
     next: Option<IpAddr>,
@@ -1186,15 +1186,6 @@ fn strings(
     }
 }
 
-/// Render a subnet the screen refuses to draw, as the list of ranges the operator declared.
-///
-/// 🔑 It shows what the PLAN holds rather than an apology: a `/16` has at most a handful of ranges,
-/// and those ranges are the thing the operator wrote. The grid is what does not scale; the plan
-/// does.
-///
-/// ⚠️ **No offer, and the findings list IS shown** (decision 14): a subnet too large to draw is
-/// still a subnet the network can contradict, and its findings are bounded by what was SEEN, not by
-/// its size.
 /// Render a subnet the product cannot OBSERVE: its declared ranges, and the sentence saying so.
 ///
 /// 🔴 **STORY 14.6's AC3, and the family is what routes here — never the size.** An IPv6 subnet gets
@@ -1248,6 +1239,15 @@ fn render_unobservable(
         .unwrap_or_else(|_| crate::page::render_error_body())
 }
 
+/// Render a subnet the screen refuses to draw, as the list of ranges the operator declared.
+///
+/// 🔑 It shows what the PLAN holds rather than an apology: a `/16` has at most a handful of ranges,
+/// and those ranges are the thing the operator wrote. The grid is what does not scale; the plan
+/// does.
+///
+/// ⚠️ **No offer, and the findings list IS shown** (decision 14): a subnet too large to draw is
+/// still a subnet the network can contradict, and its findings are bounded by what was SEEN, not by
+/// its size.
 fn render_too_large(
     subnets: &[ipam_repo::PlannedSubnet],
     selected: &str,
@@ -1509,9 +1509,13 @@ mod tests {
 
     /// A literal address for the tests.
     ///
-    /// 🔑 **It answers `IpAddr` since story 14.6**, so the same helper writes an IPv4 or an IPv6
-    /// literal and a test that means one cannot silently get the other. The name is kept: `v4` is
-    /// what four hundred call sites say, and renaming them would bury the story's real diff.
+    /// ⚠️ **It answers `IpAddr` since story 14.6, which means it no longer PINS the family** — and
+    /// the first version of this sentence claimed the opposite, that *"a test that means one cannot
+    /// silently get the other"*. The reverse is true: before the widening `v4("2001:db8::1")`
+    /// panicked, and now it returns a V6, which is how `an_ipv6_row_is_read_back_rather_than_skipped`
+    /// uses it. **The name is kept and it no longer means anything**, because renaming four hundred
+    /// call sites would bury the story's real diff — a cost accepted and stated rather than hidden
+    /// behind a sentence that reads like a guarantee.
     fn v4(text: &str) -> IpAddr {
         text.parse().expect("a v4 address")
     }

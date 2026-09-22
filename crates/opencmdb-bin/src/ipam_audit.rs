@@ -439,6 +439,20 @@ pub(crate) struct Network {
 
 /// Parse `declared_attribute.ipv4` values into addresses, skipping what does not parse — a declared
 /// value is operator text, and one that is not an address documents no address.
+///
+/// 🔴 **IT TAKES BOTH FAMILIES SINCE STORY 14.6, and that was a CONSEQUENCE nobody decided until the
+/// blind review layer named it.** The field is `ipv4` by name; this is the DECLARED side, which is
+/// neither the plan nor the sightings, and §0.3's measured escape table named only `sighting_repo`.
+/// The widening happened because the set it feeds (`Network.documented`) is compared against plan
+/// addresses, which are now `IpAddr`.
+///
+/// 🔑 **The behaviour it buys is the one the operator would expect and it is stated rather than
+/// inherited**: an operator who documents `2001:db8::9` on a device gets that address excluded from
+/// the offer and marked *documented* in the audit, exactly as an IPv4 one is. Refusing it would mean
+/// the product reading a value the operator wrote and silently ignoring it because of the column's
+/// NAME. ⚠️ The column is still called `ipv4` — renaming it is a migration this story does not own —
+/// so the name and the contents have drifted apart, which is registered rather than left to be
+/// discovered by whoever next reads the schema.
 pub(crate) fn documented_addresses(values: &[String]) -> BTreeSet<IpAddr> {
     values
         .iter()
@@ -453,9 +467,13 @@ mod tests {
 
     /// A literal address for the tests.
     ///
-    /// 🔑 **It answers `IpAddr` since story 14.6**, so the same helper writes an IPv4 or an IPv6
-    /// literal and a test that means one cannot silently get the other. The name is kept: `v4` is
-    /// what four hundred call sites say, and renaming them would bury the story's real diff.
+    /// ⚠️ **It answers `IpAddr` since story 14.6, which means it no longer PINS the family** — and
+    /// the first version of this sentence claimed the opposite, that *"a test that means one cannot
+    /// silently get the other"*. The reverse is true: before the widening `v4("2001:db8::1")`
+    /// panicked, and now it returns a V6, which is how `an_ipv6_row_is_read_back_rather_than_skipped`
+    /// uses it. **The name is kept and it no longer means anything**, because renaming four hundred
+    /// call sites would bury the story's real diff — a cost accepted and stated rather than hidden
+    /// behind a sentence that reads like a guarantee.
     fn v4(text: &str) -> IpAddr {
         text.parse().expect("a v4 address")
     }

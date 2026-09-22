@@ -145,7 +145,7 @@ fn from_canonical_v6(text: &str) -> Result<IpAddr, IpamError> {
 
 /// A subnet as the plan declares it: a base address and a prefix length.
 ///
-/// 🔑 **`IpAddr`, not `IpAddr`, since story 14.6 — and the SIGHTINGS deliberately did not follow**
+/// 🔑 **`IpAddr`, not `Ipv4Addr`, since story 14.6 — and the SIGHTINGS deliberately did not follow**
 /// (Guy, 2026-09-21). The PLAN may hold IPv6; the observed side may not, because the connector emits
 /// IPv4 only and `Fact` — the domain type — has no IPv6 variant at all. The audit therefore joins the
 /// two only where both are IPv4, which is *observation-only expressed in the TYPES rather than in a
@@ -153,8 +153,15 @@ fn from_canonical_v6(text: &str) -> Result<IpAddr, IpamError> {
 ///
 /// ⚠️ **That promise is carried on ONE HALF and it is said rather than implied** (story 5.12's
 /// precedent). `Plan.defined: BTreeSet<IpAddr>` refuses a mixed lookup at the type, because `Borrow`
-/// will not hand a `&IpAddr` to a set of `IpAddr`. `Plan.ranges` does NOT: `IpAddr` and `IpAddr`
-/// are cross-comparable in std, so an interval test spanning two families COMPILES. It answers
+/// will not hand it a `&Ipv4Addr`. `Plan.ranges` does NOT: `Ipv4Addr` and `IpAddr` are
+/// cross-comparable in std, so an interval test spanning two families COMPILES.
+///
+/// ⚠️ **These sentences were CORRUPTED by the blanket `Ipv4Addr` → `IpAddr` substitution that made
+/// this change, and the blind review layer caught it from the diff alone.** They read *"`IpAddr`,
+/// not `IpAddr`"*, *"`Borrow` will not hand a `&IpAddr` to a set of `IpAddr`"* — false, that is
+/// exactly what such a set accepts — and *"`IpAddr` and `IpAddr` are cross-comparable"*, which says
+/// nothing. 🔑 The register row written by the same commit carried the TRUE sentence all along:
+/// *a mechanical edit rewrites prose it cannot read, and the compiler is silent about every word.* It answers
 /// correctly today only because `IpAddr`'s total order puts every V4 below every V6 — *luck rather
 /// than design*. A tripwire on one half, never a compiler guarantee.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -272,10 +279,16 @@ impl Subnet {
     /// Rust"*). `architecture.md:4847` (F57) asks that SQL-side comparison be costed before any
     /// epic reintroduces it; this story does not reintroduce it.
     ///
-    /// 🔴 **A different family is never contained, and that is an EXPLICIT arm rather than a
-    /// consequence of the ordering.** `IpAddr`'s total order puts every V4 below every V6, so the
-    /// bare interval test would answer correctly today — and would go on compiling if that order
-    /// ever changed. *An answer that is right by luck is one nobody can rely on.*
+    /// ⚠️ **A different family is never contained, and the explicit arm below is BELT AND BRACES
+    /// rather than the carrier — which is the opposite of what this doc first claimed.** `IpAddr`'s
+    /// total order puts every V4 below every V6, so the bare interval test answers correctly for
+    /// every input; **measured, deleting the arm leaves the whole suite GREEN**. The arm cannot
+    /// change an answer, so no mutation can red it and no test can guard it.
+    ///
+    /// 🔑 **What CAN be guarded is the property the answer really rests on**, and
+    /// `the_total_order_puts_every_v4_below_every_v6` pins it. *A guard placed where the defect
+    /// cannot occur reads as coverage and is none* — this project's dominant class, and the blind
+    /// review layer caught it inside the arm added to avoid it.
     pub(crate) fn contains(&self, addr: IpAddr) -> bool {
         if self.is_v6() != matches!(addr, IpAddr::V6(_)) {
             return false;
@@ -1769,7 +1782,19 @@ where
     for (addr, at) in rows {
         let instant =
             chrono::DateTime::parse_from_rfc3339(&at).map(|t| t.with_timezone(&chrono::Utc));
-        match (from_canonical(&addr), instant) {
+        // 🔴 **AN IPv6 ROW IS SKIPPED AND NAMED, exactly as `sighting_repo::observed_v4` does — and
+        // the blind review layer caught that this reader had NO such arm while its twin did.**
+        // `address_release` is the OTHER observed-side table: `0011` leaves its CHECK IPv4-only by
+        // decision, and `from_canonical` became family-generic in the same story, so this reader was
+        // passing whatever family it decoded straight through with nothing to say about it.
+        // ⚠️ `the_observed_side_stays_narrow` treats the two tables as ONE decision; until now only
+        // one of them carried it in Rust. *A decision held in one of the two places it applies is a
+        // decision a refactor removes in half.*
+        let read = match from_canonical(&addr) {
+            Ok(IpAddr::V6(_)) => Err(IpamError::MalformedAddress),
+            other => other,
+        };
+        match (read, instant) {
             (Ok(parsed), Ok(instant)) => {
                 released.insert(parsed, instant);
             }
@@ -1844,20 +1869,15 @@ pub(crate) mod tests {
         }
     }
 
-    /// 🔴 **Each store-backed test owns its own CIDR, and the review measured why.** Three of them
-    /// built `192.0.2.0/24` under different ids; a test that panics skips its trailing cleanup, its
-    /// subnet survives, and the NEXT test's `insert_subnet` then dies on `ip_subnet_cidr` — not on
-    /// the thing under test. Measured: one mutation reported **red 3** in a full run and **red 1**
-    /// when each test ran alone on a virgin store, so the recorded carrier counts were inflated by
-    /// collateral; and a single leftover row made a PRISTINE tree red, with *which* test reddening
-    /// depending on run order — which is what makes it read as flakiness.
-    /// ⚠️ Not claimed as the cause of issue #38 or of Epic 6's registered non-determinism: it is a
-    /// named, reproducible cause of non-determinism in THIS story's tests, and nothing more.
     /// A literal address for the tests.
     ///
-    /// 🔑 **It answers `IpAddr` since story 14.6**, so the same helper writes an IPv4 or an IPv6
-    /// literal and a test that means one cannot silently get the other. The name is kept: `v4` is
-    /// what four hundred call sites say, and renaming them would bury the story's real diff.
+    /// ⚠️ **It answers `IpAddr` since story 14.6, which means it no longer PINS the family** — and
+    /// the first version of this sentence claimed the opposite, that *"a test that means one cannot
+    /// silently get the other"*. The reverse is true: before the widening `v4("2001:db8::1")`
+    /// panicked, and now it returns a V6, which is how `an_ipv6_row_is_read_back_rather_than_skipped`
+    /// uses it. **The name is kept and it no longer means anything**, because renaming four hundred
+    /// call sites would bury the story's real diff — a cost accepted and stated rather than hidden
+    /// behind a sentence that reads like a guarantee.
     /// **AC8 — an IPv6 row is READ BACK, not skipped, and the migration and the reader are ONE
     /// commit.**
     ///
@@ -2016,9 +2036,10 @@ pub(crate) mod tests {
 
     /// **A different family is never contained, and it is an EXPLICIT arm.**
     ///
-    /// 🔑 `IpAddr`'s total order puts every V4 below every V6, so the bare interval test would
-    /// answer correctly today — and would go on compiling if that order ever changed. *An answer
-    /// that is right by luck is one nobody can rely on.*
+    /// ⚠️ **It asserts ANSWERS, and the answers are correct without the explicit family arms** —
+    /// measured, deleting `contains`'s arm leaves the whole suite green. So this is a guard on the
+    /// BEHAVIOUR and not on the arms; what carries the behaviour is `IpAddr`'s total order, pinned
+    /// by the test below. Both are kept and neither is claimed to be the other.
     #[test]
     fn a_subnet_never_contains_an_address_of_another_family() {
         let v4net = Subnet::new("192.0.2.0".parse().expect("a literal"), 24).expect("a /24");
@@ -2030,6 +2051,31 @@ pub(crate) mod tests {
         assert!(!v6net.overlaps(v4("192.0.2.1"), v4("192.0.2.40")));
         assert!(!v4net.overlaps(v4("2001:db8:0:42::1"), v4("2001:db8:0:42::40")));
         assert!(v4net.overlaps(v4("192.0.2.1"), v4("192.0.2.40")));
+    }
+
+    /// 🔑 **THE PROPERTY THE FAMILY ANSWERS REALLY REST ON, pinned because it is a dependency and
+    /// not a fact of ours**: `IpAddr`'s `Ord` puts every V4 below every V6. `Subnet::contains` and
+    /// `Subnet::overlaps` carry explicit family arms, and those arms cannot change an answer while
+    /// this holds — so THIS is the guard, and the arms are belt and braces.
+    ///
+    /// ⚠️ It is a std API property, stable and unlikely to move; pinning it is cheap and says which
+    /// assumption the arithmetic is standing on, where the arms only said someone had thought about
+    /// it.
+    #[test]
+    fn the_total_order_puts_every_v4_below_every_v6() {
+        let highest_v4: IpAddr = "255.255.255.255".parse().expect("a literal");
+        let lowest_v6: IpAddr = "::".parse().expect("a literal");
+        assert!(
+            highest_v4 < lowest_v6,
+            "the families no longer partition the order, so `contains` and `overlaps` stop being \
+             correct without their explicit arms — and those arms are what would then start \
+             carrying the answer"
+        );
+        let lowest_v4: IpAddr = "0.0.0.0".parse().expect("a literal");
+        let highest_v6: IpAddr = "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
+            .parse()
+            .expect("a literal");
+        assert!(lowest_v4 < highest_v6 && lowest_v4 < lowest_v6 && highest_v4 < highest_v6);
     }
 
     /// The canonical codec round-trips BOTH families, and refuses every other spelling.
@@ -2075,6 +2121,15 @@ pub(crate) mod tests {
         }
     }
 
+    /// 🔴 **Each store-backed test owns its own CIDR, and the review measured why.** Three of them
+    /// built `192.0.2.0/24` under different ids; a test that panics skips its trailing cleanup, its
+    /// subnet survives, and the NEXT test's `insert_subnet` then dies on `ip_subnet_cidr` — not on
+    /// the thing under test. Measured: one mutation reported **red 3** in a full run and **red 1**
+    /// when each test ran alone on a virgin store, so the recorded carrier counts were inflated by
+    /// collateral; and a single leftover row made a PRISTINE tree red, with *which* test reddening
+    /// depending on run order — which is what makes it read as flakiness.
+    /// ⚠️ Not claimed as the cause of issue #38 or of Epic 6's registered non-determinism: it is a
+    /// named, reproducible cause of non-determinism in THIS story's tests, and nothing more.
     fn v4(text: &str) -> IpAddr {
         text.parse().expect("a literal address")
     }
@@ -2427,7 +2482,7 @@ pub(crate) mod tests {
     /// defect class written into the migration.
     ///
     /// 🔑 **It is the SECOND carrier of decision §0.3.** The first is the Rust type — the plan speaks
-    /// `IpAddr` and the sightings speak `IpAddr` — and story 5.12's lesson is that a promise held
+    /// `IpAddr` and the sightings speak `Ipv4Addr` — and story 5.12's lesson is that a promise held
     /// in one place only is a promise a refactor removes in silence. This test is what reds if a
     /// later tidy-up widens all six for symmetry.
     #[tokio::test]

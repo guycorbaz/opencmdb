@@ -280,11 +280,19 @@ INSERT INTO identity_link
 -- ⚠️ **`2001:db8::/32` is RFC 3849's documentation prefix**, the IPv6 twin of the RFC 5737 blocks
 -- every other address in this file comes from: a published screenshot names nobody's network.
 -- ⚠️ The stored form is the EXPANDED, zero-padded, lower-case one `0011` imposes — 39 characters —
--- which is what the column accepts and NOT what the screen renders (`2001:db8:1466::/64`).
+-- which is what the column accepts and NOT what the screen renders (`2001:db8:1466::/120`).
+--
+-- 🔴 **A `/120` AND NOT A `/64`, AND THE PREFIX LENGTH IS THE WHOLE POINT OF THE ROW.** AC3 says the
+-- refusal is keyed on the FAMILY, never on the size — and on a `/64` the two mechanisms are
+-- INDISTINGUISHABLE: with the family check removed a `/64` still falls into *too large to draw* and
+-- still shows no grid and no offer. A `/120` is 256 addresses, UNDER `MAX_DRAWN_ADDRESSES`, so it is
+-- the one shape where the browser gate can tell the two apart. ⚠️ The first version of this seed used
+-- a `/64`, and the blind review layer caught that the gate added in this story for this property was
+-- pointed at the one prefix length that cannot show it.
 INSERT INTO ip_subnet (id, base, prefix_len, label, vlan) VALUES
   ('22222222-0000-0000-0000-00000000a001', '192.000.002.000', 25, 'Office', 10),
   ('22222222-0000-0000-0000-00000000a002', '198.051.100.128', 25, 'Workshop', 0),
-  ('22222222-0000-0000-0000-00000000a003', '2001:0db8:1466:0000:0000:0000:0000:0000', 64, 'Office v6', 0);
+  ('22222222-0000-0000-0000-00000000a003', '2001:0db8:1466:0000:0000:0000:0000:0000', 120, 'Office v6', 0);
 
 INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) VALUES
   ('33333333-0000-0000-0000-00000000b001', '22222222-0000-0000-0000-00000000a001',
@@ -312,4 +320,7 @@ INSERT INTO ip_address (id, subnet_id, addr, label) VALUES
   ('44444444-0000-0000-0000-00000000c002', '22222222-0000-0000-0000-00000000a001',
    '192.000.002.090', 'printer-hp'),
   ('44444444-0000-0000-0000-00000000c009', '22222222-0000-0000-0000-00000000a003',
-   '2001:0db8:1466:0000:0000:0000:0000:0100', 'NAS v6');
+   -- ⚠️ `::0090`, not `::0100`: a `/120` ends at `::ff`, and a raw INSERT does not check containment
+   -- the way the adapter does, so the first spelling would have seeded an address OUTSIDE its own
+   -- subnet — a fixture that contradicts itself and that every reader would then have to explain.
+   '2001:0db8:1466:0000:0000:0000:0000:0090', 'NAS v6');

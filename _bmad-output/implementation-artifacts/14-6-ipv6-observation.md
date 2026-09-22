@@ -357,13 +357,22 @@ containment check (measured, 422). ⚠️ Its inherited prove-to-red is free onl
 it does not advertise — it reads ONE constraint by name, it returns early without `DATABASE_URL`, and
 a rename turns its red `.expect()`-carried. AC1's name-keeping is what buys it.
 
-**AC11 — the screen speaks the right family.** The forms' example placeholders on an IPv6 subnet's
+**AC11 — the screen speaks the right family**, and ⚠️ its test calls the RENDERER, which is the
+placement the T6 mutation condemned one criterion over. It is kept deliberately: `family_examples`
+is a pure swap and the defect it guards lives in the strings, not in the routing — and AC3's test,
+which DOES go through `plan_data`, is what carries the routing. *Two guards at two levels, each
+saying which it is*, rather than one claiming both. The forms' example placeholders on an IPv6 subnet's
 page are IPv6 (measured: *"First address — for example 192.0.2.10"* renders there today), and the
 selector tab names remain distinct per story 14.5's `tab_labels`. ⚠️ No test and neither browser gate
 can see a resolvable key rendering a correct string in the WRONG CONTEXT — story 6b.6's `role_key`
 family — so the carrier is named rather than assumed.
 
-**AC12 — both browser gates REACH an IPv6 page.** `a11y/seed.sql` is IPv4-only, so an unseeded IPv6
+**AC12 — the AXE gate reaches an IPv6 page; the KEYBOARD gate does not, and that is narrowed here
+rather than claimed.** ⚠️ The criterion's letter says *both*, and only `axe-gate.mjs` was taught to
+follow the selector to the IPv6 tab; `kbd-probe.mjs` now runs against a store that happens to hold
+one and nothing makes it open that tab. The blind review layer caught the over-claim. **What the
+keyboard gate would add is the rail's controls on an IPv6 subnet** — a real gap, registered rather
+than papered over, because the page carries no gesture the keyboard layer owns. `a11y/seed.sql` is IPv4-only, so an unseeded IPv6
 surface is *the gate could not run* rather than a pass — this project's own `AXE_REQUIRE_*`
 distinction. Any new key joins `ipam_page.rs`'s non-blank guard, and **a `.rs` is touched** because
 `app.yml` is invisible to Cargo's incremental build.

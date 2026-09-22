@@ -2165,12 +2165,6 @@ mod tests {
         );
     }
 
-    /// **AC3 — the correction is held to the SAME VLAN rules as the definition.**
-    ///
-    /// ⚠️ Driven through the ROUTE and not through `parse_vlan`, for this file's standing reason: a
-    /// handler that parses the field and forgets to refuse on it leaves a unit test of the parser
-    /// perfectly green. The port is asserted UNREACHED, which is what says the refusal happened
-    /// before the write rather than after it.
     /// **AC7 — what EVERY write route answers to an IPv6 argument, enumerated rather than assumed.**
     ///
     /// 🔴 **The release answered 500 before story 14.6, and the gap-hunt measured it on a booted
@@ -2243,19 +2237,63 @@ mod tests {
             }
         }
 
-        // ⚠️ The six that take no address of their own, named rather than left out of the list: an
-        // IPv6 argument in one of these fields is not a state they can be in.
+        // 🔴 **THREE MORE ROUTES DO PARSE AN ADDRESS, and this loop asserted the opposite while
+        // measuring nothing.** Its first version listed six routes and checked they were members of
+        // `WriteRoute::ALL` — a tautology under a test named for IPv6 arguments — under a comment
+        // reading *"the six that take no address of their own"*. The blind review layer refuted it
+        // from the diff: `edit_range` parses `first` and `last`, `edit_address` parses `addr`, and
+        // `EditSubnet` goes through `parse_cidr`, all widened to `IpAddr` by this very story. ⚠️ The
+        // test's own doc half-said so (*"except `EditAddress`"*) and was contradicted by its
+        // assertion two screens below, inside one test.
+        //
+        // 🔑 What they answer is a CONSEQUENCE of §0.3 rather than a new decision: the record's own
+        // id is checked first, so an unknown id is a 404 before any address is read — which is why
+        // these press a well-formed id and read what the ADDRESS did.
+        let record = "01900000-0000-7000-8000-0000000000bb";
+        let carrying: [(WriteRoute, String); 3] = [
+            (
+                WriteRoute::EditRange,
+                format!(
+                    "id={record}&first=2001:db8:1461::10&last=2001:db8:1461::2f&policy=static&label=v6"
+                ),
+            ),
+            (
+                WriteRoute::EditAddress,
+                format!("id={record}&addr=2001:db8:1461::100&label=v6"),
+            ),
+            (
+                WriteRoute::EditSubnet,
+                format!("id={record}&label=v6&vlan="),
+            ),
+        ];
+        for (route, body) in carrying {
+            let port = FakePort::answering(Ok("01900000-0000-7000-8000-00000000000a".to_string()));
+            let (status, _) = drive(port.clone(), form_post_to(route, &body)).await;
+            assert_eq!(
+                status,
+                StatusCode::OK,
+                "`{}` parses an address and must ACCEPT an IPv6 one — the plan holds IPv6 since \
+                 `0011`, and a correction the definition allows is a correction the edit must allow",
+                route.path()
+            );
+            assert!(
+                !port.asked.lock().expect("the log").is_empty(),
+                "`{}` refused an IPv6 argument before the store",
+                route.path()
+            );
+        }
+
+        // ⚠️ The three that carry NO address at all — the deletes address a record by its id.
         for route in [
             WriteRoute::DeleteSubnet,
             WriteRoute::DeleteRange,
             WriteRoute::DeleteAddress,
-            WriteRoute::EditRange,
-            WriteRoute::EditSubnet,
-            WriteRoute::EditAddress,
         ] {
             assert!(
-                WriteRoute::ALL.contains(&route),
-                "`{}` left the route list and this enumeration did not notice",
+                !WriteRoute::ALL
+                    .iter()
+                    .any(|r| *r == route && r.carries_label()),
+                "`{}` gained a field; re-read what it does with an IPv6 one",
                 route.path()
             );
         }
@@ -2274,6 +2312,12 @@ mod tests {
     /// test for its VLAN refusal at all. *A divergence between a prediction and a measurement is
     /// the finding*, and here the measurement was right and the prediction described a test that
     /// did not exist.
+    /// **AC3 — the correction is held to the SAME VLAN rules as the definition.**
+    ///
+    /// ⚠️ Driven through the ROUTE and not through `parse_vlan`, for this file's standing reason: a
+    /// handler that parses the field and forgets to refuse on it leaves a unit test of the parser
+    /// perfectly green. The port is asserted UNREACHED, which is what says the refusal happened
+    /// before the write rather than after it.
     #[tokio::test]
     async fn every_route_that_asks_for_a_vlan_refuses_one_outside_the_domain() {
         // ⚠️ `+1` is NOT here and was measured rather than reasoned about: Rust's `u16::from_str`
