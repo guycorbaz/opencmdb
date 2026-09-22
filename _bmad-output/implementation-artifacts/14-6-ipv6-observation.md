@@ -533,8 +533,10 @@ Every IPv6 behaviour is exercised by fixtures, as story 14.5's VLAN was.
 - registered: The plan-wide address order is PER-FAMILY, not global
 - registered: is NOT carried by the type, where `Plan.defined` is
 - registered: The workspace declares no `[profile]`
-- registered: is STRUCTURALLY UNABLE to catch it
 - registered: The keyboard gate never opens an IPv6 subnet's tab
+- registered: now holds IPv6 values, and the column's NAME has drifted
+- registered: is STRUCTURALLY UNABLE to see an obligation carried by an EDIT
+- registered: family arm changes no answer for any input
 - file: .github/workflows/ci.yml
 - file: _bmad-output/implementation-artifacts/14-6-ipv6-observation.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
