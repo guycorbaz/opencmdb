@@ -1097,6 +1097,14 @@ fn family_examples(s: &mut IpamStrings) {
     s.form_first = rust_i18n::t!("ipam.form.first_v6").to_string();
     s.form_last = rust_i18n::t!("ipam.form.last_v6").to_string();
     s.form_addr = rust_i18n::t!("ipam.form.addr_v6").to_string();
+    // ⚠️ **`form_cidr` IS DELIBERATELY NOT HERE, and the reason is which subnet each form is
+    // about.** The edge layer of story 14.6's second review round measured the *Define a subnet*
+    // placeholder still reading `192.0.2.0/24` on an IPv6 subnet's page and reported it as an
+    // inconsistency. It is not one: the range and address forms write INSIDE the subnet in force,
+    // so their examples are a function of its family, while the subnet form creates a NEW subnet of
+    // either family — switching its example with the tab would suggest the operator must match the
+    // tab they happen to be looking at. 🔑 *Three of four examples following the tab is the shape
+    // that looks wrong; what decides it is what each form writes into, not how many follow.*
 }
 
 /// Resolve every string, with the occupancy and next-free lines when there is a plan.
@@ -2821,7 +2829,7 @@ mod tests {
             .run(&pool)
             .await
             .expect("migrate");
-        for id in ["t-fam4", "t-fam6", "t-fam6s"] {
+        for id in ["t-fam4", "t-fam6", "t-fam6s", "t-fam6t", "t-fam6o"] {
             crate::ipam_repo::tests::forget_subnet(&pool, id).await;
         }
         let mut conn = pool.acquire().await.expect("a connection");
@@ -2835,6 +2843,22 @@ mod tests {
         let big6 =
             crate::ipam_repo::Subnet::new("2001:db8:1463:2::".parse().expect("a literal"), 64)
                 .expect("a /64");
+        // 🔑 **AC3 NAMES THREE PREFIX LENGTHS AND THE FIRST ROUND SHIPPED TWO**, which the
+        // acceptance layer measured rather than read past. The `/124` and the `/128` are the two
+        // the criterion asks for and the shape where the ceiling is least plausible as the
+        // mechanism: a `/128` is ONE address, so a size test would draw it without hesitating.
+        let tiny6 =
+            crate::ipam_repo::Subnet::new("2001:db8:1463:3::".parse().expect("a literal"), 124)
+                .expect("a /124");
+        let one6 =
+            crate::ipam_repo::Subnet::new("2001:db8:1463:4::".parse().expect("a literal"), 128)
+                .expect("a /128");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-fam6t", tiny6, "tiny v6", 0)
+            .await
+            .expect("the /124");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-fam6o", one6, "one v6", 0)
+            .await
+            .expect("the /128");
         crate::ipam_repo::insert_subnet(&mut *conn, "t-fam4", v4, "v4", 0)
             .await
             .expect("the IPv4 subnet");
@@ -2846,18 +2870,28 @@ mod tests {
             .expect("the large IPv6 subnet");
         drop(conn);
 
-        let sentence = rust_i18n::t!("ipam.audit.unobservable").to_string();
-        let all_clear = rust_i18n::t!("ipam.findings.none").to_string();
-
+        // 🔴 **THE THREE ORACLES BELOW NAME A CLASS, AND THE SECOND REVIEW ROUND IS WHY.** They
+        // read `rust_i18n::t!` before: the presence check happened to hold, and the ABSENCE check
+        // — `!page.contains(t!("ipam.findings.none"))` — was **true of every page that exists**,
+        // because Askama escapes the apostrophe in *this subnet's plan* and the needle carries `\'`
+        // where the page carries `&#39;`. The edge layer planted the exact defect the criterion
+        // forbids (the all-clear rendered BESIDE the unobservable sentence) and measured 1 043
+        // tests and ten gates GREEN. *A negative assertion over a translated sentence cannot fail;
+        // the positive twin beside it would have reddened the day it was written, which is what
+        // makes the negative form the dangerous one.* Fourth occurrence of that escape in this
+        // project, and the first where the story's own record names the class and the remedy was
+        // applied to the browser gate and not to the Rust test written for the same criterion.
         let v4page = plan_data(&pool, Some("t-fam4")).await.expect("the v4 plan");
         assert!(
-            v4page.contains("ipam-cell") && !v4page.contains(&sentence),
+            v4page.contains("ipam-cell") && !v4page.contains("ipam-unobservable"),
             "an IPv4 subnet keeps its grid and says nothing about being unobservable"
         );
 
         for (id, what) in [
             ("t-fam6s", "a /120, UNDER the ceiling"),
             ("t-fam6", "a /64"),
+            ("t-fam6t", "a /124"),
+            ("t-fam6o", "a /128, ONE address"),
         ] {
             let page = plan_data(&pool, Some(id)).await.expect("the v6 plan");
             assert!(
@@ -2865,16 +2899,16 @@ mod tests {
                 "{what} drew a GRID — the size decided where the family should have"
             );
             assert!(
-                page.contains(&sentence),
+                page.contains("ipam-unobservable"),
                 "{what} did not say that nothing was checked"
             );
             assert!(
-                !page.contains(&all_clear),
+                !page.contains("ipam-all-clear"),
                 "{what} rendered the ALL-CLEAR — the product asserting concordance about a plan \
                  its only connector will never look at"
             );
         }
-        for id in ["t-fam4", "t-fam6", "t-fam6s"] {
+        for id in ["t-fam4", "t-fam6", "t-fam6s", "t-fam6t", "t-fam6o"] {
             crate::ipam_repo::tests::forget_subnet(&pool, id).await;
         }
     }
@@ -4307,6 +4341,12 @@ mod tests {
         // gesture's word on a finding's control; 76 → 77 at its code review: `ipam.released_note`, the
         // confirmation that rides in the URL; **77 → 80 at story 14.5**, read off the list this
         // assertion prints: `ipam.form.vlan`, `ipam.vlan_tab` and `ipam.vlan_note`.
+        // 🔴 **80 → 84 at story 14.6, and this line was MISSING until its second review round** —
+        // both the acceptance and the edge layer found the trail recording every earlier bump with
+        // its keys and silent about the one that had just moved it. Read off the printed list:
+        // `ipam.audit.unobservable`, `ipam.unobservable.heading`, `ipam.unobservable.no_offer` and
+        // `ipam.form.addr_v6`. ⚠️ `ipam.form.first_v6` and `…last_v6` are NOT a fifth and sixth:
+        // they were already named by `family_examples` before this count was taken.
         assert_eq!(
             keys.len(),
             84,

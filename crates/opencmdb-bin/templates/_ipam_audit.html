@@ -41,7 +41,15 @@
   {%- if !audit.unobservable.is_empty() %}
   <p class="empty ipam-unobservable">{{ audit.unobservable }}</p>
   {%- else if audit.findings.is_empty() %}
-  <p class="empty">{{ s.no_findings }}</p>
+  {#- 🔴 **STORY 14.6, SECOND ROUND: `ipam-all-clear` EXISTS SO THAT A GUARD CAN NAME THIS
+       PARAGRAPH WITHOUT QUOTING IT.** The test written for the criterion above asserted
+       `!page.contains(t!("ipam.findings.none"))` — and Askama escapes the apostrophe in *this
+       subnet's plan*, so the needle carries `'` where the page carries `&#39;` and the negation was
+       **true of every page that exists**. The edge review measured it: the defect the criterion
+       forbids — the all-clear rendered BESIDE the unobservable sentence — left 1 043 tests and ten
+       gates green. *A negative assertion on a translated sentence cannot fail, and it is the
+       negative form that hides it: a positive one would have reddened the day it was written.* -#}
+  <p class="empty ipam-all-clear">{{ s.no_findings }}</p>
   {%- else %}
   <ul class="ipam-findings">
     {%- for row in audit.findings %}

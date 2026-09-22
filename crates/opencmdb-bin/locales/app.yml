@@ -854,8 +854,19 @@ ipam.findings.heading:
   fr: "Ce que montre le réseau"
 # 🔴 Story 14.6: the sentence that REPLACES the all-clear for a subnet the product cannot observe.
 # `ipam.findings.none` would assert concordance about a plan the only connector never looks at; this
-# says what is true — nothing was checked — and it names THIS SUBNET, because the plan-wide *outside*
-# list keeps rendering beside it and the two must not contradict each other in one viewport.
+# says what is true and names THIS SUBNET, because the plan-wide *outside* list keeps rendering
+# beside it and the two must not contradict each other in one viewport.
+# 🔴 **IT SAID *"nothing here was checked"*, AND THE SECOND REVIEW ROUND REFUTED THAT TWICE OVER.**
+# The acceptance layer measured the closing clause — *"What it shows below is what you declared"* —
+# rendered directly above *Seen outside every subnet of the plan*, which is what the NETWORK showed:
+# claim and refutation in one viewport, the class story 14.4's third round paid for, reintroduced by
+# the sentence written to prevent it. And *nothing was checked* over-claimed on a second axis: the
+# **pool warnings** below it are a plan-internal check that needs no observation, and they render for
+# an IPv6 subnet — correctly, since an address defined inside a declared DHCP pool is a contradiction
+# in the plan alone. 🔑 *What is missing on an IPv6 subnet is the COMPARISON, never the checking* —
+# so the sentence names the comparison, claims nothing about what follows, and the pool warnings keep
+# their own heading. Refused: suppressing the pool warnings for IPv6, which would have cost the
+# operator a true and useful warning in order to save a sentence that was wrong.
 # The *no offer* line for an unobservable subnet: the shipped one names the SIZE, which is a true
 # sentence about the wrong reason for an IPv6 subnet of any prefix length.
 ipam.unobservable.heading:
@@ -865,8 +876,8 @@ ipam.unobservable.no_offer:
   en: "No address is offered here: the product cannot see what is in use on an IPv6 network."
   fr: "Aucune adresse n'est proposée ici : le produit ne voit pas ce qui est utilisé sur un réseau IPv6."
 ipam.audit.unobservable:
-  en: "Nothing here was checked: the scanner does not reach IPv6, so the product has no observation to compare the plan of this subnet against. What it shows below is what you declared."
-  fr: "Rien ici n'a été vérifié : le scanner n'atteint pas IPv6, donc le produit n'a aucune observation à comparer au plan de ce sous-réseau. Ce qui suit est ce que vous avez déclaré."
+  en: "This subnet was not compared against the network: the scanner does not reach IPv6, so the product has no observation of it."
+  fr: "Ce sous-réseau n'a pas été comparé au réseau : le scanner n'atteint pas IPv6, donc le produit n'en a aucune observation."
 ipam.findings.none:
   en: "Nothing the network has shown contradicts this subnet's plan."
   fr: "Rien de ce que le réseau a montré ne contredit le plan de ce sous-réseau."
@@ -1334,9 +1345,22 @@ ipam.refusal.address_outside_subnet:
 ipam.refusal.base_not_network:
   en: "A subnet is named by its network address: 192.0.2.5/24 is the subnet 192.0.2.0/24."
   fr: "Un sous-réseau se nomme par son adresse de réseau : 192.0.2.5/24, c'est le sous-réseau 192.0.2.0/24."
+# 🔴 **IT NAMED IPv4 AND 32 FOR AN IPv6 CIDR UNTIL STORY 14.6's SECOND REVIEW ROUND**, measured on
+# a booted binary: `2001:db8:9::/129` answered *"cannot belong to an IPv4 subnet: 32 at most"*. The
+# sentence was true when written — one family existed — and this is the commit that made the second
+# case reachable, which is exactly when an inherited sentence stops being right and nothing says so.
+# 🔑 The variant carries no family, so the sentence names BOTH bounds rather than guessing one: a
+# refusal that states the rule is readable under either reading, where a refusal that names the
+# wrong family sends the operator to check the half they got right.
 ipam.refusal.prefix_not_in_family:
-  en: "That prefix length cannot belong to an IPv4 subnet: 32 at most."
-  fr: "Cette longueur de préfixe ne peut pas appartenir à un sous-réseau IPv4 : 32 au maximum."
+  en: "That prefix length does not fit the address family: 32 at most for IPv4, 128 for IPv6."
+  fr: "Cette longueur de préfixe ne convient pas à la famille d'adresses : 32 au maximum pour IPv4, 128 pour IPv6."
+# 🔴 Story 14.6, second review round: the IPv4-mapped form, refused rather than held. It named a
+# space the scanner sweeps while the page called it unobservable; the sentence says which spelling
+# the plan wants instead, because a refusal the operator cannot act on is a dead end.
+ipam.refusal.ipv4_mapped_base:
+  en: "That is an IPv4 space written in IPv6 form. Enter it as IPv4 — the product observes it."
+  fr: "C'est un espace IPv4 écrit en forme IPv6. Saisissez-le en IPv4 : le produit l'observe."
 ipam.refusal.not_an_address:
   en: "That is not an address the plan can hold."
   fr: "Ce n'est pas une adresse que le plan sache porter."

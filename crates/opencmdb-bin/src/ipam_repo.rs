@@ -318,7 +318,15 @@ impl Subnet {
     ///
     /// 🔑 It is a `u64` because a `/0` IPv4 holds 2³² addresses and a `u32` cannot say so. The count
     /// is what lets a caller refuse to DRAW a subnet before it has paid for drawing it — see
-    /// `ipam_page::MAX_DRAWN_ADDRESSES`, which is this function's ONLY production caller.
+    /// `ipam_page::MAX_DRAWN_ADDRESSES`. 🔴 **This line said *ONLY production caller* until story
+    /// 14.6's second review round, and the word was added BY that story over a second caller that
+    /// predates it**: `release_address` uses `size()` as a COUNT, to pick the innermost subnet
+    /// containing an address. The old sentence — *"see `MAX_DRAWN_ADDRESSES`"* — was true, and the
+    /// superlative added to it was not. ⚠️ It matters because the whole safety argument for
+    /// saturating below rests on the value being read as a CEILING and never as a count: the
+    /// release handler refuses IPv6 before the repository sees it and `contains` filters the
+    /// candidates to IPv4, whose sizes never saturate, so the second caller is safe *today* and by
+    /// a chain of three facts rather than by this function's signature.
     ///
     /// 🔴 **THE OBVIOUS SPELLING IS A RELEASE-ONLY HANG, and story 14.6's validation measured both
     /// halves.** `1_u64 << (128 - 64)` is `1 << 64`: it **panics in debug** (`attempt to shift left
@@ -380,9 +388,18 @@ impl Subnet {
     /// 🔑 An INTERVAL comparison and never a walk: a `/8` holds 16 777 216 addresses, and the one
     /// caller asks this question while rendering a page the ceiling refuses to draw.
     pub(crate) fn overlaps(&self, first: IpAddr, last: IpAddr) -> bool {
-        // 🔴 A bound of ANOTHER family overlaps nothing, said explicitly for `contains`'s reason:
-        // the bare interval test answers correctly only because `IpAddr`'s order puts every V4 below
-        // every V6, and an answer that is right by luck is one nobody can rely on.
+        // 🔴 **THIS ARM IS LOAD-BEARING WHERE `contains`'s IS NOT, and the difference is a
+        // STRADDLING interval.** The edge review ran both implementations side by side over every
+        // family combination: with `first` and `last` in the same family the bare interval test
+        // already answers correctly, and the ONE input where the two forms differ is `first` V4 and
+        // `last` V6 — guarded `false`, bare **`true`**, i.e. an interval spanning the whole of IPv4
+        // and the whole of IPv6 would overlap every subnet of the plan. ⚠️ Until that review the
+        // only test naming this arm used same-family bounds on both sides, so it exercised the
+        // three cases the bare form gets right and none of the one it gets wrong.
+        //
+        // 🔑 Unreachable from the store today — `ip_range_same_family` refuses a straddling row,
+        // which story 14.6 made live — so the schema is the FIRST carrier and this arm is what
+        // holds if a caller ever assembles bounds without going through a range.
         if self.is_v6() != matches!(first, IpAddr::V6(_))
             || self.is_v6() != matches!(last, IpAddr::V6(_))
         {
@@ -2051,6 +2068,16 @@ pub(crate) mod tests {
         assert!(!v6net.overlaps(v4("192.0.2.1"), v4("192.0.2.40")));
         assert!(!v4net.overlaps(v4("2001:db8:0:42::1"), v4("2001:db8:0:42::40")));
         assert!(v4net.overlaps(v4("192.0.2.1"), v4("192.0.2.40")));
+        // 🔴 **THE STRADDLING BOUNDS, AND THEY ARE THE ONLY INPUT THE ARM CHANGES AN ANSWER FOR.**
+        // The three rows above use same-family bounds on both sides, which is exactly what the bare
+        // interval test already gets right — so until story 14.6's second review round this test
+        // named the arm and exercised none of it. With `first` in IPv4 and `last` in IPv6 the
+        // interval spans both families entirely, and without the arm it overlaps EVERY subnet of
+        // the plan. ⚠️ The schema refuses such a row (`ip_range_same_family`), so this is a guard
+        // on the function rather than on a reachable state — said here rather than implied, because
+        // the previous version of this comment implied the reverse.
+        assert!(!v4net.overlaps(v4("192.0.2.1"), v4("2001:db8:0:42::40")));
+        assert!(!v6net.overlaps(v4("192.0.2.1"), v4("2001:db8:0:42::40")));
     }
 
     /// 🔑 **THE PROPERTY THE FAMILY ANSWERS REALLY REST ON, pinned because it is a dependency and
@@ -2315,7 +2342,7 @@ pub(crate) mod tests {
             .await
             .expect("a canonical subnet is accepted — the control for every refusal below");
 
-        let refusals: [(&str, &str, &str); 6] = [
+        let refusals: [(&str, &str, &str); 7] = [
             (
                 "an unpadded base",
                 "INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES ('t-x1','192.0.2.0',24,'x')",
@@ -2351,6 +2378,19 @@ pub(crate) mod tests {
               VALUES ('t-x6','t-ddl','192.000.002.009 ','x')",
                 "the same PAD SPACE trap, closed by the RLIKE's `$` anchor",
             ),
+            (
+                // 🔴 **THE ROW THE GUARD ASKED FOR IN WRITING FOR FIVE STORIES.** `0007`'s message
+                // said `ip_range_same_family` *"now needs a test of its own AND a row in the
+                // refusal array"* the day a second width exists; `0011` is that day, and story
+                // 14.6's first round wrote the test, wrote *"Both exist now"* beside it, and left
+                // the array at six — which the acceptance layer of the second round measured by
+                // counting rather than by reading. ⚠️ Both bounds below pass their OWN canonical
+                // CHECK — that is the point: nothing but the family rule refuses this pair.
+                "a range straddling the two families",
+                "INSERT INTO ip_range (id,subnet_id,first_addr,last_addr,policy,label) \
+              VALUES ('t-x7','t-ddl','192.000.002.010','2001:0db8:0000:0000:0000:0000:0000:0010','static','x')",
+                "`ip_range_same_family` compares octet lengths and is the only clause that can",
+            ),
         ];
         for (what, statement, why) in refusals {
             let outcome = sqlx::query(statement).execute(&pool).await;
@@ -2365,7 +2405,7 @@ pub(crate) mod tests {
         .execute(&pool)
         .await
         .expect(
-            "a legal range is accepted — without this the six refusals above could all be one \
+            "a legal range is accepted — without this the seven refusals above could all be one \
                  broken table",
         );
         forget_subnet(&pool, "t-ddl").await;
@@ -2672,15 +2712,21 @@ pub(crate) mod tests {
     /// and every address check answered 500. They skip and NAME it now, as [`list_subnets`] does.
     ///
     /// ⚠️ **AND THE STORE CANNOT PRODUCE SUCH A ROW TODAY, which is said rather than implied.** Every
-    /// spelling below is refused by `0007`'s own CHECKs: the canonical pattern admits exactly ONE
-    /// address family (pinned by `the_family_check_is_implied_until_a_second_width_exists`, whose
-    /// own subject is that vacuity) so a stored bound always parses, and
+    /// spelling below is refused by the plan's own CHECKs — `0007`'s, as widened by `0011` — so a
+    /// stored bound always parses, and
     /// `LENGTH(policy) = LENGTH(TRIM(policy))` closes the PAD SPACE door the `IN (...)` list leaves
     /// open. ⚠️ The address half of the decision is also pinned by
     /// `only_the_canonical_spelling_reads_back`; it is asserted here too because this test is about
-    /// what the PLAN-WIDE readers refuse, and that redundancy is deliberate. So the skip is **defensive code whose trigger is out of
-    /// reach until FR25 widens that CHECK for IPv6** — at which point a v6 bound in a v4 build is
-    /// exactly this case. 🔑 *What is testable here is the DECISION — which spellings this build
+    /// what the PLAN-WIDE readers refuse, and that redundancy is deliberate.
+    ///
+    /// 🔴 **THIS PARAGRAPH SAID THE TRIGGER WAS *out of reach until FR25 widens that CHECK for
+    /// IPv6* — AND FR25 IS THIS STORY**, which widened it two files away while leaving the sentence
+    /// standing in the present tense; the acceptance layer of the second review round found it. The
+    /// skip is still defensive and its trigger is still unreachable, for a DIFFERENT reason worth
+    /// having written down: a v6 bound is now *readable* rather than refused, so what would have to
+    /// go wrong is a row whose spelling no widened CHECK admits. 🔑 *A sentence that names the
+    /// condition of its own falsification is the one to re-read on the day that condition is met —
+    /// and nothing re-read it, because nothing could.* 🔑 *What is testable here is the DECISION — which spellings this build
     /// calls unreadable — and that is what this pins; the loop around it is one `match`.*
     /// Registering the unreachability is the honest half: a guard nobody can red is a guard whose
     /// reach must be written down (story 14.1's `ip_range_same_family`, same shape).

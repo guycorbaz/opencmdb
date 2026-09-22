@@ -309,7 +309,11 @@ in the literal form — sound for IPv4, wrong here — and that is named rather 
 
 **AC3 — the refusal is keyed on the FAMILY, never on the size.** An IPv6 subnet gets **no grid, no
 occupancy line, no offer and no audit of its own**, *whatever its prefix length* — with tests on a
-`/120`, a `/124` and a `/128`. 🔴 The size ceiling delivers none of the three: the gap-hunt built the
+`/120`, a `/124` and a `/128` — ⚠️ **and the first round shipped two of the three**, the `/124`
+appearing nowhere in the tree and the `/128` only in the pure `size()` and `is_edge` tests; the
+acceptance layer measured it rather than reading past it. All three render through `plan_data` now,
+plus a `/64` the criterion does not ask for, which is the case the ceiling would have caught anyway
+and is what makes the other three the measurement. 🔴 The size ceiling delivers none of the three: the gap-hunt built the
 widening and `/ipam` drew a 256-cell grid, an occupancy line and **an offer** (`Next address the plan
 can offer 2001:db8:0:43::10`) on a `2001:db8:0:43::/120`. ⚠️ And the *too large to draw* branch's own
 sentence is about SIZE, which is a true sentence about the wrong reason for a `/64`.
@@ -321,8 +325,12 @@ claiming concordance about a plan its only connector will never look at. ⚠️ 
 *outside* list keeps rendering, so the sentence must say it speaks of THIS SUBNET only, or the two
 contradict each other in one viewport.
 
-**AC5 — `Subnet::size()` is family-aware and CANNOT shift by 64 or more**, with `/0`, `/64`, `/120`
-and `/128` pinned in both families. 🔴 The obvious spelling `1_u64 << (128 - prefix)` **panics in
+**AC5 — `Subnet::size()` is family-aware and CANNOT shift by 64 or more**, with `/0`, `/24` and
+`/32` pinned on IPv4 and `/0`, `/64`, `/118`, `/120` and `/128` on IPv6. ⚠️ **It read *"`/0`, `/64`,
+`/120` and `/128` pinned in both families"*, which is unsatisfiable as written** and was corrected
+rather than ticked: `Subnet::new` refuses `/64`, `/120` and `/128` on an IPv4 base by this story's
+own design, so three of those four cases cannot exist on one side of the *both*. The delivered set
+is the right one; the criterion's wording was not. 🔴 The obvious spelling `1_u64 << (128 - prefix)` **panics in
 debug and returns 1 in release** — reproduced — and the workspace declares no `[profile]`, so the
 shipped image has `overflow-checks = false`: an IPv6 `/64` would report `1`, sail under the ceiling
 and loop over 2^64 addresses. *The debug build turns it into a crash and the release build into a
@@ -503,9 +511,12 @@ ceiling and looped over 2⁶⁴ addresses — story 14.2's 2.08 GB denial of ser
 invisible in the debug suite where the same code panics. *The debug build turns it into a crash and
 the release build into a hang.*
 
-⚠️ **`ipam_page.rs` crossed the ceiling mid-implementation** (2015 lines, the gate RED) and the right
+⚠️ **`ipam_page.rs` came within two lines of the ceiling mid-implementation** (1998 code lines against 2000) and the right
 cut was taken in ONE gesture because story 14.5's review had measured and registered it: the three
-`GET` checks, 596 lines, now `ipam_checks.rs`. ⚠️ The split then produced a finding of its own —
+`GET` checks, now `ipam_checks.rs` — **629 lines left `ipam_page.rs` and the new module is 698, of which 632 are code by the `file-size` gate's own definition**; `ipam_page.rs` sits at **1437**.
+
+⚠️ **The figures above are the second review round's, and the ones they replace reproduced under no reading.** *596 lines* was published here and in the register and matches no measurement of that commit — not the file's total, its non-blank count, its code count, nor the lines deleted from `ipam_page.rs`. And *2015 code lines, the gate RED* names a state no commit carries: `ipam_page.rs` at the split's parent is **1998**, two under the ceiling and GREEN. Consistent with a transient working tree, which is exactly the problem — *a number taken from a state nobody can return to is a recollection, and the register is where the next story reads it as a measurement*.
+ ⚠️ The split then produced a finding of its own —
 `ipam_page`'s key guard reads `include_str!("ipam_page.rs")`, so nineteen keys left its population
 **without reddening it**. *A guard keyed on a file measures the file, not the concept.*
 
@@ -515,13 +526,15 @@ Every IPv6 behaviour is exercised by fixtures, as story 14.5's VLAN was.
 
 ## Record
 
-- live-count: bin=742 core=191 xtask=110
+- live-count: bin=744 core=191 xtask=110
 - base: a254de354fb679c54edd6cc467bbefcc20e31887
 - registered: is the tightest file in the tree at 1954 code lines
 - registered: is LIVE since `0011`, and it is the SECOND carrier
 - registered: The plan-wide address order is PER-FAMILY, not global
 - registered: is NOT carried by the type, where `Plan.defined` is
 - registered: The workspace declares no `[profile]`
+- registered: is STRUCTURALLY UNABLE to catch it
+- registered: The keyboard gate never opens an IPv6 subnet's tab
 - file: .github/workflows/ci.yml
 - file: _bmad-output/implementation-artifacts/14-6-ipv6-observation.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
@@ -529,6 +542,7 @@ Every IPv6 behaviour is exercised by fixtures, as story 14.5's VLAN was.
 - file: a11y/seed.sql
 - file: crates/opencmdb-bin/assets/app.css
 - file: crates/opencmdb-bin/locales/app.yml
+- file: crates/opencmdb-bin/migrations/0007_addressing_plan.sql
 - file: crates/opencmdb-bin/migrations/0011_ipv6_canonical.sql
 - file: crates/opencmdb-bin/src/ipam_audit.rs
 - file: crates/opencmdb-bin/src/ipam_checks.rs
@@ -538,6 +552,7 @@ Every IPv6 behaviour is exercised by fixtures, as story 14.5's VLAN was.
 - file: crates/opencmdb-bin/src/ipam_write.rs
 - file: crates/opencmdb-bin/src/main.rs
 - file: crates/opencmdb-bin/src/sighting_repo.rs
+- file: crates/opencmdb-bin/templates/_ipam.html
 - file: crates/opencmdb-bin/templates/_ipam_audit.html
 - file: docs/manuals/user-manual/user-manual.tex
 

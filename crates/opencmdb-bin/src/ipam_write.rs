@@ -1625,6 +1625,32 @@ fn parse_cidr(raw: &str) -> Result<Subnet, Refusal> {
     // sentences for what looks like one mistake, and the distinction is the honest one: the product
     // can only name a rule it can evaluate.
     let prefix: u8 = prefix.parse().map_err(|_| malformed())?;
+    // 🔴 **AN IPv4-MAPPED BASE IS REFUSED, AND THE EDGE LAYER MEASURED WHY.** `::ffff:192.0.2.0/120`
+    // parsed, stored and served a page reading *"the product cannot observe IPv6"* over
+    // `192.0.2.0–192.0.2.255`, **which the shipped connector sweeps every five minutes** — Rust maps
+    // that spelling to `IpAddr::V6`, so `is_v6()` is true and story 14.6's whole family branch fires
+    // over an IPv4 space. *The product denying it can see what it is looking at is worse than
+    // refusing to hold the record at all.*
+    //
+    // 🔑 **Decision taken by me on delegation and recorded as mine so it can be reversed at the
+    // right cost** (2026-09-22). Refused: NORMALISING to IPv4, which reads well on a `/120` and has
+    // no meaning at all on a mapped `/64`, and would silently turn one CIDR the operator typed into
+    // another; and stating it as a limit, which leaves a false sentence on a served page. The
+    // operator writes the space as IPv4, which is what it is.
+    //
+    // ⚠️ **Scoped to the SUBNET, and the residual is written rather than implied**: a range or an
+    // address is parsed inside a subnet the plan already holds, so a mapped bound can only be
+    // reached under a genuine IPv6 subnet wide enough to contain the mapped block — and the page it
+    // renders is then about that genuine IPv6 subnet, which the sentence is true of.
+    if matches!(base, IpAddr::V6(v6) if v6.to_ipv4_mapped().is_some()) {
+        // Built here rather than as a `WriteRoute` method: this parser has ONE caller by decision,
+        // and a per-route constructor would be an enumeration over ten routes nine of which cannot
+        // reach it — which is the shape this project keeps finding green.
+        return Err(Refusal::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.ipv4_mapped_base",
+        ));
+    }
     // The subnet route is the only caller of this parser, and it is the gesture whose sentence this
     // refusal will carry.
     Subnet::new(base, prefix).map_err(|error| ipam_refusal(&error, WriteRoute::Subnet))
@@ -2176,9 +2202,16 @@ mod tests {
     ///
     /// 🔑 **The other nine are enumerated with what each answers, because *the plan speaks IPv6* is
     /// a sentence about ten routes and this is the only place that says which.** The three
-    /// definitions ACCEPT IPv6 — that is the story — the five corrections address a record by id and
-    /// never parse an address of their own except `EditAddress`, and the deletes carry no address at
-    /// all.
+    /// definitions ACCEPT IPv6 — that is the story — the three deletes address a record by id and
+    /// carry no address at all, and **three of the corrections DO parse one**: `EditRange` reads
+    /// `first` and `last`, `EditAddress` reads `addr`, and `EditSubnet` goes through `parse_cidr`.
+    ///
+    /// 🔴 **This paragraph read *"the five corrections … never parse an address of their own except
+    /// `EditAddress`"* until the second review round, and the loop below asserted the same thing
+    /// about six routes while measuring only their membership in `WriteRoute::ALL`.** The one route
+    /// the exception named was the one the criterion's value depends on being enumerated honestly,
+    /// and the sentence undercounted the other two on top of that. *An enumeration that carries its
+    /// own exception is an enumeration that has stopped being read.*
     #[tokio::test]
     async fn every_write_route_says_what_it_does_with_an_ipv6_argument() {
         let subnet = "01900000-0000-7000-8000-0000000000aa";
@@ -2523,10 +2556,63 @@ mod tests {
         // MALFORMED, `/64` fits and cannot belong to IPv4. The product names only a rule it can
         // evaluate. ⚠️ And this one is a REFUSAL rather than a lint because `Subnet::last` would
         // compute `32 - 64` and panic on subtract-with-overflow (story 14.1's measurement).
-        let port = FakePort::answering(Ok("unreached".to_string()));
-        let (status, body) = drive(port, form_post("cidr=192.0.2.0/64&label=Office")).await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(body, key("ipam.refusal.prefix_not_in_family"));
+        //
+        // 🔴 **AND IT IS DRIVEN FROM BOTH FAMILIES SINCE STORY 14.6's SECOND ROUND.** It drove the
+        // IPv4 side alone, which is how the shipped sentence — *"cannot belong to an IPv4 subnet:
+        // 32 at most"* — survived the commit that made `/129` reachable: the one case the copy was
+        // wrong about was the one case no test asked for. The body is the same key on both sides,
+        // so this test pins the ROUTING and not the wording; what pins the wording is that the key
+        // no longer names a family the error cannot know.
+        for spelling in ["192.0.2.0/64", "2001:db8:9::/129"] {
+            let port = FakePort::answering(Ok("unreached".to_string()));
+            let (status, body) =
+                drive(port, form_post(&format!("cidr={spelling}&label=Office"))).await;
+            assert_eq!(
+                status,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "`{spelling}` names a prefix length its family cannot carry"
+            );
+            assert_eq!(
+                body,
+                key("ipam.refusal.prefix_not_in_family"),
+                "for `{spelling}`"
+            );
+        }
+    }
+
+    /// 🔴 **An IPv4 space written in IPv6 form is REFUSED, and the page it used to serve is why.**
+    /// The edge layer of story 14.6's second review round defined `::ffff:192.0.2.0/120`, got a
+    /// `201`, and read back a page saying *"the product cannot observe IPv6"* over an address range
+    /// the shipped connector sweeps every five minutes. Rust parses that spelling as `IpAddr::V6`,
+    /// so the family branch fires and the product denies seeing what it is looking at.
+    ///
+    /// ⚠️ The control is the third row: the genuine IPv6 subnet must still be ACCEPTED, or the
+    /// refusal would be indistinguishable from FR25 being reverted.
+    #[tokio::test]
+    async fn an_ipv4_space_written_in_ipv6_form_is_refused_and_ipv6_proper_is_not() {
+        for spelling in ["::ffff:192.0.2.0/120", "::ffff:0.0.0.0/96"] {
+            let port = FakePort::answering(Ok("unreached".to_string()));
+            let (status, body) =
+                drive(port, form_post(&format!("cidr={spelling}&label=Office"))).await;
+            assert_eq!(
+                status,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "`{spelling}` is an IPv4 space and the plan must not hold it as IPv6"
+            );
+            assert_eq!(
+                body,
+                key("ipam.refusal.ipv4_mapped_base"),
+                "for `{spelling}`"
+            );
+        }
+        let port = FakePort::answering(Ok("defined".to_string()));
+        let (status, _) = drive(port, form_post("cidr=2001:db8:1466::/120&label=Lab")).await;
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "a genuine IPv6 subnet is still accepted — without this row the refusal above would \
+             read the same as FR25 being reverted"
+        );
     }
 
     #[tokio::test]
@@ -2777,9 +2863,16 @@ mod tests {
         // 🔑 42 → 45 at story 14.5, read off the list this prints: `ipam.refusal.not_a_vlan`, then
         // the tenth route's two — `ipam.refusal.malformed_edit_subnet` and `ipam.done.edit_subnet`.
         // ⚠️ The re-entry sentence is NOT a fourth: the correction shares the definition's key.
+        // 🔑 45 → 46 at story 14.6: `ipam.refusal.release_of_unobservable`, the release refused on
+        // an address the product cannot observe.
+        // 🔴 **46 → 47 at 14.6's SECOND REVIEW ROUND**: `ipam.refusal.ipv4_mapped_base`. ⚠️ Both
+        // lines are written here because the round found this trail — which records every earlier
+        // bump with the key read off the printed list — silent about the story that moved it, in
+        // its twin in `ipam_page.rs` as well. *A trail that stops being written is a trail that
+        // says the last person to touch the file was someone else.*
         assert_eq!(
             keys.len(),
-            46,
+            47,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );

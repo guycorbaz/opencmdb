@@ -5186,6 +5186,23 @@ it re-derivable.*
   *red* — a measurement manufactured from an absence. It refuses both now. 🔑 *A debt three stories
   route around stops being a debt and becomes a practice* — and this is the third, so the sentence
   above is no longer a warning but a description.
+  🔴 **STORY 14.6 IS THE FOURTH, and its pass was recorded here only at its SECOND REVIEW ROUND.**
+  The story asserted compliance in three places — AC13, its mutation table and a ticked T7 — and
+  wrote nothing into this row; the acceptance layer established it with
+  `git diff <base>...HEAD -- deferred-work.md`, which touched line 6083 and the end of the file and
+  nothing near here. 🔑 **And `cargo xtask record` is STRUCTURALLY UNABLE to catch it**: it compares
+  the rows a branch ADDS, and this obligation is an EDIT to a row that already exists — story 6b.9's
+  class (*a section that says "registered" is not a registration*) in the one shape the tool built to
+  prevent it cannot see. **Owner of that gap: `cargo xtask record`'s next revision**, or the retro.
+  ⚠️ The pass itself: `0011`'s three mutations were driven by the purpose-built script again, and
+  with `--baseline` on a virgin store the DRIVER reported **162 reds** — changing a migration breaks
+  sqlx's checksum for the store the baseline had just migrated, so the number measures the checksum
+  and not the guard. **D1** (`0011` widens `address_sighting.addr` too) red 1 on
+  `the_observed_side_stays_narrow`, which is decision §0.3 written into the schema · **D2** (the
+  canonical CHECK narrowed back to IPv4 alone) red 1 on
+  `the_family_check_is_live_now_that_a_second_width_exists` · **D3** (`$` instead of `\z`) red 1 on
+  `one_address_has_exactly_one_spelling_in_the_store`, story 14.1's trap still carried after the
+  widening. *A debt four stories route around is a practice, and the fourth story forgot to say so.*
 - 🔴 **A DDL mutation that leaves INVALID SQL measures the parser, not the guard** — and it reports
   a red indistinguishable from a real one. Measured twice in this story's own pass: deleting a
   `CONSTRAINT` line left a trailing comma, the migration failed, and **101 tests reddened** on a
@@ -6083,8 +6100,9 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   shipped an unreviewed restructure to buy headroom a hundred lines already bought. 🔑 The
   measurement is recorded so the next story choosing where to cut does not re-take it. **Owner: the
   next story that grows `ipam_page.rs`.**
-  ✅ **CLOSED by story 14.6, which grew it past the ceiling — 2015 code lines, the gate RED.** The
-  three checks are `crates/opencmdb-bin/src/ipam_checks.rs` now (596 lines moved), and the cut cost
+  ✅ **CLOSED by story 14.6, which grew it to 1998 code lines against a 2000 ceiling.** The
+  three checks are `crates/opencmdb-bin/src/ipam_checks.rs` now (**629 lines left `ipam_page.rs`,
+  which now sits at 1437 code lines; the new module is 698 lines of which 632 are code**), and the cut cost
   what this row said it would: the constants, the three handlers and the two shared helpers changed
   visibility, the router still mounts the same three addresses, and nothing else moved. 🔑 *A
   registered measurement is what let a story cross a ceiling mid-implementation and take the right
@@ -6155,3 +6173,22 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   it would mean reading a value the operator wrote and ignoring it because of a column name. The
   rename is a migration this story does not own. **Owner: the story that next writes a migration
   touching `declared_attribute`.**
+- 🔴 **`cargo xtask record` is STRUCTURALLY UNABLE to see an obligation carried by an EDIT.** It
+  compares the rows a branch ADDS to this file, so the DDL row's standing request — *the next story
+  to write a migration must record its pass here* — is invisible to it: story 14.6 asserted
+  compliance in three places (AC13, its mutation table, a ticked T7), wrote nothing, and the tool
+  said `✅ the record matches the tree`. The acceptance layer found it with one `git diff` over this
+  file. 🔑 *A checker that reads only additions certifies a record that lost something.* ⚠️ Not fixed
+  here: teaching it to follow a row's obligations means giving a register row a machine-readable
+  owner, which is a subject of its own and 6.4b shows that is a whole story. **Owner: `cargo xtask
+  record`'s next revision**, or Epic 14's final retrospective.
+- ⚠️ **`Subnet::contains`'s family arm changes no answer for any input, and `Subnet::overlaps`'s
+  changes exactly one.** The edge layer ran both implementations side by side over every family
+  combination: `contains` is identical with and without its arm — `IpAddr`'s total order already
+  partitions the families — while `overlaps` differs on a STRADDLING interval (`first` V4, `last`
+  V6), where the bare form overlaps every subnet of the plan. So one arm is belt-and-braces that no
+  mutation can ever red, and the other is load-bearing against a row the schema refuses. Both are
+  kept, both now say which they are, and the straddling case has a test since this round. 🔑 *A guard
+  placed where the defect cannot occur reads as coverage and is none* — this project's dominant
+  class, in the pair of arms added to avoid it. **Owner: nobody — recorded so the next reader does
+  not take the two arms for one guarantee.**

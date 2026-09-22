@@ -40,8 +40,12 @@ pub(crate) const ADDRESS_CHECK_PATH: &str = "/ipam/address-check";
 /// The query the address check accepts.
 #[derive(Debug, Default, serde::Deserialize)]
 pub(crate) struct AddressCheckQuery {
-    /// The address as typed so far. Anything that is not yet an IPv4 address is answered with an
-    /// empty warning, before the store is touched.
+    /// The address as typed so far. Anything that is not yet an address the plan can hold is
+    /// answered with an empty warning, before the store is touched.
+    ///
+    /// ⚠️ It said **IPv4** until story 14.6's second review round — true of the handler it
+    /// documents until that story widened the parse to `IpAddr`, and false in the commit that
+    /// widened it. Measured on a booted binary: `?addr=2001:db8:1466::100` is answered normally.
     pub(crate) addr: Option<String>,
 }
 

@@ -499,7 +499,15 @@ async function main() {
               return {
                 unobservable: note !== null,
                 cells: document.querySelectorAll("ul.ipam-grid li.ipam-cell").length,
-                allClear: document.querySelector(".ipam-audit p.empty:not(.ipam-unobservable)") !== null,
+                // 🔴 **`p.ipam-all-clear`, MINTED FOR THIS LINE.** It read
+                // `textContent.includes("contradicts")` at the first round's head — a fragment of a
+                // TRANSLATED sentence, in a file whose own comments say twice that a class is asked
+                // for and never its text. The edge layer measured the cost with a control: the same
+                // plant, the same seed, `EXIT=1` in English and `EXIT=0` in French, the gate
+                // printing a positive sentence over the live defect. Its first repair asked for
+                // `p.empty:not(.ipam-unobservable)`, which the *outside is truncated* paragraph
+                // also matches — a needle that reds on a big enough network.
+                allClear: document.querySelector(".ipam-audit p.ipam-all-clear") !== null,
               };
             }, UNOBSERVABLE);
             {

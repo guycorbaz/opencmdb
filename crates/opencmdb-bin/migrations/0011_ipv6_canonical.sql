@@ -38,7 +38,7 @@
 --      naming its own remedy: `migration 11 is partially applied; fix and remove row from
 --      _sqlx_migrations table`. Nothing the product does can write into that window.
 --   2. **A rename costs story 14.1's inherited prove-to-red outright.**
---      `the_family_check_is_implied_until_a_second_width_exists` reads the constraint BY THE NAME
+--      `the_family_check_is_live_now_that_a_second_width_exists` reads the constraint BY THE NAME
 --      `ip_range_first_canonical` and `.expect()`s a row. Under a rename it panics on `RowNotFound`
 --      and never reaches EITHER of the two sentences written to guide this story.
 --      *A guard first seen red by an absent row has not been seen red.*
@@ -47,7 +47,27 @@
 -- a near-miss this story's validation recorded: `SELECT 'literal' RLIKE pattern` over two utf8mb4
 -- literals is CASE-INSENSITIVE and answers 1 for `2001:0DB8:…`, which the `ascii_bin` column refuses
 -- with `ERROR 4025`. ⚠️ `0007`'s own header records its probe results in that literal form — sound for
--- IPv4, which has no letters, and WRONG here. The verdicts below were taken by INSERT.
+-- IPv4, which has no letters, and WRONG here.
+--
+-- 🔴 **THIS SENTENCE READ *"The verdicts below were taken by INSERT"* AND NO VERDICTS FOLLOWED IT**,
+-- which the acceptance layer of story 14.6's second review round found by looking for them: `0007`'s
+-- header, the thing being corrected, carries a verdict list and this one carried a promise of one.
+-- Taken by INSERT against the migrated column, and re-measured independently by the edge layer over
+-- twenty spellings:
+--   ACCEPTED  192.000.002.009                          the IPv4 canonical form, unchanged by `0011`
+--   ACCEPTED  2001:0db8:0000:0000:0000:0000:0000:0001  the IPv6 canonical form this migration adds
+--   REFUSED   2001:0DB8:…                              upper case — and the literal-form probe
+--                                                      ACCEPTS it, which is the trap above, live
+--   REFUSED   2001:db8::1                              compressed
+--   REFUSED   2001:0db8:0000:0000:0000:0000:0001       seven groups
+--   REFUSED   …:0000:0001:0002                         nine groups
+--   REFUSED   ::ffff:192.0.2.9                         the IPv4-mapped form
+--   REFUSED   999.999.999.999                          the octet alternation, not a digit count
+--   REFUSED   192.000.002.009 + a trailing newline     `\z` and not `$` — story 14.1's trap
+--   REFUSED   a leading space, an embedded tab, `g`, the empty string, wrong separators
+-- ⚠️ An over-length value with trailing whitespace is accepted with `Note 1265 Data truncated` and
+-- `HEX(base)` shows the stored bytes ARE the 39-character canonical form, so no second spelling
+-- reaches the store; a 40-character NON-whitespace value is refused with `ERROR 1406`.
 --
 -- ⚠️ `\z`, NEVER `$`: story 14.1's measured trap. In MariaDB's `RLIKE`, `$` matches before a final
 -- newline, so `$` would admit a second spelling of every address.

@@ -474,6 +474,12 @@ mod tests {
     /// uses it. **The name is kept and it no longer means anything**, because renaming four hundred
     /// call sites would bury the story's real diff — a cost accepted and stated rather than hidden
     /// behind a sentence that reads like a guarantee.
+    ///
+    /// ⚠️ **They are 356 and not *four hundred*, counted** (`grep -o '\bv4(' `, 110 here, 118 in
+    /// `ipam_page.rs`, 128 in `ipam_repo.rs`; the acceptance layer measured 352 before this round
+    /// added four). The decision is sound and the figure was not: it was written in flight in a
+    /// story whose own record warns about numbers written in flight, and a number nobody can
+    /// reproduce is what turns an announced decision into a claim.
     fn v4(text: &str) -> IpAddr {
         text.parse().expect("a v4 address")
     }
