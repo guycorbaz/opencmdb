@@ -386,12 +386,49 @@ to hide.
       validation, each recorded with the option refused.
 - [x] **T1** `bmad-create-story validate` — two fresh-context layers. **The fact-check refuted seven
       claims and the gap-hunt BUILT the design and refuted its central premise on a running product.**
-- [ ] **T2** (AC1, AC2) `0011`, its probes through the column, and the guard keeping `0008`/`0009` narrow.
-- [ ] **T3** (AC5, AC6, AC9) `Subnet` and `Plan` widened; `size()`, `is_edge`, and the narrowed promise.
-- [ ] **T4** (AC8, AC10) The reader in the same commit; `ip_range_same_family`'s own test.
-- [ ] **T5** (AC3, AC4, AC11) The family refusal, the sentence that replaces the all-clear, the copy.
-- [ ] **T6** (AC7) Every write route's answer to an IPv6 argument, enumerated.
-- [ ] **T7** (AC12–AC14) The gates, the record, the manuals, the twins; the DDL pass recorded in the register.
+- [x] **T2** (AC1, AC2) `0011`, its probes through the column, and the guard keeping `0008`/`0009` narrow.
+- [x] **T3** (AC5, AC6, AC9) `Subnet` and `Plan` widened; `size()`, `is_edge`, and the narrowed promise.
+- [x] **T4** (AC8, AC10) The reader in the same commit; `ip_range_same_family`'s own test.
+- [x] **T5** (AC3, AC4, AC11) The family refusal, the sentence that replaces the all-clear, the copy.
+- [x] **T6** (AC7) Every write route's answer to an IPv6 argument, enumerated.
+- [x] **T7** (AC12–AC14) The gates, the record, the manuals, the twins; the DDL pass recorded in the register.
+
+## Mutation table
+
+⚠️ **Written as the pass ran, never reconstructed afterwards** — story 14.5's review found that table
+missing entirely, living in three commit messages and a scratchpad directory that does not survive
+the session. Every cargo-side row was driven by `cargo xtask mutate`, which prints the prediction
+beside the measurement and exits 1 when they disagree.
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| **D1** | `0011` widens `address_sighting.addr` too | red | 🔴 red 1 | `the_observed_side_stays_narrow` — decision §0.3 written into the schema |
+| **D2** | `0011` narrows `ip_range_first_canonical` back to IPv4 | red | 🔴 red 1 | `the_family_check_is_live_now_that_a_second_width_exists` |
+| **D3** | `$` instead of `\z` in `ip_address_canonical` | red | 🔴 red 1 | `one_address_has_exactly_one_spelling_in_the_store` — story 14.1's trap, still carried after the widening |
+| T1 | `is_edge` loses its IPv6 arm | red | 🔴 red 1 | `an_ipv6_subnet_has_no_edges_at_any_prefix_length` |
+| T2 | `size()` back to `1_u64 << (width - prefix)` | red | 🔴 red 1 | `a_subnets_size_saturates_and_never_shifts_out_of_range` — the release-only hang |
+| T3 | `from_canonical` loses its IPv6 arm | red | 🔴 red 2 | the read-back test and the codec round-trip |
+| T4 | the release drops its `is_ipv6` refusal | red | 🔴 red 1 | `every_write_route_says_what_it_does_with_an_ipv6_argument` |
+| T5 | `family_examples` is not called | red:1 | 🔴 red 1 | `an_ipv6_subnets_page_offers_ipv6_examples` |
+| **T6** | `plan_data` drops the family check | red | ✅ **GREEN — the pass's own finding** | **nothing.** The test called the RENDERER, so the branch that decides which renderer runs was carried by no test at all |
+| T6-bis | the same, after the test went through `plan_data` | red | 🔴 red 1 | `the_family_and_not_the_size_decides_what_an_ipv6_subnet_renders` |
+| **B1** | the seed's IPv6 subnet removed | axe 2 | 🔴 axe **2** (*the gate could not run*) | `AXE_REQUIRE_V6` |
+
+**Eleven rows: ten reds and one GREEN that is the finding.** Carriers named per row; no *"every red
+assertion-carried"* headline is claimed.
+
+🔴 **`cargo xtask mutate` STILL CANNOT DRIVE DDL — this is the FOURTH story to measure it**, and
+`deferred-work.md:5164` asks each one to record its pass there. With `--baseline` on a virgin store
+it reported **162 reds**, because changing a migration breaks sqlx's checksum for the store the
+baseline had just migrated. D1–D3 were driven by the purpose-built script instead. *A debt four
+stories route around is a practice.*
+
+⚠️ **Three instrument defects of mine, each caught by disbelieving a result.** Two browser runs
+answered `ERR_INVALID_AUTH_CREDENTIALS` because the credentials were not exported in that shell — I
+was one line from recording a refusal as the proof that `AXE_REQUIRE_V6` works. A `sed` renaming
+`from_bits` missed the one call written `me.from_bits(...)`, and the compiler named it. And an
+apostrophe in *"this subnet's plan"* is escaped by Askama, so a `contains` assertion could not see
+the sentence it was written for — **the third time this project has paid for that**.
 
 ## Dev Notes
 
@@ -423,3 +460,78 @@ to hide.
 - 🔴 **`ipam_repo.rs`'s first `#[cfg(test)]` is on LINE 7**, inside the module doc explaining that the
   `file-size` gate stops at the first one — a script cutting the file there replaces nothing and the
   unchanged build reads as a result. The gap-hunt hit it; story 14.2's review hit it in the same file.
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Claude Opus 5 (1M context), 2026-09-21/22.
+
+### Completion Notes List
+
+**What shipped.** The plan holds IPv6. `0011` widens the four PLAN-side canonical CHECKs to the
+expanded, zero-padded, lower-case 39-character form and leaves the two OBSERVED-side ones narrow;
+`Subnet` carries an `IpAddr` and does its arithmetic on `u128`; the SIGHTINGS stay `Ipv4Addr`, so
+the audit joins the two only where both are IPv4. An IPv6 subnet's page draws no grid, no occupancy
+line and no offer **whatever its prefix length**, and says *nothing here was checked* in place of the
+all-clear. **1 032 → 1 043 tests** (742 bin + 191 core + 110 xtask), ten gates, both browser gates.
+
+🔴 **THE VALIDATION EARNED ITS COST TWICE, AND THE SECOND TIME IT REFUTED THE STORY'S CENTRE.** The
+gap-hunt BUILT the widening and measured that a `2001:db8:0:43::/120` — 256 addresses, under the
+ceiling — drew a 256-cell grid, an occupancy line and an OFFER. *Every IPv6 subnet an operator really
+has is larger than a /118* was a claim about deployments, not a property of the product. The refusal
+is keyed on the FAMILY.
+
+🔴 **AND MY OWN GUARD WAS PLACED WHERE THE DEFECT CANNOT OCCUR.** Mutation T6 — dropping the family
+check from `plan_data` — came back GREEN: my test called `render_unobservable` directly, so the
+branch that decides which renderer runs was carried by nothing, in the story whose central criterion
+it is. *A test that calls the renderer measures the renderer.*
+
+🔴 **THE SHARPEST THING THE STORY AVOIDED IS A RELEASE-ONLY HANG.** `1_u64 << (128 - 64)` panics in
+debug and returns **1** in release; the workspace declares no `[profile]`, so the shipped image runs
+with `overflow-checks = false`. An IPv6 `/64` would have reported a size of 1, sailed under the
+ceiling and looped over 2⁶⁴ addresses — story 14.2's 2.08 GB denial of service, unbounded, and
+invisible in the debug suite where the same code panics. *The debug build turns it into a crash and
+the release build into a hang.*
+
+⚠️ **`ipam_page.rs` crossed the ceiling mid-implementation** (2015 lines, the gate RED) and the right
+cut was taken in ONE gesture because story 14.5's review had measured and registered it: the three
+`GET` checks, 596 lines, now `ipam_checks.rs`. ⚠️ The split then produced a finding of its own —
+`ipam_page`'s key guard reads `include_str!("ipam_page.rs")`, so nineteen keys left its population
+**without reddening it**. *A guard keyed on a file measures the file, not the concept.*
+
+⚠️ **This story could not be verified against real IPv6, measured rather than assumed**: the
+developer machine carries ten link-local addresses, no global address and no default IPv6 route.
+Every IPv6 behaviour is exercised by fixtures, as story 14.5's VLAN was.
+
+## Record
+
+- live-count: bin=742 core=191 xtask=110
+- base: a254de354fb679c54edd6cc467bbefcc20e31887
+- registered: is the tightest file in the tree at 1954 code lines
+- registered: is LIVE since `0011`, and it is the SECOND carrier
+- registered: The plan-wide address order is PER-FAMILY, not global
+- registered: is NOT carried by the type, where `Plan.defined` is
+- registered: The workspace declares no `[profile]`
+- file: .github/workflows/ci.yml
+- file: _bmad-output/implementation-artifacts/14-6-ipv6-observation.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: a11y/axe-gate.mjs
+- file: a11y/seed.sql
+- file: crates/opencmdb-bin/assets/app.css
+- file: crates/opencmdb-bin/locales/app.yml
+- file: crates/opencmdb-bin/migrations/0011_ipv6_canonical.sql
+- file: crates/opencmdb-bin/src/ipam_audit.rs
+- file: crates/opencmdb-bin/src/ipam_checks.rs
+- file: crates/opencmdb-bin/src/ipam_page.rs
+- file: crates/opencmdb-bin/src/ipam_rail.rs
+- file: crates/opencmdb-bin/src/ipam_repo.rs
+- file: crates/opencmdb-bin/src/ipam_write.rs
+- file: crates/opencmdb-bin/src/main.rs
+- file: crates/opencmdb-bin/src/sighting_repo.rs
+- file: crates/opencmdb-bin/templates/_ipam_audit.html
+- file: docs/manuals/user-manual/user-manual.tex
+
+### File List
+
+The `## Record` block's `file:` lines are this story's File List (checked by `cargo xtask record`).
