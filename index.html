@@ -176,7 +176,7 @@
 
 <section class="hero">
   <div class="wrap">
-    <span class="pill"><span class="live"></span> v0.2.0 on Docker Hub · ten screens, one connector · closed by default</span>
+    <span class="pill"><span class="live"></span> v0.5.1 on Docker Hub · an addressing plan it audits · closed by default</span>
     <h1>Documentation that <span class="grad">corrects itself.</span></h1>
     <p class="lede">A self-hosted, single-binary reconciliation engine that continuously compares your network's <b>observed</b> state against the <b>declared</b> state you documented — and turns the gap between them into something you can act on.</p>
     <div class="cta">
@@ -297,11 +297,11 @@
     <p class="intro">opencmdb's thesis is that documentation must not lie about reality. This page holds itself to the same rule.</p>
     <div class="status-banner">
       <span class="ic">◔</span>
-      <p><b>There is a running binary.</b> <b>v0.2.0</b> is tagged and published to Docker Hub. It starts, connects to MariaDB, scans a subnet you give it, and serves <b>ten screens</b> — the first of them a triage inbox showing a real observed-vs-declared gap — reconciled from genuinely ingested observations, abstaining visibly where it cannot conclude. It has been deployed to a real Synology NAS, and everything that broke on the way is in the issue tracker and fixed.</p>
+      <p><b>There is a running binary.</b> <b>v0.5.1</b> is tagged and published to Docker Hub. It starts, connects to MariaDB, scans a subnet you give it, and reads <b>hardware addresses</b> off the neighbour table so it can tell two sightings of one card apart, and serves <b>ten screens</b> — the first of them a triage inbox showing a real observed-vs-declared gap — reconciled from genuinely ingested observations, abstaining visibly where it cannot conclude. It has been deployed to a real Synology NAS, and everything that broke on the way is in the issue tracker and fixed.</p>
     </div>
     <div class="status-banner" style="margin-top:14px">
       <span class="ic">⊘</span>
-      <p><b>What it is not, yet.</b> <b>No gesture acts</b> — the triage screen shows five controls and every one is labelled <i>not yet</i>. <b>Six of the ten screens carry labelled example content</b> rather than your data. <b>One connector</b>, and it sees an IPv4 address and a round-trip time — no hardware address at all — so the identity engine abstains on almost everything it observes. No UniFi source; the scan perimeter is still an environment variable. Epics 1–5 of 23 are done, 6 is under way. <b>v0.2.0 is not a drop-in upgrade</b>: the product is no longer publicly readable, <code>/</code> redirects, the interface is light rather than dark, and an unrecognised <code>OPENCMDB_LOCALE</code> stops the boot — see the release notes. No upgrade path is promised between <code>0.x</code> tags, and the schema will move.</p>
+      <p><b>What it is not, yet.</b> It forms <b>interfaces, not devices</b> — two network cards of one machine are two interfaces nothing yet calls one thing. <b>Four of the ten screens carry labelled example content</b> rather than your data, and two more carry an example section beside real content; the page says so on the page. <b>One connector</b>, and no UniFi source; the scan perimeter is still an environment variable. <b>It does not observe IPv6</b>: the plan holds IPv6 and there is nothing to compare it against, which the page says rather than drawing an empty audit. And the audit <b>ignores VLANs</b>, by decision — a declared VLAN and an observed L2 domain are not the same claim. Epics 1–5, 6b and 14 of 23 are done; <b>6 is frozen at story 6.7</b>. <b>The addressing plan's write routes carry no opt-in</b>: anyone who can sign in can change it. No upgrade path is promised between <code>0.x</code> tags, and the schema will move.</p>
     </div>
     <div style="margin-top:26px">
       <p class="eyebrow" style="margin-bottom:14px">Run it</p>
