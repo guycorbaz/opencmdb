@@ -5865,7 +5865,30 @@ development_status:
   #   the gestures · B3 carry the DDL debt to a decision rather than a fifth routing · B4 write the
   #   partial retrospective's closures INTO the register — DONE in the same act, because *a
   #   retrospective that says "closed" is not a closure if the closure lives only in the retrospective*.
-  #   ⚠️ `epic-14` STAYS `in-progress`: the PROJECT REVIEW follows, then the release.
+  #   ✅ The PROJECT REVIEW was held the same day and `epic-14` is `done`; `v0.5.0` then `v0.5.1`
+  #   were cut. ⚠️ This line read *`epic-14` STAYS `in-progress`* for a day after both had happened.
+
+  # ── Between epics: what the first real use of the gesture found ──────────
+  # 🔑 Created 2026-09-22 by GUY USING THE PRODUCT ON THE NAS, not by a plan. He added a machine
+  # from `/triage` on his own network — the first time that gesture has been pressed outside a
+  # test — and said: *« Documenter est un peu trop fort : aucune fiche ne peut être créée pour
+  # l'instant. »* Two defects were measured from it and are GitHub issues #200 and #201.
+  # ⚠️ In no epic file, on 6.4b's and 14.4c's precedent: a slice a finding creates has no epic.
+  add-gesture-says-what-it-does: backlog
+  #   ISSUE #200 — the gesture's five ANSWERS say `document` where `prd.md:888` binds the interface
+  #   to « Ajouter » / "Add". The BUTTON conforms (Guy corrected it himself in v0.3.1); its
+  #   confirmation does not, and the confirmation is the sentence he read. Plus a `\planned` block
+  #   in the shipped user manual claiming document-all *"is reached from no screen"* — false since
+  #   story 6.4, 2026-08-26, and published in v0.5.0 and v0.5.1.
+  #   ISSUE #201 — you add a machine, it appears in `/devices`, and it does not open. Measured:
+  #   `_inventory.html` (the REAL section) carries exactly ONE href, the empty state's link to
+  #   `/triage`, while `_devices_example.html:42` links every EXAMPLE row to `/devices/{id}`. So the
+  #   invented machines open and the operator's own does not. ✅ Guy's decision (2026-09-22): say it
+  #   in `/devices`' real section and name the epic that creates the record. ⚠️ His FIRST remedy —
+  #   say it on the record screen — was REFUTED by that measurement: the record screen is
+  #   unreachable for a machine the operator added, so nobody would read the sentence there.
+  #   ⚠️ NOT a vocabulary act: `prd.md` and the UX spec already decided, and this brings the code to
+  #   them. A story may not edit either, and does not need to.
 
   # ── Epic 15: Applications & « Hosted here » (v0.13) ──────────────────────
   epic-15: backlog
