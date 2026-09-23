@@ -236,7 +236,11 @@ operator with no name for the thing they made.
 
 ## 2. Acceptance criteria — rewritten 2026-09-23 on the validation
 
-**AC1 — the twelve terms join the TWO carriers that already exist; no new guard is written.**
+**AC1 — the NINE terms join the TWO carriers that already exist; no new guard is written.**
+⚠️ *This heading and §0.5(iii) both said **twelve**, and the blind and acceptance layers counted
+nine independently: four English inflections and five French ones. The figure's likeliest origin is
+`BINDING_GESTURE_AXIS: [(&str, &str); 12]`, twelve lines above the list the slice edited. The code
+review then added five more French forms (§4), so the shipped figure is **fourteen**.*
 `copy_vocabulary.rs`'s `RETIRED` gains `document / documents / documented / documenting` in the `en`
 column and `documenter / documenté / documentée / documentés / documentées` in the `fr` one;
 `state_vocabulary.rs`'s `RETIRED_IN_COPY` gains the same, and
@@ -268,9 +272,13 @@ anyone opens the file.*
 §0.2's withdrawn framing: these records hold what the network showed; a field it did not show cannot
 yet be added; there is nothing more to open because the row shows everything the store knows. It is
 **a key**, in both locales, and 🔴 **its field is covered** — replacing
-`rust_i18n::t!("inventory.no_record_yet")` with an English literal in `inventory_strings()` currently
-leaves **744 tests green**, because `every_field_of_the_shared_strings_comes_from_a_key` is bounded
-to `page.rs`'s `fn strings()`. Widened to reach `inventory_view.rs`, proven red on that literal.
+`rust_i18n::t!("inventory.no_authoring")` with an English literal in `inventory_strings()` currently
+leaves **744 tests green** ⚠️ *(this criterion named `inventory.no_record_yet`, a key that exists
+nowhere — caught by the blind layer, which had only the diff)*, because `every_field_of_the_shared_strings_comes_from_a_key` is bounded
+to `page.rs`'s `fn strings()`. A SIBLING guard is added — `every_strings_literal_in_the_crate_is_fed_by_keys` — and the original
+stays bounded to `page.rs`'s `fn strings()`, which its anchor cannot reach anyway. ⚠️ *This criterion
+and AC7 both said "widened"; the blind layer measured that no widening happened and that a future
+reader would look for one and not find it.*
 ⚠️ Placed inside the non-empty branch — after `{%- endif %}` it renders on the EMPTY state where
 *"these records"* names nothing, and immediately above the example marker it can be read as belonging
 to the wrong list. No guard can say that; the position is a decision, written here.
@@ -291,8 +299,8 @@ Rust, not for a reason a month out of date.
 **AC7 — three rows are registered**, and the record block claims each by its bold title:
 `nav.device` = « Fiche appareil » as the one over-promise this slice does not close (owner Epic 6);
 the absence of any way to author a declared field (owner Epic 7, FR13(b)); and
-`every_field_of_the_shared_strings_comes_from_a_key`'s bound, which AC4 widened to a property over
-the crate and whose own limit — it reads a LINE, not a value — is written at the site.
+`every_field_of_the_shared_strings_comes_from_a_key`'s bound, which AC4 addresses with a SIBLING
+guard over every `…Strings` literal in the crate, and whose own limits are written at the site.
 
 ---
 
@@ -331,6 +339,81 @@ pattern matches the shell running it, so a compound command dies before its late
 later half was a heredoc that never wrote, once it was a build. *Caught each time because the
 following command contradicted the expectation, never by reading the script.*
 
+
+---
+
+## 5. The three-layer code review, 2026-09-23 — and the guard I published as closed
+
+**Three isolated layers.** The blind one had the 995-line diff and nothing else; the edge one its own
+worktree, its own store and a mandate to make the guards lie; the acceptance one judged all seven
+criteria by independent measurement. **All seven came back MET.** Every defect below is in what the
+slice CLAIMED, or in the guards it wrote.
+
+🔴 **THE HEADLINE: the new guard reached FIVE of the crate's EIGHT `Strings` structs, and the
+register row I wrote said it was *closed for the crate*.** The edge layer planted an English literal
+on `/ipam` and measured **745 tests, ten gates, clippy and fmt all green**. `IpamStrings` escaped
+twice over — its builder is named `strings`, not `*_strings`, and its signature spans four lines so
+no line ends with `{` — and `AlertStrings` and `CommissioningStrings` are built inline with no
+constructor at all. 🔑 *The property WAS the list of five, and the sixth, seventh and eighth already
+existed — including the biggest screen in the product.* Re-anchored on the **struct literal**, with
+the body taken by brace balance and split on top-level commas: **19 literals, 169 fields**.
+
+🔴 **AND REPAIRING THAT FOUND WHAT ALL THREE LAYERS MISSED: `format!(` CONTAINS `t!(`.** "forma`t!(`"
+— so every field built with `format!` satisfied `value.contains("t!(")` trivially, and
+`every_field_of_the_shared_strings_comes_from_a_key` **has done so since the day it was written**.
+Found by planting the edge layer's own wrapped-`format!` case against the repaired guard and watching
+it pass too. 🔑 *The repair reproduced the defect it was written for, through a substring nobody
+looked at.* Closed by a word boundary in both guards, proved red.
+
+🔴 **« documentez » reached a rendered French page with both carriers green.** The imperative is the
+register this interface uses everywhere — « pressez », « choisissez », « consultez » — and the list
+carried only the infinitive and the participles, under a comment claiming *"every inflection the
+interface could reach for is listed"*. ⚠️ **An enumeration claiming the completeness of a property**,
+which this project has written four times in the opposite direction, committed in the slice that
+quotes that rule. Present and imperative added; the claim withdrawn rather than extended.
+
+🔴 **And a DECOMPOSED « documenté » passed every carrier and the keyboard regex** — byte-different,
+pixel-identical, the spelling a macOS clipboard produces by itself. Stripping U+0300–U+036F folds it
+onto « documente », so **one range closes a class rather than one spelling**. ⚠️ Still not
+exhaustive: `documentant` passes, and saying so is the point.
+
+**Five operator-visible defects, none reachable by any gate:**
+
+- 🔴 `triage.lede` said **« votre documentation »** — the identifier's noun, naming the operator's own
+  declared side, **on the screen Guy was looking at**, one line above the confirmation the slice
+  exists to repair. It was the ONE surviving occurrence over all ten screens in both locales, and it
+  survived *because `contains_word` refuses a glued needle* — by the matcher's grammar, not by a
+  decision. It says « ce que vous avez déclaré » now, a word the binding table already carries.
+- 🔴 The new sentence was **contradicted four rows above it** by « saisi à la main » ×4, on the state
+  `a11y/seed.sql` AND the shipped `docker/seed-example.sql` create — so both browser gates went green
+  over it. It speaks of the GESTURE and of *your rows here* now, which is true whatever a seeded
+  row's provenance says.
+- 🔴 The French empty state was ungrammatical: *« Une fiche vient de la **Triage** file de triage »*.
+- ⚠️ « le magasin » — a shop — where this product says « la base » everywhere else; the one occurrence
+  in the whole locale file, added by this slice.
+- ⚠️ `ipam.finding.documented` lost its subject when the participle went.
+
+**Record defects, each mine:** *"twelve terms"* is **nine** (two layers counted it independently);
+AC4 named `inventory.no_record_yet`, **a key that exists nowhere**, caught by the layer holding only
+the diff; AC4 and AC7 said *"widened"* where a sibling guard was added; the manual's repaired block
+**refuted itself eleven words later** (*"Epic 7 gives **both** a control"*, inherited from the version
+where both were unreachable) and dated reachability to `v0.3.1` where it is **`v0.3.0`** — a false
+version number published in the sentence written to remove a false claim.
+
+🔴 **AND *"Corrected in the twins"* WAS FALSE.** Each twin carries **two** statements of the `app.yml`
+build hazard; §0.5 corrected the later one and left the original standing in the present tense, with
+its two *live consequences* both false — `CLAUDE.md` carrying the false corollary **twice**. 🔑 *A
+closure written only where it was made does not reach the file the next story reads* — the sentence
+§0.5 wrote, refuted by the gesture that accompanied it. Both are corrected here, and the acceptance
+layer refuted the corollary **by accident**, while measuring something else.
+
+⚠️ **And the question this project's method does not ask, which the auditor was asked to ask**: *what
+can the operator now DO?* **Nothing they could not do yesterday.** Issue #200 is answered completely
+— twenty strings, both languages, three independent carriers. **Issue #201 is answered with a
+sentence rather than a gesture**, and the sentence lives on `/devices` while the gesture redirects to
+`/triage`, one navigation away. That is the right call for a slice and it is registered with Epic 7;
+it is stated here rather than implied by seven green criteria.
+
 ---
 
 ## Record
@@ -340,6 +423,9 @@ following command contradicted the expectation, never by reading the script.*
 - registered: says « Fiche appareil » and the screen behind it serves an invented machine
 - registered: An operator cannot AUTHOR a declared field
 - registered: bounded ONE constructor while five more existed
+- registered: CONTAINS `t!(`, and both key guards read
+- registered: is COLUMN-BLIND in the direction it claims to hold
+- registered: The identifier is in the operator's ADDRESS BAR and no criterion covers it
 - file: CLAUDE.md
 - file: _bmad-output/implementation-artifacts/add-gesture-says-what-it-does.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
