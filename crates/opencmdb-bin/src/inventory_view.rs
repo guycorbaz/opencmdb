@@ -8,7 +8,11 @@
 //! invisible, which is a worse dead end than a screen that says it is empty.
 //!
 //! It was named as point 3 of the plan the 2026-08-30 project review left, and it got heavier the
-//! same week: since the reverse-DNS story the gesture writes TWO fields, not one.
+//! same week: since the reverse-DNS story the gesture writes TWO fields, not one. ⚠️ **THREE since
+//! PR #163 gave the connector a hardware address (2026-09-10), and this line said TWO until
+//! 2026-09-23** — found by the validation of the slice issues #200/#201 created, after the false
+//! figure had been copied into six documents. `gap::project` maps `IpV4`, `Hostname` and `Mac`;
+//! `arp_ping::emitted_facts` emits all three (the hostname only when the PTR answers).
 //!
 //! # What is in it, and what is deliberately not
 //!
@@ -18,8 +22,12 @@
 //! *the gap is the product*, and an inventory that already contains the gap is not an inventory.
 //!
 //! ⚠️ **There is no drill-in, and that is today's data speaking rather than a design.** A
-//! documented entity carries at most two fields (`ipv4`, and `hostname` since the reverse-DNS
-//! story), so the row shows everything the store knows and a record page would repeat it. The day
+//! documented entity carries at most THREE fields (`ipv4`; `hostname` since the reverse-DNS story;
+//! `mac` since PR #163), so the row shows everything the store knows and a record page would repeat
+//! it. 🔑 **THIS PARAGRAPH IS THE ANSWER TO THE QUESTION GUY ASKED ON 2026-09-22** — *« aucune fiche
+//! ne peut être créée pour l'instant »* — and it has been true and correct in this file the whole
+//! time, where **no operator could read it**. Issue #201 is that gap: the reason is written for the
+//! next author and never for the person who pressed the button. The day
 //! an entity carries an owner, a criticality or a group — Epic 6's and Epic 15's — the record
 //! earns its own page and `Screen::Device` stops being an example.
 

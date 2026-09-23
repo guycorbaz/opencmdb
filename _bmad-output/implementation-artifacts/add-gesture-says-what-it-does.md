@@ -133,8 +133,21 @@ recorded here so that reversing it costs one commit and no archaeology.
 - `Screen::Device` is `Nature::Example(ExampleContent::DeviceRecord)`; `entity` and `device` exist in
   the schema with **no producer**, by story 6.5's own criterion; `interface` stays outside the
   supertype until story 6.12.
-- What the gesture gives the operator today: `declared_attribute` rows (`origin='adopted'`) — **on
-  the shipped connector, `ipv4` alone** — the question leaving the queue, and an inventory row.
+- What the gesture gives the operator today: `declared_attribute` rows (`origin='adopted'`) —
+  **up to THREE on the shipped connector — `ipv4`, `hostname` when reverse DNS answers, and `mac` since PR #163** — the question leaving the queue, and an
+  inventory row. 🔴 **This bullet said *`ipv4` alone* and the validation refuted it**: `gap::project`
+  maps `IpV4`, `Hostname` AND `Mac`, and `arp_ping::emitted_facts` pushes all three. The figure was
+  true before 2026-09-10 and was copied into **six documents** — this story, issue #201, both twins
+  and two files of the project record — from a claim I wrote rather than measured. ⚠️ And the tree's
+  own prose said **TWO** (`inventory_view.rs:11`, written after the reverse-DNS story and before the
+  MAC one), so the slice took ONE from an issue while the file it cites said TWO and the code did
+  THREE. *Three figures for one fact, none of them measured until now.*
+- 🔑 **`inventory_view.rs:21` already carries the ANSWER to Guy's question, and has all along**:
+  *"There is no drill-in, and that is today's data speaking rather than a design. A documented entity
+  carries at most \[three\] fields, so the row shows everything the store knows and a record page
+  would repeat it."* **True, correct, and written where no operator can read it.** That is issue #201
+  in one sentence: the reason exists, for the next author and never for the person who pressed the
+  button. AC3's sentence is that paragraph, said on the screen.
 
 ---
 
