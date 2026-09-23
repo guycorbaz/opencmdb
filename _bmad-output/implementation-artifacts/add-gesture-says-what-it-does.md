@@ -120,6 +120,49 @@ dodges *fiche* while keeping the promise, since an enregistrement is no more ope
 from it and are ordinary screen copy — `nav.devices` is « Appareils » and is untouched. It is
 recorded here so that reversing it costs one commit and no archaeology.
 
+### §0.5 — 🔴 WHAT THE VALIDATION CHANGED, and it reframes the slice
+
+Two fresh-context layers refuted enough of §0.1–§0.4 that the criteria are rewritten below rather
+than patched. **Four things, each measured.**
+
+**(i) The audit is of a VERB; the promise is a NOUN, and it lives in other keys.** Twenty keys carry
+`document`. **`inventory.n_entities_one/other` renders « %{n} fiche(s) » INSIDE THE SAME `<h2>` as
+the title** (`_inventory.html:15`), carries no form of the identifier, and is outside every
+criterion. §0.4's rewrite would have produced « **Ce que vous avez déclaré** · 4 fiches » with AC3's
+*« ces machines n'ont pas encore de fiche »* three lines below — **claim and refutation in one
+section, which is the class §0.4's own argument invokes.** Six more record-promising keys sit
+outside the twenty, `nav.device` = « **Fiche appareil** » among them.
+
+**(ii) And the promise is not quite what §0.2 said.** The binding glossary has **no row for
+`record`/`fiche`** — checked — but it uses the noun in its own definitions: *"write observed values
+into the **declared record**"*, *"the operator **CREATES THE MISSING RECORD**"*. 🔑 **So the product
+DOES create a record in the glossary's sense. What it does not create is a PAGE** — and « fiche »
+carries *a sheet you open and fill*. `/devices/{id}`, labelled « Fiche appareil » in the navigation,
+serves invented content. *§0.2 said the product promises a record it cannot deliver; it delivers the
+record and not the page.* ⚠️ **This refinement is NOT taken here** — it changes what the slice is
+about and it is posed to Guy.
+
+**(iii) AC1 asked for a guard that already exists TWICE, and its scope was the story's own recorded
+defect.** `copy_vocabulary.rs`'s `RETIRED` (per-locale, whole file, real YAML parse, located
+findings, keys protected by construction) and `state_vocabulary.rs`'s `RETIRED_IN_COPY` (read by
+`no_resolved_value_carries_a_retired_term`, on the **rendered** string), kept in step by
+`the_two_carriers_agree_on_what_is_retired`. Twelve entries in each and the property holds over all
+twenty — **measured: 40 findings on the shipped tree, exactly 20 keys × 2 locales, and green after
+the repair**, with « votre documentation » surviving because `contains_word` refuses a glued needle.
+🔴 **AC1's three namespaces would have left eleven of twenty-one strings with no carrier**, including
+the one §0.3 itself re-filed. *A guard scoped by a family is scoped by a reading of it* — the
+instrument defect §1 records, reproduced inside the criterion written about it.
+
+**(iv) 🔴 A stale fixture pins the defect Guy corrected by hand.** Three `xtask` tests carry
+`gesture.document: en "Document" / fr "Merger"` **as correct copy**, green since before `v0.3.1`.
+Adding the terms reds all three, and the honest repair is the fixture, not the list.
+
+⚠️ **And AC5's stated reason was FALSE**: `build.rs:38` has carried
+`cargo::rerun-if-changed=locales/app.yml` since story 6b.10 closed that hazard. Measured — a sentinel
+planted in `app.yml` alone reaches the binary. **Both twins and four story files went on citing the
+hazard as live for a month**, which is Epic 14's retrospective's own class in mirror: *a closure
+written only where it was made does not reach the file the next story reads.* Corrected in the twins.
+
 ---
 
 ## 1. Measured facts
