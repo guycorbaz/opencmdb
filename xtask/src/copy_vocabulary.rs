@@ -164,6 +164,19 @@ const RETIRED: &[(&str, &[&str])] = &[
             "documentée",
             "documentés",
             "documentées",
+            // 🔴 **The present and the imperative were MISSING, and the imperative is the register
+            // this interface uses everywhere** — « pressez », « choisissez », « consultez »,
+            // « Réessayez ». The code review measured it: « … et documentez-la. » reached a
+            // rendered French page with BOTH carriers green.
+            // ⚠️ The comment above said *"every inflection the interface could reach for is
+            // listed"* — an enumeration claiming completeness, which this project has written
+            // four times in the opposite direction. It is a TRIPWIRE against the ordinary
+            // gesture, never a barrier: `documentant` and a decomposed `é` still pass.
+            "documente",
+            "documentes",
+            "documentent",
+            "documentez",
+            "documentons",
         ],
     ),
 ];
@@ -448,6 +461,15 @@ fn strip_invisible(text: &str) -> String {
                 | 0xFE00..=0xFE0F         // variation selectors
                 | 0xFEFF                  // zero-width no-break space (BOM)
                 | 0xE0000..=0xE01EF       // tags and variation selectors supplement
+                // 🔴 **COMBINING MARKS, 2026-09-23**: the code review measured a DECOMPOSED
+                // « documenté » — byte-different, pixel-identical — passing this gate, the
+                // resolver carrier AND the keyboard gate's regex. Stripping this range folds the
+                // decomposed form onto « documente », which the French list now carries, so one
+                // range closes a class rather than one spelling.
+                // ⚠️ Not a normaliser, and not exhaustive: the precomposed « é » is a single code
+                // point caught by the list's accented entries, and `documentant` passes either
+                // way. *An enumeration cannot claim the completeness of a property.*
+                | 0x0300..=0x036F         // combining diacritical marks
             )
         })
         .collect()

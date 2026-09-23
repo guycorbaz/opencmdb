@@ -324,6 +324,19 @@ const RETIRED_IN_COPY: [(&str, &[&str]); 2] = [
             "documentée",
             "documentés",
             "documentées",
+            // 🔴 **The present and the imperative were MISSING, and the imperative is the register
+            // this interface uses everywhere** — « pressez », « choisissez », « consultez »,
+            // « Réessayez ». The code review measured it: « … et documentez-la. » reached a
+            // rendered French page with BOTH carriers green.
+            // ⚠️ The comment above said *"every inflection the interface could reach for is
+            // listed"* — an enumeration claiming completeness, which this project has written
+            // four times in the opposite direction. It is a TRIPWIRE against the ordinary
+            // gesture, never a barrier: `documentant` and a decomposed `é` still pass.
+            "documente",
+            "documentes",
+            "documentent",
+            "documentez",
+            "documentons",
         ],
     ),
 ];
@@ -501,6 +514,17 @@ mod gesture_axis_tests {
                         | 0xFE00..=0xFE0F
                         | 0xFEFF
                         | 0xE0000..=0xE01EF
+                        // 🔴 **COMBINING MARKS, added 2026-09-23 after the code review measured a
+                        // DECOMPOSED « documenté » passing every carrier** — byte-different,
+                        // pixel-identical, and the spelling a macOS clipboard or several editors
+                        // produce by themselves. Stripping U+0300–U+036F folds the decomposed form
+                        // onto « documente », which the French list now carries, so one range
+                        // closes a class rather than one spelling.
+                        // ⚠️ It is not a normaliser: a PRECOMPOSED « é » is a single code point and
+                        // is caught by the list's own accented entries. Neither is exhaustive, and
+                        // saying so is the point — *an enumeration cannot claim the completeness of
+                        // a property*.
+                        | 0x0300..=0x036F
                     )
                 })
                 .collect()

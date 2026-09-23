@@ -3030,7 +3030,7 @@ mod tests {
             }
             checked += 1;
             assert!(
-                value.contains("t!("),
+                reaches_a_key(value),
                 "`strings().{name}` is fed by `{}` rather than by a key — every field here is \
                  read by a template and shown to an operator, and a literal is invisible to the \
                  template-side guard, which sees only `{{{{ s.{name} }}}}`",
@@ -3055,87 +3055,151 @@ mod tests {
         );
     }
 
-    /// 🔴 **THE SAME PROPERTY OVER EVERY OTHER `*_strings()` CONSTRUCTOR, and its absence was
-    /// measured rather than suspected.** The guard above bounds ONE function and its own doc says
-    /// *"the day a second such constructor exists this guard must name it too"* — **five existed
-    /// and none was named**: `inventory_strings`, `diagnostic_strings`, `example_strings`,
-    /// `apps_strings`, `source_strings`.
+    /// Whether a field initialiser really reaches the locale file, rather than merely *containing*
+    /// the three characters `t!(`.
     ///
-    /// 🔑 Measured before this test was written: a new `InventoryStrings` field initialised with
-    /// the English literal `"PLACEHOLDER LITERAL"` left **744 tests, ten gates and clippy GREEN**,
-    /// so a sentence could ship in English under a French UI with nothing to say so — story 6b.3's
-    /// defect and story 6b.7's `criticality` defect, one constructor over.
+    /// 🔴 **`format!(` CONTAINS `t!(` — "forma**t!(**" — so a plain `contains("t!(")` passes every
+    /// field built with `format!`, and `every_field_of_the_shared_strings_comes_from_a_key` has
+    /// done so since it was written.** Found while repairing the code review's H2, by planting a
+    /// wrapped `format!` and watching the repaired guard pass it too: *the repair reproduced the
+    /// defect it was written for, through a substring nobody looked at.*
     ///
-    /// ⚠️ A PROPERTY over the crate's sources rather than a list of five, because a list is a
-    /// sixth constructor away from being wrong — which is exactly how the first one came to stand
-    /// alone. It walks `src/` for `fn <name>_strings() -> <Type> {` and checks the same shape.
+    /// 🔑 The check is a WORD BOUNDARY, not a longer needle: `t!` counts only where the character
+    /// before it is not one a Rust identifier can carry. That admits `t!(`, `rust_i18n::t!(` and
+    /// `crate::t!(`, and refuses `format!(`, `write!(` and `concat!(`.
+    fn reaches_a_key(value: &str) -> bool {
+        let bytes = value.as_bytes();
+        value.match_indices("t!").any(|(at, _)| {
+            at == 0 || !matches!(bytes[at - 1], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_')
+        })
+    }
+
+    /// 🔴 **EVERY `*Strings` STRUCT LITERAL IN THE CRATE IS FED BY KEYS, and the first draft of
+    /// this test reached five of the eight.** The guard above bounds ONE function and its own doc
+    /// said *"the day a second such constructor exists this guard must name it too"* — five
+    /// existed and none was named.
     ///
-    /// ⚠️ **Its own limit, stated**: a field fed through a helper (`counted(…)`, `format!`) is
-    /// accepted as long as the initialiser mentions `t!(` somewhere — the guard reads a line, not
-    /// a value. It is a tripwire against the ordinary gesture of typing a string where a key
-    /// belongs, never a barrier against a determined one (story 5.12's precedent).
+    /// 🔑 Measured before it was written: a new `InventoryStrings` field initialised with an
+    /// English literal left **744 tests, ten gates and clippy GREEN**, so a sentence could ship in
+    /// English under a French UI with nothing to say so — story 6b.3's defect and 6b.7's
+    /// `criticality` defect, one constructor over.
+    ///
+    /// 🔴 **AND THE FIRST DRAFT ANCHORED ON THE CONSTRUCTOR'S NAME, which the code review measured
+    /// reaching five structs of eight.** `IpamStrings` — the biggest screen in the product — was
+    /// missed TWICE over: its builder is named `strings`, not `*_strings`, and its signature spans
+    /// four lines so no line ends with `{`. `AlertStrings` and `CommissioningStrings` are built
+    /// inline inside their render functions and have no constructor at all. An English literal
+    /// planted on `/ipam` left the whole suite, ten gates, clippy and fmt green.
+    /// ⚠️ **And `cargo fmt` blinded it**: a field assembled with a wrapped `format!` has no line
+    /// ending in `,`, so it was skipped rather than checked — *a guard an automatic formatter can
+    /// blind depends on something nobody is deciding*, this project's own sentence, one file over
+    /// from where it was written.
+    ///
+    /// 🔑 **So the anchor is the STRUCT LITERAL, not the function.** `…Strings {` is what every
+    /// one of the eight has in common, whatever builds it and however it is formatted; the body is
+    /// taken by BRACE BALANCE and split on TOP-LEVEL commas, so a wrapped initialiser is one chunk
+    /// and is checked rather than skipped.
+    ///
+    /// ⚠️ **Its limit, stated**: a chunk passes if it mentions `t!(` anywhere, so a field
+    /// concatenating a key with a literal passes. A tripwire against the ordinary gesture of typing
+    /// a string where a key belongs, never a barrier (story 5.12's precedent).
     #[test]
-    fn every_string_constructor_in_the_crate_is_fed_by_keys() {
-        let mut constructors = 0_usize;
+    fn every_strings_literal_in_the_crate_is_fed_by_keys() {
+        let mut literals = 0_usize;
         let mut checked = 0_usize;
-        for entry in std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/src"))
+        let mut dir: Vec<_> = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/src"))
             .expect("the crate's sources are readable")
-        {
-            let path = entry.expect("a directory entry").path();
-            if path.extension().is_none_or(|e| e != "rs") {
-                continue;
-            }
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|e| e == "rs"))
+            .collect();
+        dir.sort();
+        for path in dir {
             let source = std::fs::read_to_string(&path).expect("a source file");
-            let name = path.file_name().expect("a file name").to_string_lossy();
-            // ⚠️ **ANCHORED ON A DECLARATION LINE, and the first draft was not.** It searched
-            // the source for `_strings() -> ` and matched ITS OWN doc comment and its own code —
-            // *a guard that greps a file greps its prose, and the better the prose explains the
-            // defect the more reliably it reproduces it*, this project's own sentence, met again.
-            // It reds now only on a real `fn …_strings() -> … {`.
-            let lines: Vec<&str> = source.lines().collect();
-            let mut i = 0;
-            while i < lines.len() {
-                let head = lines[i].trim_start();
-                let is_declaration = (head.starts_with("fn ")
-                    || head.starts_with("pub(crate) fn "))
-                    && head.contains("_strings() -> ")
-                    && head.ends_with('{');
-                if !is_declaration {
-                    i += 1;
+            let file = path
+                .file_name()
+                .expect("a file name")
+                .to_string_lossy()
+                .to_string();
+            let bytes: Vec<char> = source.chars().collect();
+            let mut at = 0_usize;
+            while let Some(found) = source[at..].find("Strings {") {
+                let start = at + found + "Strings {".len();
+                at = start;
+                // ⚠️ **A DECLARATION IS NOT A LITERAL, and the first run of this walk proved it by
+                // reddening on `title: String,` inside `struct ExampleStrings`.** The check was
+                // written against the word before the name and `pub(crate) struct ExampleStrings`
+                // ends with `Example`, not with `struct`. It reads the LINE now, which is where
+                // the keyword actually is — *a needle placed one token from where the fact lives*.
+                let head = source[..at].lines().next_back().unwrap_or("").trim();
+                if head.contains("struct ") || head.starts_with("//") || head.starts_with("///") {
                     continue;
                 }
-                constructors += 1;
-                let indent = lines[i].len() - head.len();
-                i += 1;
-                while i < lines.len() && lines[i].trim() != "}" {
-                    let line = lines[i].trim();
-                    i += 1;
-                    let Some((field, value)) = line.split_once(':') else {
+                literals += 1;
+                // Take the body by BRACE BALANCE, so a wrapped initialiser stays inside it.
+                let mut depth = 1_usize;
+                let mut idx = source[..start].chars().count();
+                let mut body = String::new();
+                while idx < bytes.len() && depth > 0 {
+                    let c = bytes[idx];
+                    match c {
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    body.push(c);
+                    idx += 1;
+                }
+                // Split on TOP-LEVEL commas: one chunk per field, wrapped or not.
+                let mut chunk = String::new();
+                let mut d = 0_i32;
+                let mut chunks: Vec<String> = Vec::new();
+                for c in body.chars() {
+                    match c {
+                        '{' | '(' | '[' => d += 1,
+                        '}' | ')' | ']' => d -= 1,
+                        ',' if d == 0 => {
+                            chunks.push(std::mem::take(&mut chunk));
+                            continue;
+                        }
+                        _ => {}
+                    }
+                    chunk.push(c);
+                }
+                chunks.push(chunk);
+                for chunk in chunks {
+                    let chunk = chunk.trim();
+                    let Some((field, value)) = chunk.split_once(':') else {
                         continue;
                     };
-                    if !value.trim_end().ends_with(',') || field.contains(' ') || field.is_empty() {
+                    let field = field.trim();
+                    if field.is_empty() || field.contains(char::is_whitespace) || value.is_empty() {
                         continue;
                     }
                     checked += 1;
                     assert!(
-                        value.contains("t!("),
-                        "in `{name}`, `{}` feeds `{field}` with `{}` rather than with a key. Every \
-                         field here reaches a template as `{{{{ s.{field} }}}}`, where the \
-                         template-side guard cannot see what produced it — so a literal ships in \
-                         the DEFAULT locale under whatever language the operator chose.",
-                        head.trim_end_matches(" {"),
-                        value.trim().trim_end_matches(',')
+                        reaches_a_key(value),
+                        "in `{file}`, a `…Strings` literal feeds `{field}` with `{}` rather than \
+                         with a key. Every field here reaches a template as `{{{{ s.{field} }}}}`, \
+                         where the template-side guard cannot see what produced it — so a literal \
+                         ships in the DEFAULT locale under whatever language the operator chose.",
+                        value.trim().lines().next().unwrap_or("").trim()
                     );
                 }
-                let _ = indent;
             }
         }
-        // The floor is what is THERE, not under it: five constructors beside `page.rs`'s, which
-        // this test exists because nobody counted.
-        assert!(
-            constructors >= 5 && checked > 60,
-            "the walk found {constructors} constructor(s) and {checked} field(s) — too few to be \
-             reading the crate it names"
+        // 🔑 The floor EQUALS what is there, because the first draft's `checked > 60` had three of
+        // slack over 63 — *a floor is only a guard while it equals what is there*, and the comment
+        // beside it claimed the opposite. Moving either number is a deliberate act.
+        assert_eq!(
+            (literals, checked),
+            (19, 169),
+            "the walk found {literals} `…Strings` literal(s) and {checked} field(s); if that is \
+             deliberate, move these numbers after READING what the walk printed"
         );
     }
 
