@@ -3030,7 +3030,7 @@ mod tests {
             }
             checked += 1;
             assert!(
-                value.contains("t!("),
+                reaches_a_key(value),
                 "`strings().{name}` is fed by `{}` rather than by a key — every field here is \
                  read by a template and shown to an operator, and a literal is invisible to the \
                  template-side guard, which sees only `{{{{ s.{name} }}}}`",
@@ -3052,6 +3052,154 @@ mod tests {
             checked, fields,
             "every field of `Strings` was inspected — a scan that reads fewer initialisers than \
              the struct has fields has stopped seeing part of what it names"
+        );
+    }
+
+    /// Whether a field initialiser really reaches the locale file, rather than merely *containing*
+    /// the three characters `t!(`.
+    ///
+    /// 🔴 **`format!(` CONTAINS `t!(` — "forma**t!(**" — so a plain `contains("t!(")` passes every
+    /// field built with `format!`, and `every_field_of_the_shared_strings_comes_from_a_key` has
+    /// done so since it was written.** Found while repairing the code review's H2, by planting a
+    /// wrapped `format!` and watching the repaired guard pass it too: *the repair reproduced the
+    /// defect it was written for, through a substring nobody looked at.*
+    ///
+    /// 🔑 The check is a WORD BOUNDARY, not a longer needle: `t!` counts only where the character
+    /// before it is not one a Rust identifier can carry. That admits `t!(`, `rust_i18n::t!(` and
+    /// `crate::t!(`, and refuses `format!(`, `write!(` and `concat!(`.
+    fn reaches_a_key(value: &str) -> bool {
+        let bytes = value.as_bytes();
+        value.match_indices("t!").any(|(at, _)| {
+            at == 0 || !matches!(bytes[at - 1], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_')
+        })
+    }
+
+    /// 🔴 **EVERY `*Strings` STRUCT LITERAL IN THE CRATE IS FED BY KEYS, and the first draft of
+    /// this test reached five of the eight.** The guard above bounds ONE function and its own doc
+    /// said *"the day a second such constructor exists this guard must name it too"* — five
+    /// existed and none was named.
+    ///
+    /// 🔑 Measured before it was written: a new `InventoryStrings` field initialised with an
+    /// English literal left **744 tests, ten gates and clippy GREEN**, so a sentence could ship in
+    /// English under a French UI with nothing to say so — story 6b.3's defect and 6b.7's
+    /// `criticality` defect, one constructor over.
+    ///
+    /// 🔴 **AND THE FIRST DRAFT ANCHORED ON THE CONSTRUCTOR'S NAME, which the code review measured
+    /// reaching five structs of eight.** `IpamStrings` — the biggest screen in the product — was
+    /// missed TWICE over: its builder is named `strings`, not `*_strings`, and its signature spans
+    /// four lines so no line ends with `{`. `AlertStrings` and `CommissioningStrings` are built
+    /// inline inside their render functions and have no constructor at all. An English literal
+    /// planted on `/ipam` left the whole suite, ten gates, clippy and fmt green.
+    /// ⚠️ **And `cargo fmt` blinded it**: a field assembled with a wrapped `format!` has no line
+    /// ending in `,`, so it was skipped rather than checked — *a guard an automatic formatter can
+    /// blind depends on something nobody is deciding*, this project's own sentence, one file over
+    /// from where it was written.
+    ///
+    /// 🔑 **So the anchor is the STRUCT LITERAL, not the function.** `…Strings {` is what every
+    /// one of the eight has in common, whatever builds it and however it is formatted; the body is
+    /// taken by BRACE BALANCE and split on TOP-LEVEL commas, so a wrapped initialiser is one chunk
+    /// and is checked rather than skipped.
+    ///
+    /// ⚠️ **Its limit, stated**: a chunk passes if it mentions `t!(` anywhere, so a field
+    /// concatenating a key with a literal passes. A tripwire against the ordinary gesture of typing
+    /// a string where a key belongs, never a barrier (story 5.12's precedent).
+    #[test]
+    fn every_strings_literal_in_the_crate_is_fed_by_keys() {
+        let mut literals = 0_usize;
+        let mut checked = 0_usize;
+        let mut dir: Vec<_> = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/src"))
+            .expect("the crate's sources are readable")
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|e| e == "rs"))
+            .collect();
+        dir.sort();
+        for path in dir {
+            let source = std::fs::read_to_string(&path).expect("a source file");
+            let file = path
+                .file_name()
+                .expect("a file name")
+                .to_string_lossy()
+                .to_string();
+            let bytes: Vec<char> = source.chars().collect();
+            let mut at = 0_usize;
+            while let Some(found) = source[at..].find("Strings {") {
+                let start = at + found + "Strings {".len();
+                at = start;
+                // ⚠️ **A DECLARATION IS NOT A LITERAL, and the first run of this walk proved it by
+                // reddening on `title: String,` inside `struct ExampleStrings`.** The check was
+                // written against the word before the name and `pub(crate) struct ExampleStrings`
+                // ends with `Example`, not with `struct`. It reads the LINE now, which is where
+                // the keyword actually is — *a needle placed one token from where the fact lives*.
+                let head = source[..at].lines().next_back().unwrap_or("").trim();
+                if head.contains("struct ") || head.starts_with("//") || head.starts_with("///") {
+                    continue;
+                }
+                literals += 1;
+                // Take the body by BRACE BALANCE, so a wrapped initialiser stays inside it.
+                let mut depth = 1_usize;
+                let mut idx = source[..start].chars().count();
+                let mut body = String::new();
+                while idx < bytes.len() && depth > 0 {
+                    let c = bytes[idx];
+                    match c {
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    body.push(c);
+                    idx += 1;
+                }
+                // Split on TOP-LEVEL commas: one chunk per field, wrapped or not.
+                let mut chunk = String::new();
+                let mut d = 0_i32;
+                let mut chunks: Vec<String> = Vec::new();
+                for c in body.chars() {
+                    match c {
+                        '{' | '(' | '[' => d += 1,
+                        '}' | ')' | ']' => d -= 1,
+                        ',' if d == 0 => {
+                            chunks.push(std::mem::take(&mut chunk));
+                            continue;
+                        }
+                        _ => {}
+                    }
+                    chunk.push(c);
+                }
+                chunks.push(chunk);
+                for chunk in chunks {
+                    let chunk = chunk.trim();
+                    let Some((field, value)) = chunk.split_once(':') else {
+                        continue;
+                    };
+                    let field = field.trim();
+                    if field.is_empty() || field.contains(char::is_whitespace) || value.is_empty() {
+                        continue;
+                    }
+                    checked += 1;
+                    assert!(
+                        reaches_a_key(value),
+                        "in `{file}`, a `…Strings` literal feeds `{field}` with `{}` rather than \
+                         with a key. Every field here reaches a template as `{{{{ s.{field} }}}}`, \
+                         where the template-side guard cannot see what produced it — so a literal \
+                         ships in the DEFAULT locale under whatever language the operator chose.",
+                        value.trim().lines().next().unwrap_or("").trim()
+                    );
+                }
+            }
+        }
+        // 🔑 The floor EQUALS what is there, because the first draft's `checked > 60` had three of
+        // slack over 63 — *a floor is only a guard while it equals what is there*, and the comment
+        // beside it claimed the opposite. Moving either number is a deliberate act.
+        assert_eq!(
+            (literals, checked),
+            (19, 169),
+            "the walk found {literals} `…Strings` literal(s) and {checked} field(s); if that is \
+             deliberate, move these numbers after READING what the walk printed"
         );
     }
 

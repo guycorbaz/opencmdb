@@ -47,7 +47,9 @@ const SETTLE_WAIT_MS = 900;
 // — this project has caught that twice, once in a privacy floor and once in a word count. If a
 // check is added this number moves deliberately; if one is skipped, the gate says so instead of
 // printing a green.
-const MIN_CHECKS = 61;
+// 🔑 61 → 62 on 2026-09-23: the confirmation's own words, added where the gate already presses the
+// gesture. The number below is READ OFF the run, never counted by hand — see the sentence above.
+const MIN_CHECKS = 62;
 const MIN_ROWS = 2;
 // 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
 // the field at one site and spelled out inside the expected triage href at another — so a seed that
@@ -591,6 +593,30 @@ async function main() {
       landed.url.includes("documented=") && landed.confirmation !== "",
       "a successful gesture RE-RENDERS the screen and the confirmation rides in the URL",
       `url=${landed.url} confirmation=${JSON.stringify(landed.confirmation)}`,
+    );
+    // 🔴 **THE ONE STRING THE OPERATOR READS AFTER ACTING, and until 2026-09-23 this check asked
+    // only whether it was non-empty.** Guy pressed « Ajouter » on his own network and the product
+    // answered « Documenté » — `prd.md:888` binds the interface to *"Add" / « Ajouter »* while
+    // documentation, API and code keep `document`, and the BUTTON had conformed since `v0.3.1`.
+    // *The word came back through the sentence the product ANSWERS.*
+    // 🔑 This is the only automated check in the repository standing where that defect occurred:
+    // it presses the gesture for real and reads the rendered confirmation out of the DOM. A
+    // source guard names the cause and is cheaper; this one measures what was SERVED, which is
+    // story 6b.11's amended AC5 — *a source-reading guard does not SUFFICE where the defect lives
+    // in the DOM* — and the two cumulate rather than replace each other.
+    // ⚠️ **Its limit is stated, and the first version of this sentence was FALSE** — it said the
+    // check knows only the English stems and that a French « Documenté » is caught elsewhere. Both
+    // the blind and the edge review layers measured the opposite from the expression below: JS `\b`
+    // is ASCII-only, so the accent IS a boundary and `/\bdocument\b/i` matches « Documenté ». *An
+    // exculpatory sentence refuted by the line beneath it.*
+    // 🔑 What it really misses is the UNACCENTED forms — « documenter », « documentez » — and the
+    // DECOMPOSED spelling, where the accent is a separate code point. Both are caught by the two
+    // Rust carriers, which fold combining marks and carry the full inflection list. A tripwire
+    // here, a property there.
+    check(
+      !/\bdocument(s|ed|ing)?\b/i.test(landed.confirmation),
+      "and the confirmation does not name the gesture by its IDENTIFIER — the interface says Add",
+      `confirmation=${JSON.stringify(landed.confirmation)}`,
     );
     check(
       landed.live === 0,

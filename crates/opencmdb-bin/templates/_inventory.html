@@ -46,5 +46,15 @@
       {%- endfor %}
     </tbody>
   </table>
+  {#- 🔴 **INSIDE the non-empty branch, and the position is a DECISION no guard can make.** After
+       `{%- endif %}` this sentence renders on the EMPTY state too, where *"these records"* names
+       nothing; the empty state already says where a record comes from. And it sits before the
+       example marker rather than after, so a reader cannot attach it to the demonstration below.
+       🔑 It answers the question Guy asked on 2026-09-22 after using the product — *« aucune fiche
+       ne peut être créée pour l'instant »* — with what was measured: every call site of the only
+       `'manual'` writer is inside a `#[cfg(test)]` module, so **the gesture adopts and does not
+       author**. `inventory_view.rs` has carried the second half of this sentence correctly since
+       the inventory shipped, where no operator could read it. -#}
+  <p class="lede">{{ s.no_authoring }}</p>
   {%- endif %}
 </section>

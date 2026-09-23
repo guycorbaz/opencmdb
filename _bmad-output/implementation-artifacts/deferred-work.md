@@ -6209,3 +6209,54 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   placed where the defect cannot occur reads as coverage and is none* — this project's dominant
   class, in the pair of arms added to avoid it. **Owner: nobody — recorded so the next reader does
   not take the two arms for one guarantee.**
+
+
+## Slice « the gesture says what it does » — issues #200 and #201
+
+- ⚠️ **`nav.device` says « Fiche appareil » and the screen behind it serves an invented machine.**
+  It is the one record-promise this slice does not close: an entry that addresses no particular
+  device, whose `Screen::Device` is `Nature::Example(ExampleContent::DeviceRecord)`. 🔑 The slice
+  measured that « fiche » is the RIGHT word for an inventory row — the row IS the declared record, in
+  the binding glossary's own sense — so retiring the noun was refused; what stays wrong is a
+  navigation entry promising a page that shows somebody else's machine. **Owner: Epic 6**, which
+  forms devices and is what gives that entry something of the operator's to show.
+- 🔴 **An operator cannot AUTHOR a declared field, and nothing on any screen said so until now.**
+  Measured 2026-09-23: every call site of `insert_declared_attribute` — the only `'manual'` writer —
+  is inside a `#[cfg(test)]` module. There is no production call site at all, so the only write path
+  copies what the connector observed. 🔑 *The gesture ADOPTS; it does not AUTHOR*, and that is what
+  Guy's *« aucune fiche ne peut être créée pour l'instant »* named, measured rather than read into.
+  `/devices` now says it; what would close it is `document-field` (FR13(b)) plus a way to enter a
+  value the network did not show. **Owner: Epic 7.**
+- ⚠️ **`every_field_of_the_shared_strings_comes_from_a_key` bounded ONE constructor while five more
+  existed**, and its own doc said *"the day a second such constructor exists this guard must name it
+  too"*. Measured: a new field fed an English literal left **744 tests, ten gates and clippy green**.
+  🔴 **A FIRST REPAIR CLAIMED TO CLOSE IT FOR THE CRATE AND REACHED FIVE STRUCTS OF EIGHT** — the code
+  review measured an English literal on `/ipam` passing 745 tests, ten gates, clippy and fmt, because
+  `IpamStrings`' builder is named `strings` and its signature spans four lines. *The property WAS the
+  list of five, and the sixth, seventh and eighth already existed.* Closed for the crate by
+  `every_strings_literal_in_the_crate_is_fed_by_keys`, anchored on the STRUCT LITERAL — ⚠️ but **its stated limit is that it reads a LINE, not a value**: a
+  field fed through a helper passes as long as the initialiser mentions `t!(` somewhere. A tripwire
+  against the ordinary gesture, never a barrier (story 5.12's precedent). **Owner: nobody — recorded
+  so the next author does not take the property for a guarantee.**
+- 🔴 **`format!(` CONTAINS `t!(`, and both key guards read `value.contains("t!(")`.** "forma`t!(`" —
+  so every field built with `format!` satisfied the check trivially, and
+  `every_field_of_the_shared_strings_comes_from_a_key` had done so since it was written. Found on
+  2026-09-23 by planting the code review's own wrapped-`format!` case against the REPAIRED guard and
+  watching it pass too: *the repair reproduced the defect it was written for, through a substring
+  nobody looked at.* Closed in both by a word boundary (`reaches_a_key`). **Owner: nobody — recorded
+  because the class is a needle that is a substring of a legitimate macro, and this tree has other
+  `contains("…!(")` checks nobody has audited.**
+- ⚠️ **`the_two_carriers_agree_on_what_is_retired` is COLUMN-BLIND in the direction it claims to
+  hold.** Measured by the code review's edge layer: moving `"documenter"` out of the gate's French
+  column into its English one leaves the agreement test green, and the gate then passes a French
+  value carrying « documenter ». The resolver carrier still reds, so the tree is defended — but the
+  guard whose only job is keeping the two lists in step cannot see the distinction its own doc
+  narrates having been bitten by twice (*an unbounded needle cannot tell one locale's column from
+  another's*). **Owner: whoever next edits either denylist.**
+- ⚠️ **The identifier is in the operator's ADDRESS BAR and no criterion covers it.** Pressing the
+  gesture redirects to `…/triage?documented=N`, which the keyboard gate itself asserts on. Whether a
+  query parameter is API surface (where `prd.md:888` permits the identifier) or interface is an
+  arbitration this slice does not pose. ⚠️ And the noun escapes the carriers even in the sentence the
+  slice exists to fix: `"Documentation updated: %{n} field(s)"` passes the gate, the resolver AND
+  the DOM check, which prints its own ✅ with the defect quoted beside it. **Owner: Epic 7**, with the
+  per-field gesture that will mint more of these strings.
