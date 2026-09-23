@@ -288,7 +288,52 @@ store conditions, both browser gates, both manuals. ⚠️ **No claim is made th
 story 6b.10 closed that hazard, measured again here. A `.rs` is touched because AC1 and AC4 touch
 Rust, not for a reason a month out of date.
 
-**AC7 — three rows are registered**, and the `## Record
+**AC7 — three rows are registered**, and the record block claims each by its bold title:
+`nav.device` = « Fiche appareil » as the one over-promise this slice does not close (owner Epic 6);
+the absence of any way to author a declared field (owner Epic 7, FR13(b)); and
+`every_field_of_the_shared_strings_comes_from_a_key`'s bound, which AC4 widened to a property over
+the crate and whose own limit — it reads a LINE, not a value — is written at the site.
+
+---
+
+## 3. What this slice must NOT do
+
+- **Not rename a key.** The identifier is bound to `document` by the same row that binds the label.
+- **Not extend the binding vocabulary.** §0.3 measured that none is needed; the gap is registered,
+  and inventing a term to fill it is what this slice must not do.
+- **Not make the real inventory row clickable**, and not remove the example rows' links — both were
+  refused on 2026-09-22, the first as a route that exists to apologise, the second as hiding a
+  working demonstration to conceal an absence.
+- **Not retire « fiche » / « record ».** §0.6 measured it is the right word: the row IS the declared
+  record, in the glossary's own sense.
+- **Not write a new vocabulary guard.** §0.5(iii) measured the property exists twice already.
+- **Not create a record page.** That is Epic 6's, and this slice says so rather than doing it.
+
+---
+
+## 4. What the implementation found, beyond its criteria
+
+🔴 **THE ANCHOR COLLISION ON `## Record` HAPPENED AGAIN, in this file, one day after it cut story
+14.6's AC13 in half.** Writing the block below, a `str::index("## Record")` matched **AC7's own
+prose** — *"the `## Record` block"* — and truncated the document there, destroying AC7's tail and
+everything after it. Caught because `cargo xtask record` answered **`🔴 CANNOT CHECK: no ## Record
+block`**, which is the tool built by the partial retrospective's action A1 catching, on its second
+day, the class its own §3 predicted.
+
+🔑 *The heading that names the record is a phrase the record talks about.* Story 14.6 met it, this
+slice records it, and the remedy Guy chose on 2026-09-22 — teach `cargo xtask record` to refuse a
+heading whose string also occurs in the body — is **action B1 of Epic 14's final retrospective and
+is not built yet**. Until it is, an edit anchored on a `## ` heading in this repository is a loaded
+gun, and this is its second recorded discharge.
+
+⚠️ **And three shell commands were killed by their own `pkill -f 'target/debug/opencmdb'`** — the
+pattern matches the shell running it, so a compound command dies before its later half. Twice the
+later half was a heredoc that never wrote, once it was a build. *Caught each time because the
+following command contradicted the expectation, never by reading the script.*
+
+---
+
+## Record
 
 - live-count: bin=745 core=191 xtask=110
 - base: ec466b2dddebd09472f06443e5ac106014ec88d1
