@@ -604,8 +604,15 @@ async function main() {
     // source guard names the cause and is cheaper; this one measures what was SERVED, which is
     // story 6b.11's amended AC5 — *a source-reading guard does not SUFFICE where the defect lives
     // in the DOM* — and the two cumulate rather than replace each other.
-    // ⚠️ Its limit is stated: it knows the ENGLISH stems, and this gate runs in the default
-    // locale. A French deployment's « Documenté » is caught by the two Rust carriers and not here.
+    // ⚠️ **Its limit is stated, and the first version of this sentence was FALSE** — it said the
+    // check knows only the English stems and that a French « Documenté » is caught elsewhere. Both
+    // the blind and the edge review layers measured the opposite from the expression below: JS `\b`
+    // is ASCII-only, so the accent IS a boundary and `/\bdocument\b/i` matches « Documenté ». *An
+    // exculpatory sentence refuted by the line beneath it.*
+    // 🔑 What it really misses is the UNACCENTED forms — « documenter », « documentez » — and the
+    // DECOMPOSED spelling, where the accent is a separate code point. Both are caught by the two
+    // Rust carriers, which fold combining marks and carry the full inflection list. A tripwire
+    // here, a property there.
     check(
       !/\bdocument(s|ed|ing)?\b/i.test(landed.confirmation),
       "and the confirmation does not name the gesture by its IDENTIFIER — the interface says Add",
