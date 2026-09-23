@@ -5874,7 +5874,41 @@ development_status:
   # test — and said: *« Documenter est un peu trop fort : aucune fiche ne peut être créée pour
   # l'instant. »* Two defects were measured from it and are GitHub issues #200 and #201.
   # ⚠️ In no epic file, on 6.4b's and 14.4c's precedent: a slice a finding creates has no epic.
-  add-gesture-says-what-it-does: backlog
+  add-gesture-says-what-it-does: done
+  #   DONE 2026-09-23, PR #203 squash-merged as `4a88cf1`, CI green on the head commit `59af158`
+  #   ITSELF (run 35904875728). Validated by two fresh-context layers, then code-reviewed by three
+  #   isolated layers and REPAIRED.
+  #   The identifier leaves TWENTY-ONE interface strings in both locales; the KEYS stay, because
+  #   `prd.md:888` binds them. THREE carriers, each seeing what the others do not: the FILE gate,
+  #   the RESOLVED string (the embedded binary copy), and the rendered DOM where `kbd-probe.mjs`
+  #   already pressed the gesture. Prove-to-red: 🔴 40 findings = twenty keys × two locales.
+  #   🔑 §0.6 settled what Guy's sentence meant BY MEASUREMENT rather than by a fourth question:
+  #   every call site of `insert_declared_attribute` — the only `'manual'` writer — is inside a
+  #   `#[cfg(test)]` module. **The gesture ADOPTS; it does not AUTHOR.** So « fiche » STAYS (the row
+  #   IS the record), §0.4 was WITHDRAWN and struck rather than deleted, and `/devices` says what
+  #   the operator can and cannot do — the paragraph `inventory_view.rs:21` had carried correctly
+  #   all along, where no operator could read it.
+  #   🔴 THE REVIEW'S HEADLINE IS A GUARD I PUBLISHED AS CLOSED: it reached FIVE of the crate's
+  #   EIGHT `Strings` structs, and an English literal on `/ipam` passed 745 tests, ten gates, clippy
+  #   and fmt. Re-anchored on the STRUCT LITERAL: 19 literals, 169 fields against 5 and 63.
+  #   🔴 AND REPAIRING THAT FOUND WHAT ALL THREE LAYERS MISSED: `format!(` CONTAINS `t!(`, so every
+  #   `format!`-fed field passed trivially — and the ORIGINAL guard has done so since it was
+  #   written. *The repair reproduced the defect it was written for, through a substring nobody
+  #   looked at.*
+  #   🔴 « documentez » and a DECOMPOSED « documenté » both reached a French page with both carriers
+  #   green; the imperative is this interface's register everywhere, and the comment beside the list
+  #   claimed every inflection was listed — an enumeration claiming completeness, in the slice that
+  #   quotes that rule.
+  #   🔴 `triage.lede` said « votre documentation » — the identifier's noun, on the screen Guy was
+  #   looking at, one line above the confirmation — surviving BY THE MATCHER'S GRAMMAR and not by a
+  #   decision.
+  #   🔴 And *"Corrected in the twins"* was FALSE: each twin carries TWO statements of the `app.yml`
+  #   hazard and only the later was corrected. *A closure written only where it was made does not
+  #   reach the file the next story reads* — the sentence §0.5 wrote, refuted by its own gesture.
+  #   ⚠️ WHAT THE OPERATOR CAN NOW DO: nothing they could not do yesterday. #200 is answered
+  #   completely; #201 is answered WITH A SENTENCE RATHER THAN A GESTURE, one navigation from where
+  #   the operator was. Registered with Epic 7, and said rather than implied by seven green criteria.
+  #   1 046 tests (745 + 191 + 110), ten gates, axe 0 nodes both passes, kbd 62/0, six register rows.
   #   ISSUE #200 — the gesture's five ANSWERS say `document` where `prd.md:888` binds the interface
   #   to « Ajouter » / "Add". The BUTTON conforms (Guy corrected it himself in v0.3.1); its
   #   confirmation does not, and the confirmation is the sentence he read. Plus a `\planned` block
