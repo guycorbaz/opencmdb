@@ -288,31 +288,26 @@ store conditions, both browser gates, both manuals. ⚠️ **No claim is made th
 story 6b.10 closed that hazard, measured again here. A `.rs` is touched because AC1 and AC4 touch
 Rust, not for a reason a month out of date.
 
-**AC7 — three rows are registered**, and the `## Record` block claims each by its bold title:
-`nav.device` = « Fiche appareil » as the one over-promise this slice does not close (owner Epic 6);
-the absence of any way to author a declared field (owner Epic 7, FR13(b)); and
-`every_field_of_the_shared_strings_comes_from_a_key`'s bound, which AC4 widens for one constructor
-and which every other `*_strings()` in the tree still escapes.
+**AC7 — three rows are registered**, and the `## Record
 
-## 3. What this slice must NOT do
-
-- **Not rename a key.** The identifier is bound to `document` by the same row that binds the label.
-- **Not extend the binding vocabulary.** §0.3 measured that none is needed; the gap is registered, and inventing a term to fill it is what this slice must not do.
-- **Not make the real inventory row clickable**, and not remove the example rows' links — both were
-  refused on 2026-09-22, the first as a route that exists to apologise, the second as hiding a
-  working demonstration to conceal an absence.
-- **Not retire « fiche » / « record ».** §0.6 measured it is the right word: the row IS the declared
-  record, in the glossary's own sense. Removing a true word to fix a false sentence would leave the
-  operator with no name for the thing they made.
-- **Not write a new vocabulary guard.** §0.5(iii) measured that the property exists twice already,
-  over the whole file and over the rendered string. A third would be a third reading of a scope.
-- **Not create a record.** That is Epic 6's, and this slice says so rather than doing it.
-
----
-
-## Record
-
-- live-count: bin=744 core=191 xtask=110
+- live-count: bin=745 core=191 xtask=110
 - base: ec466b2dddebd09472f06443e5ac106014ec88d1
-- registered:
+- registered: says « Fiche appareil » and the screen behind it serves an invented machine
+- registered: An operator cannot AUTHOR a declared field
+- registered: bounded ONE constructor while five more existed
+- file: CLAUDE.md
 - file: _bmad-output/implementation-artifacts/add-gesture-says-what-it-does.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: a11y/kbd-probe.mjs
+- file: crates/opencmdb-bin/locales/app.yml
+- file: crates/opencmdb-bin/src/inventory_view.rs
+- file: crates/opencmdb-bin/src/page.rs
+- file: crates/opencmdb-bin/src/state_vocabulary.rs
+- file: crates/opencmdb-bin/templates/_inventory.html
+- file: docs/manuals/user-manual/user-manual.tex
+- file: docs/project-context.md
+- file: xtask/src/copy_vocabulary.rs
+
+### File List
+
+The `## Record` block's `file:` lines are this slice's File List (checked by `cargo xtask record`).

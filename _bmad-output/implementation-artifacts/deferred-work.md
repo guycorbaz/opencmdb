@@ -6209,3 +6209,29 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   placed where the defect cannot occur reads as coverage and is none* — this project's dominant
   class, in the pair of arms added to avoid it. **Owner: nobody — recorded so the next reader does
   not take the two arms for one guarantee.**
+
+
+## Slice « the gesture says what it does » — issues #200 and #201
+
+- ⚠️ **`nav.device` says « Fiche appareil » and the screen behind it serves an invented machine.**
+  It is the one record-promise this slice does not close: an entry that addresses no particular
+  device, whose `Screen::Device` is `Nature::Example(ExampleContent::DeviceRecord)`. 🔑 The slice
+  measured that « fiche » is the RIGHT word for an inventory row — the row IS the declared record, in
+  the binding glossary's own sense — so retiring the noun was refused; what stays wrong is a
+  navigation entry promising a page that shows somebody else's machine. **Owner: Epic 6**, which
+  forms devices and is what gives that entry something of the operator's to show.
+- 🔴 **An operator cannot AUTHOR a declared field, and nothing on any screen said so until now.**
+  Measured 2026-09-23: every call site of `insert_declared_attribute` — the only `'manual'` writer —
+  is inside a `#[cfg(test)]` module. There is no production call site at all, so the only write path
+  copies what the connector observed. 🔑 *The gesture ADOPTS; it does not AUTHOR*, and that is what
+  Guy's *« aucune fiche ne peut être créée pour l'instant »* named, measured rather than read into.
+  `/devices` now says it; what would close it is `document-field` (FR13(b)) plus a way to enter a
+  value the network did not show. **Owner: Epic 7.**
+- ⚠️ **`every_field_of_the_shared_strings_comes_from_a_key` bounded ONE constructor while five more
+  existed**, and its own doc said *"the day a second such constructor exists this guard must name it
+  too"*. Measured: a new field fed an English literal left **744 tests, ten gates and clippy green**.
+  Closed for the crate by `every_string_constructor_in_the_crate_is_fed_by_keys`, a PROPERTY over
+  `src/` rather than a list — ⚠️ but **its stated limit is that it reads a LINE, not a value**: a
+  field fed through a helper passes as long as the initialiser mentions `t!(` somewhere. A tripwire
+  against the ordinary gesture, never a barrier (story 5.12's precedent). **Owner: nobody — recorded
+  so the next author does not take the property for a guarantee.**
