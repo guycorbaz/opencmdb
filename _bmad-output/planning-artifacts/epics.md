@@ -1864,6 +1864,33 @@ So that the cascade gains its first opposing voice.
 
 **And** the rule id is spelled exactly as the corpus spells it, or the trap reds as `rule_mismatch`.
 
+_🔑 **REORDERED 2026-09-23 by Guy's decision, and the criterion is a MEASUREMENT of what the shipped
+connector produces.** The epic was FROZEN at 6.7 on 2026-08-30, on three outside reviews measuring
+that two thirds of delivered work was invisible to the operator. **Half of the freeze's stated
+reason has since dissolved and half has not**, and that is what decides the order:_
+
+| _Story_ | _The fact it judges_ | _Producer on a real network_ |
+|---|---|---|
+| _6.8 `l2-uplink-agrees`_ | _`Fact::Uplink`_ | _🔴 **none** — zero occurrences in `arp_ping.rs`; the fact exists only in the fixture connector_ |
+| _6.9 `l2-hostname-agrees`_ | _`Fact::Hostname`_ | _✅ since PR #143_ |
+| _6.10 `l2-different-switch`_ | _the switch port_ | _🔴 **none**_ |
+| _6.11 the virtual-MAC anchor_ | _`Fact::Mac`_ | _✅ since PR #163_ |
+
+_**The order is 6.9 → 6.11 → 6.12**, then 6.13 onward. 6.8 and 6.10 WAIT for a connector that emits
+an uplink or a switch port — Epic 11 (UniFi) or Epic 12 — because building them now means two engine
+stories validated against fixtures alone, which is the exact shape the freeze was called for._
+
+_🔑 **6.12 is the pivot and the reason the reorder is worth taking**: it is the first story of this
+epic with a production caller, and it is where `obelix` — two interfaces, one machine, live on the
+reference network since 2026-09-10 — stops being two rows. ⚠️ It also LOSES two shields registered at
+Epic 5: two concurrent passes mint two interfaces for one MAC, and a `CHECK` evaluating to `UNKNOWN`
+admits a row the read then misses. Neither was reachable while the connector emitted no MAC. **6.12
+carries the race**, and its own criteria say so._
+
+_⚠️ Recorded as Guy's act because **a story may not re-scope an epic** — `CLAUDE.md` posed this
+question on 2026-08-30 and deliberately left it open (*"which of 6.8–6.13 the freeze still covers is
+a question for the epic"*). This is the answer._
+
 ### Story 6.8: `l2-uplink-agrees` — the first producer of `Supports`
 
 As the operator,

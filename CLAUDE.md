@@ -41,7 +41,7 @@ plan; there is a v1.0 labelled MVP.* Two of the three reviews INSTALLED the prod
 measurement this project had never taken, and it found in one afternoon what ten gates and three
 review layers had not seen in five weeks.
 
-⚠️ **EPIC 6 IS STILL FROZEN AT 6.7, AND ITS STATED REASON HAS HALF DISSOLVED.** The freeze named
+✅ **EPIC 6 IS UNFROZEN AND REORDERED (Guy, 2026-09-23), and the criterion is a MEASUREMENT of what the shipped connector produces.** Order: **6.9 → 6.11 → 6.12**, then 6.13 onward; **6.8 and 6.10 WAIT** for a connector that emits an uplink or a switch port (Epic 11 or 12), because `Fact::Uplink` has **zero occurrences in `arp_ping.rs`** and lives only in the fixture connector — building them now means two engine stories validated against fixtures alone, the exact shape the freeze was called for. 🔑 **6.12 is the pivot**: the first story of this epic with a production caller, and where `obelix` stops being two rows. ⚠️ It also LOSES two shields registered at Epic 5 — two concurrent passes minting two interfaces for one MAC, and a `CHECK` evaluating to `UNKNOWN` — neither reachable while the connector emitted no MAC. `epics.md` edited, which a planning act may and a story may not. What follows is the freeze as it stood, kept because its reasoning is what the reorder rests on. ⚠️ **EPIC 6 WAS FROZEN AT 6.7, AND ITS STATED REASON HAD HALF DISSOLVED.** The freeze named
 three facts *"no connector produces"* — `Uplink`, `Hostname`, switch port. **`Hostname` has had a
 producer since PR #143 and `Mac` since PR #163**; `Uplink` and the switch port still have none. So
 the freeze is no longer one decision: which of 6.8–6.13 it still covers is a question for the epic,
