@@ -1,7 +1,7 @@
 # Slice: the gesture says what it does
 
-Status: **contexted** 2026-09-23, every decision taken — ready for validation by two fresh-context
-layers.
+Status: **ready-for-dev** — contexted 2026-09-23, VALIDATED the same day by two fresh-context layers
+whose findings rewrote §2 entirely, withdrew §0.4 and dissolved §0.3. Every decision is taken.
 
 **Issues:** #200, #201. **Base:** `ec466b2`. **In no epic file**, on 6.4b's and 14.4c's precedent:
 *a slice a finding creates has no epic.*
@@ -91,7 +91,7 @@ where it lives rather than what it is. **Registered rather than minted** — a t
 gap nobody has met on a screen is minted by accident, which the PLAN axis's own act of 2026-09-10
 says in as many words.
 
-### §0.4 — ✅ DECIDED BY ME ON DELEGATION, recorded as mine so it can be reversed at the right cost
+### §0.4 — ~~DECIDED BY ME~~ **WITHDRAWN 2026-09-23 by §0.6's measurement**, and kept visible
 
 **Measured**: `nav.devices` is « **Appareils** » / "Devices". `inventory.title` — « **Vos fiches** »
 — is the REAL section's own `<h2>`, rendered at `_inventory.html:15`, and it is **not** the
@@ -103,8 +103,11 @@ copy.
 fiche que vous avez écrite »* is claim and refutation in one viewport — the class story 14.4's third
 round paid for, and which this project has now found in its own copy twice.
 
-🔑 **The screen says what it HOLDS rather than what it does not**, and it says it with a word the
-binding table already carries — `declared` / « déclaré »:
+🔴 **WITHDRAWN.** §0.6 measures that « fiche » is not the defect, so retitling the screen solves a
+problem that does not exist and creates one §0.5(i) measures (« Ce que vous avez déclaré · 4
+fiches »). *A decision taken on a reading, refuted when the reading was checked.* It is struck
+rather than deleted, because the next reader must see what was nearly shipped and why it was wrong.
+What it proposed, for the record:
 
 - `inventory.title` « Vos fiches » → **« Ce que vous avez déclaré »** / "What you have declared"
 - `inventory.lede` « une fiche que vous avez écrite » → **« une adresse que vous avez déclarée »**,
@@ -163,6 +166,43 @@ planted in `app.yml` alone reaches the binary. **Both twins and four story files
 hazard as live for a month**, which is Epic 14's retrospective's own class in mirror: *a closure
 written only where it was made does not reach the file the next story reads.* Corrected in the twins.
 
+### §0.6 — 🔑 WHAT GUY'S SENTENCE ACTUALLY MEANS, measured — and it is the slice's real subject
+
+Taken to the letter — *« aucune fiche ne peut être créée pour l'instant »* — and checked:
+
+```
+grep -rn "insert_declared_attribute(" crates/opencmdb-bin/src --include=*.rs
+```
+
+**Every call site of the only `'manual'` writer is inside a `#[cfg(test)]` module. There is no
+production call site at all.** An operator cannot write a single declared field of their own. The
+one write route that exists, `POST /document-all`, copies what the connector observed and nothing
+else; `document-field` (FR13(b)) is Epic 7's and exists nowhere in `crates/`.
+
+🔑 **So the gesture ADOPTS; it does not AUTHOR** — and that is what Guy's sentence names. Not *no
+record exists* (one does, and the glossary calls it that), and not *no page opens* (true, and
+`inventory_view.rs:21` explains why: the row shows everything the store knows). **You cannot create
+a record because you cannot write a field the network did not show you.**
+
+**Three consequences, and they settle every open point above:**
+
+1. **« fiche » / « record » STAYS.** The row IS the declared record, in the glossary's own sense
+   (*"the operator CREATES THE MISSING RECORD"*). « Vos fiches », « 4 fiches » and `inventory.lede`
+   are **true**. §0.4 is withdrawn, §0.5(i)'s heading collision dissolves with it, and the six
+   record-promising keys outside the twenty need no change.
+2. **`nav.device` = « Fiche appareil » is the ONE real over-promise left** — an entry that addresses
+   no particular device and serves an invented one. It is Epic 6's screen and not this slice's;
+   registered.
+3. **AC3's sentence changes subject.** Not *these machines have no record yet* — false, they have one
+   — but **what the operator can and cannot do with it**: these records hold what the network showed;
+   you cannot yet add a field it did not; there is nothing more to open, because the row shows
+   everything the store knows.
+
+⚠️ **This is taken by me on delegation and recorded as mine**, reversible at one commit. It rests on
+a measurement rather than a preference, which is why it is taken rather than posed a fourth time.
+**Refused: retiring « fiche »** — it would remove a true word to fix a false sentence, and leave the
+operator with no name for the thing they made.
+
 ---
 
 ## 1. Measured facts
@@ -194,28 +234,65 @@ written only where it was made does not reach the file the next story reads.* Co
 
 ---
 
-## 2. Acceptance criteria
+## 2. Acceptance criteria — rewritten 2026-09-23 on the validation
 
-**AC1 — families (a) and (c) conform to `prd.md:888`.** Ten interface strings stop rendering the
-identifier; the ten KEYS are unchanged. A guard asserts that no value under `document.*`,
-`triage.documented*` or `identity.no_gesture.*` renders the identifier in either locale, and it is
-proven red on the shipped text before it passes.
+**AC1 — the twelve terms join the TWO carriers that already exist; no new guard is written.**
+`copy_vocabulary.rs`'s `RETIRED` gains `document / documents / documented / documenting` in the `en`
+column and `documenter / documenté / documentée / documentés / documentées` in the `fr` one;
+`state_vocabulary.rs`'s `RETIRED_IN_COPY` gains the same, and
+`the_two_carriers_agree_on_what_is_retired` keeps them in step. **Proven red on the shipped tree
+before it passes: `🔴 copy-vocabulary 40 finding(s)`, which is exactly the twenty keys × two
+locales** — so the denominator falls out of the measurement instead of being asserted. Green after
+the repair, with « votre documentation » surviving untouched because `contains_word` refuses a glued
+needle.
 
-**AC2 — the manual's false sentence goes.** `user-manual.tex:139`'s `\planned` block is replaced by
-what is true: the control exists on `/triage`, and `document-field` does not. Both manuals build.
+🔑 **Two carriers and not one, because story 6b.10 measured they see different things**: the file
+carrier is blind to a key with no `fr` half (the resolver falls back and the French page serves
+English), the resolver carrier is blind to a key NAME. ⚠️ **The KEYS are protected by
+construction** — the identifier column is the `<key>` pseudo-locale and gets no term — so §3's *not a
+key rename* is held by the gate's shape rather than by care.
 
-**AC3 — `/devices`' real section says no record exists yet** and names the epic that creates it.
-Its heading and lede say what the screen holds (§0.4), so the sentence does not contradict them.
+**AC2 — three stale `xtask` fixtures are repaired, not the list.** `gesture.document: en "Document" /
+fr "Merger"` is pinned GREEN as correct copy in three tests, and has been since before `v0.3.1`. It
+pins **the product's primary button rendering the word `prd.md:888` forbids** — the defect Guy
+corrected by hand. Three one-line edits; `cargo test -p xtask` back to 110.
 
-**AC4 — the eight strings of §0.3 stop rendering the identifier** and say where the state lives
-instead, with no new term minted. `inventory.col_documented` moves to family (a) and becomes
-« Ajouté ». The absence of a word for *declared by hand* is REGISTERED, not filled.
+**AC3 — the manual's false sentence goes, and so does the retired term beside it.**
+`user-manual.tex:140-141` stops claiming document-all *"is reached from no screen"* (false since
+2026-08-26, shipped in `v0.5.0` and `v0.5.1`); `document-field` really is unbuilt, so that half
+stays. ⚠️ And `:135` carries **`drifted`**, retired by name in both binding tables since story 6b.6
+and shipped twice — *`docs/manuals/` is walked by no gate, and this slice is the only occasion
+anyone opens the file.*
 
-**AC5 — no regression**: ten gates, clippy `--all-targets`, `RUSTFLAGS="-D warnings"`, fmt, both
-store conditions, both browser gates, both manuals. ⚠️ A `.rs` is touched, because `app.yml` is
-invisible to Cargo's incremental build.
+**AC4 — `/devices`' real section says what the operator can and cannot do**, per §0.6 and NOT per
+§0.2's withdrawn framing: these records hold what the network showed; a field it did not show cannot
+yet be added; there is nothing more to open because the row shows everything the store knows. It is
+**a key**, in both locales, and 🔴 **its field is covered** — replacing
+`rust_i18n::t!("inventory.no_record_yet")` with an English literal in `inventory_strings()` currently
+leaves **744 tests green**, because `every_field_of_the_shared_strings_comes_from_a_key` is bounded
+to `page.rs`'s `fn strings()`. Widened to reach `inventory_view.rs`, proven red on that literal.
+⚠️ Placed inside the non-empty branch — after `{%- endif %}` it renders on the EMPTY state where
+*"these records"* names nothing, and immediately above the example marker it can be read as belonging
+to the wrong list. No guard can say that; the position is a decision, written here.
 
----
+**AC5 — the one string the operator actually reads gains a rendered-DOM carrier.**
+`a11y/kbd-probe.mjs` already **presses the gesture for real** and reads
+`document.querySelector(".documented")?.textContent` — *the exact string Guy read* — and asserts only
+that it is non-empty. One assertion more: it carries no form of the identifier. 🔑 That is story
+6b.11's amended AC5 applied where it belongs — *a source guard does not suffice where the defect
+lives in the DOM* — and it costs one line in a check that already runs.
+
+**AC6 — no regression.** Ten gates, clippy `--all-targets`, `RUSTFLAGS="-D warnings"`, fmt, both
+store conditions, both browser gates, both manuals. ⚠️ **No claim is made that `app.yml` needs a
+`.rs` touched to rebuild**: `build.rs:38` has carried `cargo::rerun-if-changed=locales/app.yml` since
+story 6b.10 closed that hazard, measured again here. A `.rs` is touched because AC1 and AC4 touch
+Rust, not for a reason a month out of date.
+
+**AC7 — three rows are registered**, and the `## Record` block claims each by its bold title:
+`nav.device` = « Fiche appareil » as the one over-promise this slice does not close (owner Epic 6);
+the absence of any way to author a declared field (owner Epic 7, FR13(b)); and
+`every_field_of_the_shared_strings_comes_from_a_key`'s bound, which AC4 widens for one constructor
+and which every other `*_strings()` in the tree still escapes.
 
 ## 3. What this slice must NOT do
 
@@ -224,6 +301,11 @@ invisible to Cargo's incremental build.
 - **Not make the real inventory row clickable**, and not remove the example rows' links — both were
   refused on 2026-09-22, the first as a route that exists to apologise, the second as hiding a
   working demonstration to conceal an absence.
+- **Not retire « fiche » / « record ».** §0.6 measured it is the right word: the row IS the declared
+  record, in the glossary's own sense. Removing a true word to fix a false sentence would leave the
+  operator with no name for the thing they made.
+- **Not write a new vocabulary guard.** §0.5(iii) measured that the property exists twice already,
+  over the whole file and over the rendered string. A third would be a third reading of a scope.
 - **Not create a record.** That is Epic 6's, and this slice says so rather than doing it.
 
 ---
