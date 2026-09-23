@@ -122,6 +122,21 @@ const RETIRED: &[(&str, &[&str])] = &[
             "reverts",
             "accept-as-declared",
             "structural",
+            // 🔴 **Added 2026-09-23, and the defect was found by GUY USING THE PRODUCT.** He pressed
+            // « Ajouter » on his own network and the product answered « Documenté ». `prd.md:888`
+            // binds the interface to *"Add" / « Ajouter »* while documentation, API and code use
+            // `document` — **the ONE concept whose UI label differs from its identifier**, which is
+            // what makes this drift possible here and nowhere else.
+            // ⚠️ The BUTTON conformed: Guy corrected it himself in `v0.3.1`, looking at his own
+            // product. *The word came back through the sentence the product ANSWERS, which is the
+            // one the operator reads after acting* — and no gate could see it, `document` having
+            // been on no list.
+            // 🔑 The KEY column above gets none of these: the identifier IS `document`, so a key
+            // rename would be a second defect wearing the fix's clothes.
+            "document",
+            "documents",
+            "documented",
+            "documenting",
         ],
     ),
     // « Merger » is BINDING here and must never join this list. French `ignore`/`ignorer` is the
@@ -141,6 +156,14 @@ const RETIRED: &[(&str, &[&str])] = &[
             "structurelle",
             "structurels",
             "structurelles",
+            // The French half of the same retirement (2026-09-23). « Ajouter » is binding; every
+            // inflection the interface could reach for is listed, because a denylist that catches
+            // the infinitive and misses the participle catches nothing an operator reads.
+            "documenter",
+            "documenté",
+            "documentée",
+            "documentés",
+            "documentées",
         ],
     ),
 ];
@@ -725,8 +748,15 @@ mod tests {
         ),
         // ── must stay GREEN, and each row says what it protects ───────────────────────────
         (
-            "g01 « Merger » is the BINDING French translation of `document` — never a finding",
-            "gesture.document:\n  en: \"Document\"\n  fr: \"Merger\"\n",
+            // 🔴 **This row pinned `en: "Document"` as correct copy until 2026-09-23, and it had been
+            // stale since `v0.3.1`.** It asserted that the product's primary button rendering
+            // *"Document"* in English is clean — the very spelling `prd.md:888` forbids and the one
+            // Guy corrected by hand, looking at his own product. The fixture outlived the copy it
+            // was written against, and adding `document` to the `en` column is what surfaced it.
+            // 🔑 *A green probe is a claim about what is correct, and it goes stale exactly like a
+            // sentence does.* « Merger » stays: it IS binding in French.
+            "g01 « Merger » is the BINDING French translation of `document`, and \"Add\" its binding English label — never a finding",
+            "gesture.document:\n  en: \"Add\"\n  fr: \"Merger\"\n",
             None,
         ),
         (
@@ -763,7 +793,7 @@ mod tests {
     fn the_green_line_does_not_count_the_bookkeeping_pair() {
         let (ok, message) = gate_over(
             "counts",
-            "_version: 2\ngesture.document:\n  en: \"Document\"\n  fr: \"Merger\"\n",
+            "_version: 2\ngesture.document:\n  en: \"Add\"\n  fr: \"Merger\"\n",
         );
         assert!(ok, "the document is clean: {message}");
         assert!(
@@ -900,7 +930,7 @@ mod tests {
 
         let (ok, message) = gate_over(
             "green",
-            "gesture.document:\n  en: \"Document\"\n  fr: \"Merger\"\n",
+            "gesture.document:\n  en: \"Add\"\n  fr: \"Merger\"\n",
         );
         assert!(ok, "and it passes correct copy: {message}");
         assert!(

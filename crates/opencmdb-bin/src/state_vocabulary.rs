@@ -289,9 +289,43 @@ pub(crate) const BINDING_GESTURE_AXIS: [(&str, &str); 12] = [
 const RETIRED_IN_COPY: [(&str, &[&str]); 2] = [
     (
         "en",
-        &["merge", "merged", "merging", "drift", "ignore", "revert"],
+        &[
+            "merge",
+            "merged",
+            "merging",
+            "drift",
+            "ignore",
+            "revert",
+            // 🔴 **Added 2026-09-23 with `copy_vocabulary.rs`'s twin list, and the defect came from
+            // GUY USING THE PRODUCT.** He pressed « Ajouter » on his own network and the product
+            // answered « Documenté ». `prd.md:888` binds the interface to *"Add" / « Ajouter »*
+            // while documentation, API and code keep `document`.
+            // 🔑 **This carrier and the gate's see DIFFERENT things**, which story 6b.10 measured: a
+            // key with no `fr` half falls back to `en`, so the FILE reads clean while the French
+            // page serves English — visible here and invisible there; and a key NAME is visible
+            // there and invisible here. Neither is redundant.
+            // ⚠️ `documentation` survives on purpose: the binding row permits it for docs, API and
+            // code, and `contains_word` refuses a needle glued to a letter.
+            "document",
+            "documents",
+            "documented",
+            "documenting",
+        ],
     ),
-    ("fr", &["ignorer", "ignore", "ignoré", "ignorée"]),
+    (
+        "fr",
+        &[
+            "ignorer",
+            "ignore",
+            "ignoré",
+            "ignorée",
+            "documenter",
+            "documenté",
+            "documentée",
+            "documentés",
+            "documentées",
+        ],
+    ),
 ];
 
 #[cfg(test)]

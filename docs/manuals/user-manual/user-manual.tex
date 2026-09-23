@@ -132,13 +132,25 @@ first, routine churn last.
 \section{Documenting a discovery}
 \begin{itemize}
   \item \textbf{Document-all} adopts a brand-new discovery in a single action.
-  \item \textbf{Document-field} lets you adopt specific fields of a device that has drifted
-        since you last documented it. The observed record itself is never modified.
+  \item \textbf{Document-field} lets you adopt specific fields of a device whose observed and
+        declared values have diverged since you last added it. The observed record itself is
+        never modified.
 \end{itemize}
 
+\textbf{The interface calls this gesture \emph{Add} / « Ajouter »}, not \emph{Document}. The
+identifier stays \texttt{document} in this manual, in the API and in the code --- it is the one
+concept whose label and identifier differ, because the engine can only ever ADD a declared value
+and never replace one.
+
+\textbf{What it creates, and what it does not.} The gesture copies what the connector observed
+--- today an address, a hostname when reverse DNS answers, and a hardware address. \textbf{You
+cannot yet write a field the network did not show you}: there is no form for a name, a role or an
+owner. So a record is what the sighting carried, and nothing more.
+
 \begin{planned}
-\emph{Document-all} exists as a route and is reached from no screen; \emph{document-field} is
-not built. Epic~7 gives both a control the operator can press.
+\emph{Document-all} has been reachable from the triage queue since \texttt{v0.3.1}; what is not
+built is \emph{document-field}, the per-field gesture, and with it any way to enter a value of
+your own. Epic~7 gives both a control the operator can press.
 \end{planned}
 
 \section{Working in bulk}

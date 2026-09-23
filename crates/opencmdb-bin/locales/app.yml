@@ -21,8 +21,8 @@ page.no_observation:
   en: "No in-perimeter observation yet."
   fr: "Aucune observation dans le périmètre pour l'instant."
 error.store_unreachable:
-  en: "The store did not answer. Nothing was lost — the observations and the documented records are intact; only this page could not be built. Try again, and see the self-diagnostic if it persists."
-  fr: "La base n'a pas répondu. Rien n'est perdu — les observations et les enregistrements documentés sont intacts ; seule cette page n'a pas pu être construite. Réessayez, et consultez l'auto-diagnostic si cela persiste."
+  en: "The store did not answer. Nothing was lost — the observations and your records are intact; only this page could not be built. Try again, and see the self-diagnostic if it persists."
+  fr: "La base n'a pas répondu. Rien n'est perdu — les observations et vos enregistrements sont intacts ; seule cette page n'a pas pu être construite. Réessayez, et consultez l'auto-diagnostic si cela persiste."
 auth.required:
   en: "Authentication required. This instance is closed by default: supply the operator credentials it was configured with. If none were configured, no one can sign in yet — set OPENCMDB_BASIC_USER and OPENCMDB_BASIC_PASSWORD and restart."
   fr: "Authentification requise. Cette instance est fermée par défaut : fournissez les identifiants d'exploitant configurés. Si aucun ne l'a été, personne ne peut encore se connecter — définissez OPENCMDB_BASIC_USER et OPENCMDB_BASIC_PASSWORD, puis redémarrez."
@@ -136,18 +136,18 @@ identity.cause.unrecognised:
 # software decided — and nothing about them awaits the operator, which `identity.settled` already
 # says. AC2 speaks of a CAUSE, and the code distinguishes a cause from an outcome.
 identity.no_gesture.absence_of_proof:
-  en: "Nothing to document here: what is missing is a source that can prove identity, not a record to write. The Sources screen says what this one cannot read."
-  fr: "Rien à documenter ici : ce qui manque est une source capable de prouver l'identité, pas une fiche à écrire. L'écran Sources dit ce que celle-ci ne peut pas lire."
+  en: "Nothing to add here: what is missing is a source that can prove identity, not a record to write. The Sources screen says what this one cannot read."
+  fr: "Rien à ajouter ici : ce qui manque est une source capable de prouver l'identité, pas une fiche à écrire. L'écran Sources dit ce que celle-ci ne peut pas lire."
 # ⚠️ The clause *"and choosing among the candidates is still to come"* stood here until story
 # 6.4's code review and was refuted by the doctrine sentence in `identity_view.rs`, in the same
 # commit: *announcing an absent gesture is a promise; this section stays descriptive until the
 # gesture is there* (Guy, 2026-08-12). What is left is what is TRUE of the state itself.
 identity.no_gesture.ambiguous:
-  en: "Nothing to document here: this is a doubt to lift, not an entity to create."
-  fr: "Rien à documenter ici : c'est un doute à lever, pas une entité à créer."
+  en: "Nothing to add here: this is a doubt to lift, not an entity to create."
+  fr: "Rien à ajouter ici : c'est un doute à lever, pas une entité à créer."
 identity.no_gesture.unrecognised:
-  en: "Nothing to document here: the product does not recognise this cause, so it offers nothing for it."
-  fr: "Rien à documenter ici : le produit ne reconnaît pas cette cause et n'offre donc rien pour elle."
+  en: "Nothing to add here: the product does not recognise this cause, so it offers nothing for it."
+  fr: "Rien à ajouter ici : le produit ne reconnaît pas cette cause et n'offre donc rien pour elle."
 
 cause.out_of_perimeter:
   en: "Out of perimeter"
@@ -339,11 +339,11 @@ inventory.title:
   en: "Your records"
   fr: "Vos fiches"
 inventory.lede:
-  en: "What you have documented. A row here is a record you wrote; an address nobody has claimed is a question, and questions are in the triage."
-  fr: "Ce que vous avez documenté. Une ligne est une fiche que vous avez écrite ; une adresse que personne ne revendique est une question, et les questions sont dans le triage."
+  en: "What you have added. A row here is a record kept from a sighting; an address nobody has claimed is a question, and questions are in the triage."
+  fr: "Ce que vous avez ajouté. Une ligne est une fiche retenue d'un constat ; une adresse que personne ne revendique est une question, et les questions sont dans le triage."
 inventory.none_before:
-  en: "Nothing documented yet. A record is written in the"
-  fr: "Rien de documenté pour l'instant. Une fiche s'écrit dans la"
+  en: "Nothing added yet. A record comes from the"
+  fr: "Rien d'ajouté pour l'instant. Une fiche vient de la"
 inventory.none_after:
   en: "queue: select a row the network shows, and press the button that adds it."
   fr: "file de triage : choisissez une ligne que le réseau montre, et pressez le bouton qui l'ajoute."
@@ -360,14 +360,14 @@ inventory.col_origin:
   en: "Written"
   fr: "Écrit"
 inventory.col_documented:
-  en: "Documented"
-  fr: "Documenté"
+  en: "Added"
+  fr: "Ajouté"
 inventory.col_seen:
   en: "Last seen"
   fr: "Vu"
 inventory.unnamed:
-  en: "no name documented"
-  fr: "aucun nom documenté"
+  en: "no name"
+  fr: "sans nom"
 inventory.origin_adopted:
   en: "adopted from a sighting"
   fr: "adopté depuis un constat"
@@ -451,20 +451,20 @@ gesture.badge:
 # 🔑 The entity id is GONE from what the operator reads. It named nothing they can act on; the
 # effect they can check is that the question left the queue, and that is what the sentence says.
 document.done_one:
-  en: "Documented: %{n} field."
-  fr: "Documenté : %{n} champ."
+  en: "Added: %{n} field."
+  fr: "Ajouté : %{n} champ."
 document.done_other:
-  en: "Documented: %{n} fields."
-  fr: "Documenté : %{n} champs."
+  en: "Added: %{n} fields."
+  fr: "Ajouté : %{n} champs."
 document.unknown_subject:
-  en: "Unknown subject: there is nothing here to document."
-  fr: "Sujet inconnu : il n'y a rien à documenter ici."
+  en: "Unknown subject: there is nothing here to add."
+  fr: "Sujet inconnu : il n'y a rien à ajouter ici."
 document.already_documented:
-  en: "Already documented: this sighting's fields are declared."
-  fr: "Déjà documenté : les champs de ce constat sont déclarés."
+  en: "Already added: this sighting's fields are declared."
+  fr: "Déjà ajouté : les champs de ce constat sont déclarés."
 document.nothing_to_document:
-  en: "Nothing to document: this sighting carries no field the product can declare."
-  fr: "Rien à documenter : ce constat ne porte aucun champ que le produit sache déclarer."
+  en: "Nothing to add: this sighting carries no field the product can declare."
+  fr: "Rien à ajouter : ce constat ne porte aucun champ que le produit sache déclarer."
 document.malformed:
   en: "Malformed request: the form must carry a subject naming an observation."
   fr: "Requête mal formée : le formulaire doit porter un sujet nommant une observation."
@@ -473,11 +473,11 @@ document.backend:
   fr: "L'écriture n'est pas passée. Rien n'a été modifié ; consultez l'auto-diagnostic si cela persiste."
 # The confirmation carried across the redirect, rendered by `/triage` itself — see `TriageQuery`.
 triage.documented_one:
-  en: "%{n} field documented. The question has left the queue."
-  fr: "%{n} champ documenté. La question a quitté la file."
+  en: "%{n} field added. The question has left the queue."
+  fr: "%{n} champ ajouté. La question a quitté la file."
 triage.documented_other:
-  en: "%{n} fields documented. The question has left the queue."
-  fr: "%{n} champs documentés. La question a quitté la file."
+  en: "%{n} fields added. The question has left the queue."
+  fr: "%{n} champs ajoutés. La question a quitté la file."
 gesture.badge_off:
   en: "Not enabled"
   fr: "Non activé"
@@ -838,14 +838,14 @@ ipam.next_free:
 # subnet no static range reaches — it announced an exhausted offer where nothing was ever offered —
 # and FALSE when an overlapping `reserved` range is what emptied a static one, which it did not name.
 ipam.next_free_none:
-  en: "None — nothing a static range holds here can be offered: each address is defined, documented, already seen on the network, an edge, or covered by a more protective range"
-  fr: "Aucune — rien de ce qu'une plage statique contient ici ne peut être proposé : chaque adresse est définie, documentée, déjà vue sur le réseau, une bordure, ou couverte par une plage plus protectrice"
+  en: "None — nothing a static range holds here can be offered: each address is defined, in the inventory, already seen on the network, an edge, or covered by a more protective range"
+  fr: "Aucune — rien de ce qu'une plage statique contient ici ne peut être proposé : chaque adresse est définie, dans l'inventaire, déjà vue sur le réseau, une bordure, ou couverte par une plage plus protectrice"
 ipam.next_free_no_static:
   en: "None — no static range reaches this subnet, and the offer draws from static ranges only"
   fr: "Aucune — aucune plage statique n'atteint ce sous-réseau, et l'offre ne puise que dans les plages statiques"
 ipam.next_free_caveat:
-  en: "Only from static ranges, and never an address the network has been seen on or a documented one."
-  fr: "Uniquement dans les plages statiques, et jamais une adresse vue sur le réseau ni une adresse documentée."
+  en: "Only from static ranges, and never an address the network has been seen on, nor one the inventory holds."
+  fr: "Uniquement dans les plages statiques, et jamais une adresse vue sur le réseau ni une adresse que l'inventaire contient."
 ipam.cell_label_seen:
   en: "%{label} · seen: %{sightings}"
   fr: "%{label} · vue : %{sightings}"
@@ -907,8 +907,8 @@ ipam.finding.triage_link:
   en: "Open its question in triage"
   fr: "Ouvrir sa question dans le tri"
 ipam.finding.documented:
-  en: "Documented in the inventory, so triage asks nothing about it"
-  fr: "Documentée dans l'inventaire, le tri ne pose donc aucune question à son sujet"
+  en: "In the inventory, so triage asks nothing about it"
+  fr: "Dans l'inventaire, le tri ne pose donc aucune question à son sujet"
 ipam.outside.heading:
   en: "Seen outside every subnet of the plan"
   fr: "Vues hors de tout sous-réseau du plan"
@@ -934,8 +934,8 @@ ipam.check.seen:
   en: "%{address} has been seen on the network: a machine may already be using it."
   fr: "%{address} a été vue sur le réseau : une machine l'utilise peut-être déjà."
 ipam.check.documented:
-  en: "%{address} is documented in the inventory."
-  fr: "%{address} est documentée dans l'inventaire."
+  en: "%{address} is in the inventory."
+  fr: "%{address} est dans l'inventaire."
 ipam.check.defined:
   en: "%{address} is already defined in the plan."
   fr: "%{address} est déjà définie dans le plan."
@@ -1477,8 +1477,8 @@ example.alert.unknown_device:
   en: "An unknown device appeared"
   fr: "Un appareil inconnu est apparu"
 example.alert.unseen:
-  en: "A documented address has not been seen for 7 days"
-  fr: "Une adresse documentée n'a pas été vue depuis 7 jours"
+  en: "An address in your inventory has not been seen for 7 days"
+  fr: "Une adresse de votre inventaire n'a pas été vue depuis 7 jours"
 example.alert.address_conflict:
   en: "Two devices answer on one address"
   fr: "Deux appareils répondent sur une adresse"
