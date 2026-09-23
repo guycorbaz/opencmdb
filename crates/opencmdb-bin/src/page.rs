@@ -3055,6 +3055,90 @@ mod tests {
         );
     }
 
+    /// 🔴 **THE SAME PROPERTY OVER EVERY OTHER `*_strings()` CONSTRUCTOR, and its absence was
+    /// measured rather than suspected.** The guard above bounds ONE function and its own doc says
+    /// *"the day a second such constructor exists this guard must name it too"* — **five existed
+    /// and none was named**: `inventory_strings`, `diagnostic_strings`, `example_strings`,
+    /// `apps_strings`, `source_strings`.
+    ///
+    /// 🔑 Measured before this test was written: a new `InventoryStrings` field initialised with
+    /// the English literal `"PLACEHOLDER LITERAL"` left **744 tests, ten gates and clippy GREEN**,
+    /// so a sentence could ship in English under a French UI with nothing to say so — story 6b.3's
+    /// defect and story 6b.7's `criticality` defect, one constructor over.
+    ///
+    /// ⚠️ A PROPERTY over the crate's sources rather than a list of five, because a list is a
+    /// sixth constructor away from being wrong — which is exactly how the first one came to stand
+    /// alone. It walks `src/` for `fn <name>_strings() -> <Type> {` and checks the same shape.
+    ///
+    /// ⚠️ **Its own limit, stated**: a field fed through a helper (`counted(…)`, `format!`) is
+    /// accepted as long as the initialiser mentions `t!(` somewhere — the guard reads a line, not
+    /// a value. It is a tripwire against the ordinary gesture of typing a string where a key
+    /// belongs, never a barrier against a determined one (story 5.12's precedent).
+    #[test]
+    fn every_string_constructor_in_the_crate_is_fed_by_keys() {
+        let mut constructors = 0_usize;
+        let mut checked = 0_usize;
+        for entry in std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/src"))
+            .expect("the crate's sources are readable")
+        {
+            let path = entry.expect("a directory entry").path();
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("a source file");
+            let name = path.file_name().expect("a file name").to_string_lossy();
+            // ⚠️ **ANCHORED ON A DECLARATION LINE, and the first draft was not.** It searched
+            // the source for `_strings() -> ` and matched ITS OWN doc comment and its own code —
+            // *a guard that greps a file greps its prose, and the better the prose explains the
+            // defect the more reliably it reproduces it*, this project's own sentence, met again.
+            // It reds now only on a real `fn …_strings() -> … {`.
+            let lines: Vec<&str> = source.lines().collect();
+            let mut i = 0;
+            while i < lines.len() {
+                let head = lines[i].trim_start();
+                let is_declaration = (head.starts_with("fn ")
+                    || head.starts_with("pub(crate) fn "))
+                    && head.contains("_strings() -> ")
+                    && head.ends_with('{');
+                if !is_declaration {
+                    i += 1;
+                    continue;
+                }
+                constructors += 1;
+                let indent = lines[i].len() - head.len();
+                i += 1;
+                while i < lines.len() && lines[i].trim() != "}" {
+                    let line = lines[i].trim();
+                    i += 1;
+                    let Some((field, value)) = line.split_once(':') else {
+                        continue;
+                    };
+                    if !value.trim_end().ends_with(',') || field.contains(' ') || field.is_empty() {
+                        continue;
+                    }
+                    checked += 1;
+                    assert!(
+                        value.contains("t!("),
+                        "in `{name}`, `{}` feeds `{field}` with `{}` rather than with a key. Every \
+                         field here reaches a template as `{{{{ s.{field} }}}}`, where the \
+                         template-side guard cannot see what produced it — so a literal ships in \
+                         the DEFAULT locale under whatever language the operator chose.",
+                        head.trim_end_matches(" {"),
+                        value.trim().trim_end_matches(',')
+                    );
+                }
+                let _ = indent;
+            }
+        }
+        // The floor is what is THERE, not under it: five constructors beside `page.rs`'s, which
+        // this test exists because nobody counted.
+        assert!(
+            constructors >= 5 && checked > 60,
+            "the walk found {constructors} constructor(s) and {checked} field(s) — too few to be \
+             reading the crate it names"
+        );
+    }
+
     /// 🔴 **A screen that cannot render without the store REFUSES within its budget, and the
     /// test pool is deliberately SLOWER than the budget so the elapsed arm actually runs.**
     ///

@@ -99,6 +99,10 @@ pub(crate) struct InventoryStrings {
     pub(crate) none_before: String,
     /// The rest of that sentence, after the link.
     pub(crate) none_after: String,
+    /// What the operator can and cannot do with these records — §0.6 of the slice issues #200
+    /// and #201 created. It is NOT *"these machines have no record"*, which is false: they have
+    /// one, and the glossary calls it that. It is that the gesture ADOPTS and does not AUTHOR.
+    pub(crate) no_authoring: String,
     /// The name column.
     pub(crate) col_name: String,
     /// The address column.
@@ -138,6 +142,7 @@ pub(crate) fn inventory_strings() -> InventoryStrings {
         lede: rust_i18n::t!("inventory.lede").to_string(),
         none_before: rust_i18n::t!("inventory.none_before").to_string(),
         none_after: rust_i18n::t!("inventory.none_after").to_string(),
+        no_authoring: rust_i18n::t!("inventory.no_authoring").to_string(),
         col_name: rust_i18n::t!("inventory.col_name").to_string(),
         col_ipv4: rust_i18n::t!("inventory.col_ipv4").to_string(),
         col_fields: rust_i18n::t!("inventory.col_fields").to_string(),

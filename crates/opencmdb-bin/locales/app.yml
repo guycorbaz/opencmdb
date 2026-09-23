@@ -347,6 +347,16 @@ inventory.none_before:
 inventory.none_after:
   en: "queue: select a row the network shows, and press the button that adds it."
   fr: "file de triage : choisissez une ligne que le réseau montre, et pressez le bouton qui l'ajoute."
+# 🔴 Added 2026-09-23, and GUY FOUND THE NEED BY USING THE PRODUCT: he added a machine from the
+# triage queue and said *« aucune fiche ne peut être créée pour l'instant »*. Measured — every call
+# site of `insert_declared_attribute`, the only `'manual'` writer, is inside a `#[cfg(test)]` module.
+# **The gesture ADOPTS; it does not AUTHOR.** 🔑 `inventory_view.rs` has carried the second half of
+# this sentence, correctly, since the inventory shipped — *"the row shows everything the store knows
+# and a record page would repeat it"* — written for the next author and never for the person who
+# pressed the button. This is that paragraph, said where the operator is.
+inventory.no_authoring:
+  en: "These records hold what the network showed. You cannot yet add a field it did not show — a name, a role, an owner — and there is nothing more to open: the row is everything the store knows."
+  fr: "Ces fiches contiennent ce que le réseau a montré. Vous ne pouvez pas encore ajouter un champ qu'il n'a pas montré — un nom, un rôle, un responsable — et il n'y a rien de plus à ouvrir : la ligne est tout ce que le magasin sait."
 inventory.col_name:
   en: "Name"
   fr: "Nom"
