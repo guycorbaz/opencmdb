@@ -30,6 +30,8 @@ mod ipam_rail;
 mod ipam_repo;
 mod ipam_write;
 mod l1_runner;
+mod l2_pass;
+mod l2_repo;
 mod metrics;
 mod neighbour;
 mod page;

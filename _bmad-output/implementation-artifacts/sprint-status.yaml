@@ -5084,7 +5084,7 @@ development_status:
   #   ⚠️ And story 6.9 leaves it a measured warning: three L2 `must-merge` traps cannot pass under
   #       the present algebra, so no L2 story should promise the trap gate will close.
   # 5.9b's precedent; ⚠️ two races registered at Epic 5 lose their shield here
-  6-12-resolver-writes-device-groupings: ready-for-dev
+  6-12-resolver-writes-device-groupings: in-progress
   #   📝 CONTEXTED 2026-09-24 (`6-12-resolver-writes-device-groupings.md`) — and NOT developable yet:
   #   (§0.1) no L2 rule emits `Decisive`, so no L2 pair can conclude `Match` and criterion 1 writes no
   #   grouping of two interfaces on any input; (§0.2) `obelix` concludes `Ambiguous`, which

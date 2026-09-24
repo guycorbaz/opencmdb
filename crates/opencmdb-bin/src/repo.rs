@@ -750,7 +750,7 @@ pub enum DecidedBy {
 
 impl DecidedBy {
     /// The persisted token — exhaustive `match`, no `_` arm, same refusal as [`outcome_token`].
-    fn token(self) -> &'static str {
+    pub(crate) fn token(self) -> &'static str {
         match self {
             Self::Engine => "ENGINE",
             Self::Operator => "OPERATOR",

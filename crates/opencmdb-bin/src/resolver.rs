@@ -94,19 +94,22 @@
 //! [`load_current_engine_link`] says which test measures which, because the doc used to claim the
 //! second while every test in the workspace exercised the first.
 //!
-//! # Not wired into `main.rs`
+//! # Wired into the shipped binary since story 5.14
 //!
-//! By decision, not by omission. The named consumers are stories 5.10 and 5.11; wiring the startup
-//! scan would make every deployment write links with no page to display them (story 5.14) and no
-//! purge to remove them (story 5.10) — a behaviour change no acceptance criterion asks for. Hence
-//! the `allow` below, in the idiom `repo.rs:11` already carries.
-#![allow(dead_code)]
+//! `scan_pass::poll_ingest_resolve` calls [`resolve`] after every sweep, inside one transaction.
+//! _(This section read **"Not wired into `main.rs` — by decision"**, over a blanket
+//! `#![allow(dead_code)]`, until story 6.12: true when story 5.9b wrote it and false from story 5.14
+//! onward, for seven epics' worth of stories that each read this file. The blanket `allow` went with
+//! it, so what is dead here is now named rather than hidden — PR #163's P5 measured a blanket `allow`
+//! hiding a severed MAC read.)_
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use opencmdb_core::identity::blocking::{CandidatePair, candidates};
 use opencmdb_core::identity::cascade::{Conclusion, Decision, IdentityAbstentionCause, decide};
-use opencmdb_core::identity::l1::{CURRENT_RULESET_VERSION, decide_pair, decide_singleton, join};
+use opencmdb_core::identity::l1::{
+    CURRENT_RULESET_VERSION, L1Key, decide_pair, decide_singleton, join,
+};
 use opencmdb_core::observation::{InterfaceId, LinkId, ObsId, Observation, Timestamp};
 use opencmdb_core::repo::RepositoryError;
 use sqlx::MySqlConnection;
@@ -171,6 +174,8 @@ pub struct Resolution {
     /// the fact kinds the shipped connector cannot see. *A capability the source lacks is one
     /// sentence about the source, not one row per sighting forever.*
     pub sightings_without_a_key: usize,
+    /// What the L2 pass did over the same sweep (story 6.12).
+    pub l2: crate::l2_pass::L2Resolution,
 }
 
 impl Resolution {
@@ -282,6 +287,8 @@ pub async fn resolve_within(
     // Which SUBJECTS this pass wrote or kept, per observation. What is not in here at the end is a
     // slot the input no longer supports, and the tail below closes it.
     let mut visited: BTreeMap<ObsId, BTreeSet<String>> = BTreeMap::new();
+    // The interface each key landed on — what the L2 pass judges pairs of (story 6.12).
+    let mut interfaces: BTreeMap<L1Key, InterfaceId> = BTreeMap::new();
 
     for ((l2_domain, mac_canon), group) in &groups {
         let (first_seen_at, last_seen_at) = seen_window(group, &by_id);
@@ -313,6 +320,7 @@ pub async fn resolve_within(
                 minted
             }
         };
+        interfaces.insert((*l2_domain, *mac_canon), interface);
 
         for obs_id in group {
             let observation = by_id[obs_id];
@@ -392,6 +400,10 @@ pub async fn resolve_within(
             summary.links_vacated += 1;
         }
     }
+
+    // L2 after L1, in the same transaction: every pair of the interfaces this sweep carried
+    // (story 6.12). See `l2_pass`'s module doc for what is written and what never is.
+    summary.l2 = crate::l2_pass::judge(&mut *conn, &groups, &by_id, &interfaces).await?;
 
     Ok(summary)
 }
