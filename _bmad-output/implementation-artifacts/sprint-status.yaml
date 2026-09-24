@@ -5097,8 +5097,12 @@ development_status:
   #       algebra, so 6.12 must not promise the trap gate will close.
   # `link_candidate`'s first production writer; ⚠️ story 5.14b's tripwire REDS here by design
   6-13-first-ambiguous-with-its-candidates: backlog
+  #   🔴 ABSORBED into 6.12 by Guy's act of 2026-09-24: its writer (Ambiguous + candidates) moved there,
+  #   and its tripwire criterion is unmeetable (the slice has no L2 pair). Closed or kept at 6.12's merge.
   # FR16 -- `epics.md`'s story-5.14 clause, re-owned here at 5.14b's contexting
   6-14-ambiguity-explains-itself: backlog
+  #   🔑 NEXT AFTER 6.12, by Guy's act of 2026-09-24: this is where obelix becomes visible — as ONE question
+  #   with two candidates the operator lifts, not as a device. It inherits 6.13's replacement tripwire.
   # 🔴 the five rules take the bucket 11 -> 3, NOT 0. This closes NFR4 and milestone J4 -- the gate's first green since story 4.6b
   6-15-must-abstain-traps-are-routed: backlog
   # 300 hosts; the seed's PROVENANCE guarded, per 5.11b's finding
