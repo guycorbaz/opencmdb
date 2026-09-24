@@ -901,6 +901,45 @@ mod tests {
         );
     }
 
+    /// 🔴 **EQUAL CARDINALITY, CROSSING SETS — the one population that closes Guy's arbitration, and
+    /// the two tests above do NOT close it.**
+    ///
+    /// Both divergence guards above are **2-vs-1 in cardinality**, so *cardinality alone* separates the
+    /// readings there — and a reading that gates on `len()` first therefore passes them. Measured by
+    /// the edge-case review layer: `names_a.len() == names_b.len() && !names_a.is_disjoint(&names_b)`
+    /// left **1 060 tests, clippy `--all-targets` and all ten gates GREEN**, while answering
+    /// `Supports` on `{doc-a, doc-b}` against `{doc-a, doc-c}` — *a crossing partial overlap of equal
+    /// size*, which is exactly the "one shared name settles which name is current" semantics Guy
+    /// refused.
+    ///
+    /// 🔑 *The both-orientations repair one test up was the right instinct applied to the WRONG AXIS:
+    /// it hardened DIRECTION and left CARDINALITY open.* This test closes the axis that was open, and
+    /// it is the only guard here that distinguishes equality from every intersection-flavoured reading
+    /// at once.
+    #[test]
+    fn two_name_sets_of_equal_size_that_merely_cross_do_not_agree() {
+        let left = [
+            observation(1, 0x01, Some("doc-a")),
+            observation(2, 0x01, Some("doc-b")),
+        ];
+        let right = [
+            observation(3, 0x02, Some("doc-a")),
+            observation(4, 0x02, Some("doc-c")),
+        ];
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&left), &side(&right)).verdict,
+            Verdict::Neutral,
+            "sharing one name out of two is not agreement, however equal the two counts are — and a \
+             reading that compares sizes before contents passes every other guard here"
+        );
+        assert_eq!(
+            verdict_for_hostname(&side(&left), &side(&right)).verdict,
+            Verdict::Neutral,
+            "nor is it opposition: the sets are not disjoint, so both rules stay silent together"
+        );
+    }
+
     /// 🔑 **What the decision BUYS, stated as the property that actually discriminates.**
     ///
     /// On a partial overlap the two rules are silent TOGETHER — neither supports nor opposes.
