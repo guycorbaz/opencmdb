@@ -1891,6 +1891,29 @@ _⚠️ Recorded as Guy's act because **a story may not re-scope an epic** — `
 question on 2026-08-30 and deliberately left it open (*"which of 6.8–6.13 the freeze still covers is
 a question for the epic"*). This is the answer._
 
+_🔴 **CORRECTED 2026-09-24 by Guy's act, after story 6.12's contexting and validation: the paragraph
+above promises something 6.12 cannot deliver, and it is FALSE TWICE.** The first sentence is kept
+because the reorder rests on it; the promise is withdrawn here rather than rewritten above._
+
+- _**No L2 pair can conclude `Match`.** `decide` reaches `Match` only through a `Decisive`, and no L2
+  rule emits one — `l2-different-hostname` opposes, `l2-hostname-agrees` supports,
+  `l2-virtual-mac-prefix` disqualifies. Measured over a 46-interface sweep: 1035 pairs, no `Match`.
+  **What makes a merge at L2** is the open question story 6.9 registered with this epic's
+  retrospective; until it is answered, **no story writes a device of two interfaces.**_
+- _**`obelix` concludes `Ambiguous`**, both NICs carrying one name — and a shared name is weak evidence
+  by design (issue #159). The honest outcome is not a grouping but **a question for the operator**,
+  which is D13's own shape: *"we do not guess, we expose."*_
+- _**And no screen reads an interface or a device**: the triage queue and the gap are keyed on the
+  address. Even a written grouping would change no pixel._
+
+_✅ **Guy's decisions (2026-09-24), recorded in full in the story file's §0.6**: 6.12 persists L2
+decisions **including `Ambiguous` with its candidates** — story 6.13's writer moves into 6.12 — in a
+sibling table keyed on the PAIR of interfaces, with evidence keyed on interfaces so that an unchanged
+network writes nothing, persisting `Ambiguous` and `NoMatch` and never `AbsenceOfProof`. **Story 6.14
+follows 6.12 directly**, because it is the story where `obelix` becomes visible — as one question with
+two candidates, which the operator lifts. **`obelix` stops being two unrelated rows at 6.14, not at
+6.12, and it becomes a question rather than a device.**_
+
 ### Story 6.8: `l2-uplink-agrees` — the first producer of `Supports`
 
 As the operator,
@@ -1981,6 +2004,8 @@ So that a device is a record rather than a computation repeated at each page loa
 
 **And** ⚠️ **two races registered at Epic 5 lose their shield here.** Two concurrent passes mint two interfaces for one MAC (`interface_l1_key` is a plain index and the mint is read-then-insert), and `current_subject IS NOT NULL` is not equivalent to `valid_to = OPEN_END`. Epic 5 recorded that *the connector story that gives it a MAC removes the shield*; **a device grouping that keys on interfaces reaches the same code.** This story carries them or names the story that does.
 
+_⚠️ **RE-SCOPED 2026-09-24 by Guy's act** (story file §0.6). The criteria above are kept as written and read with four corrections. **(1)** The first criterion's *"writes `device` rows"* is **not met, by decision**: no L2 rule is `Decisive`, so no real input produces a `Match`, and a device written only under a hand-built verdict would be a guard placed where the defect cannot occur. Its owner is whichever story first produces an L2 `Decisive`. **(2)** This story **also persists `Ambiguous` with its candidates** — story 6.13's writer — in a sibling table keyed on the pair of interfaces, not in `identity_link`. **(3)** *"A second identical pass"* is read as **an unchanged network**: the shipped connector mints fresh observation ids at every sweep, so a criterion satisfiable only with identical ids would be met by no deployment. **(4)** The interface-mint race is re-owned to the FR6 scheduler story (this story mints no interface it did not already mint); the device mint's own read-then-insert window belongs with the first `Match`._
+
 ### Story 6.13: The first `Ambiguous` is persisted with its candidates
 
 As the operator,
@@ -1999,6 +2024,8 @@ So that *"I don't know"* can show its work.
 
 **And** ⚠️ **story 5.14b's tripwire `the_production_pass_produces_no_ambiguous_abstention` REDS here, by design.** Its message names `epics.md`'s FR16 clause as the work that has come due. **Implement story 6.14; do not delete the assertion.**
 
+_🔴 **ABSORBED INTO STORY 6.12 on 2026-09-24 by Guy's act.** Its writer — `Ambiguous` persisted with its candidates — is 6.12's criterion now, stored in a sibling table rather than in `link_candidate`, which references `identity_link` and cannot hold an L2 candidate. ⚠️ **And the third criterion above is UNMEETABLE under every option, measured by two validation layers independently**: the tripwire's slice forms ONE interface and therefore no L2 pair at all, and it reads `count_engine_reach`, which reads `identity_link` only. A tripwire over a slice with no L2 pair is a guard placed where the defect cannot occur. What replaces it — a slice with two interfaces and a shared name, read from wherever L2 decisions live — is story 6.14's, together with the display. Whether this story is then closed or keeps a residue is decided at 6.12's merge._
+
 ### Story 6.14: The ambiguity explains itself on the page
 
 As the operator,
@@ -2009,7 +2036,7 @@ So that I can lift the doubt the engine refused to guess at.
 
 **Given** an abstention whose cause is `Ambiguous`
 **When** it is displayed
-**Then** its candidates and their evidence are shown **from the persisted `link_candidate` rows** (FR16) — the abstention explains itself. _(This is `epics.md`'s story-5.14 clause, re-owned to this epic at 5.14b's contexting with its unreachability ASSERTED; story 6.13 makes it reachable.)_
+**Then** its candidates and their evidence are shown **from the persisted `link_candidate` rows** _(from 6.12's L2 decision table since 2026-09-24 — see story 6.13's note)_ (FR16) — the abstention explains itself. _(This is `epics.md`'s story-5.14 clause, re-owned to this epic at 5.14b's contexting with its unreachability ASSERTED; story 6.13 makes it reachable.)_
 
 **Given** the operator's three cases
 **When** the line is rendered
