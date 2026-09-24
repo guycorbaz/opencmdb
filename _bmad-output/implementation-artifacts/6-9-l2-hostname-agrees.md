@@ -1,8 +1,16 @@
 # Story 6.9: `l2-hostname-agrees`
 
-Status: **validated** 2026-09-23 by two fresh-context layers (fact-check + gap-hunt, the latter having
-BUILT three readings of the rule and run a ten-row mutation pass). **ONE question for Guy, posed
-below and not settled here**; then dev.
+Status: **developed and verified** 2026-09-24, awaiting its code review. Validated first by two
+fresh-context layers (fact-check + gap-hunt, the latter having BUILT three readings of the rule and
+run its own ten-row pass), then **both questions arbitrated by Guy on 2026-09-24** — §0.0 measured
+rather than decided, §0.3 taken as set equality — then implemented, then proved to red over eight
+mutations.
+
+⚠️ *This line read "validated … ONE question for Guy, posed below and not settled here; then dev" until
+the fourth instrument defect was written up, i.e. after the questions were answered, the code shipped
+and the pass had run. **`cargo xtask record` cannot see it** — Epic 14's retrospective named `Status:`
+as the first of the checker's three blind spots, and predicted in writing that the record defects
+would migrate to exactly what it declines to read. They did, here, in the next story.*
 
 **Epic 6**, reordered by Guy on 2026-09-23: **6.9 → 6.11 → 6.12**, with 6.8 and 6.10 waiting for a
 connector that emits an uplink or a switch port. **Base:** `e7e5143`, clean tree.
@@ -12,7 +20,7 @@ every measurement below transfers.
 
 ---
 
-## 0. What contexting measured, what validation refuted, and the one question that is Guy's
+## 0. What contexting measured, what validation refuted, and the two questions Guy settled
 
 ### §0.0 — 🔴 THE HEADLINE IS EPIC-WIDE: A `Supports` RULE CANNOT ANSWER A `must-merge` TRAP
 
