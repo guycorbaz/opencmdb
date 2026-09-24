@@ -6388,3 +6388,18 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   one database per measuring process, named after the layer.** Isolation by worktree was already the
   rule; isolation by STORE was not, and it is the same requirement one layer down. **Owner: the next
   story that runs a three-layer review** — which is every story.
+- 🔴 **The `float-free` gate reds on a STORY NUMBER written inside an assertion message, and story 6.11
+  tripped it.** Measured: `l2.rs:719` carried *"where story 6.11's contexting quoted only one"* in an
+  `assert!` message, and the gate reported **`bare float literal`** — because `6.11` is
+  digit-dot-digit-digit with one dot and no suffix, which is exactly what its tokeniser is built to catch.
+  🔑 **The gate strips COMMENTS so the architecture may be quoted, and it reads STRING LITERALS**, so every
+  earlier L2 story was safe only because it wrote *"story 6.7"* in doc comments rather than in assertion
+  messages. ⚠️ **The red is CORRECT for the gate's stated promise** — it cannot know `6.11` is prose — and
+  the bisection that found it is worth recording: replacing `0x9f` with `0x9e` left it RED, which is what
+  ruled out the hex-literal hypothesis and sent me to read the matcher instead of guessing. *A guard that
+  greps a file greps its prose* (story 5.12's sentence, and story 14.4 paid for it twice in a stylesheet).
+  **Story 6.11 reworded the message — cost nil — and did NOT touch the gate**, because narrowing it is a
+  judgement about where the tripwire sits and a MAC-prefix story is not where that is decided. 🔑 *The
+  narrowing that would be correct is to strip string literals too: a float literal inside a string is
+  never a computation, so the class is a pure false positive rather than a trade.* **Owner: the next story
+  that edits `xtask/src/main.rs`'s matcher**, or a project review.

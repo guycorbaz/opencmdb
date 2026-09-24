@@ -71,8 +71,9 @@
 
 use std::collections::BTreeSet;
 
+use crate::identity::blocking::L2CandidatePair;
 use crate::identity::cascade::{RuleVerdict, Verdict};
-use crate::observation::{Fact, ObsId, Observation};
+use crate::observation::{Fact, MacAddr, ObsId, Observation};
 use crate::trap::RuleId;
 
 /// The rule id, spelled exactly as the committed corpus spells it.
@@ -422,6 +423,137 @@ pub fn verdict_for_hostname_agreement(a: &L2Side<'_>, b: &L2Side<'_>) -> RuleVer
     }
 }
 
+/// The IANA virtual-router MAC block, five octets exact — `00:00:5e:00:01:xx`.
+///
+/// D13 reads it as a STRUCTURAL FACT rather than an inference (`architecture.md:1054-1055`): *"VRRP/HSRP
+/// MAC prefixes are **IANA-reserved** … **A reading, not an inference**"*, the low bits carrying the VRID.
+///
+/// # 🔴 FIVE octets, and the width is load-bearing against the product's own shipped dataset
+///
+/// `example_data.rs` carries thirty-odd production MACs of the form `00:00:5E:00:53:xx` — RFC 7042
+/// *documentation* addresses, which share the IANA OUI `00:00:5e` and differ only at the **fifth** octet.
+/// **A predicate written on three octets would disqualify the entire example inventory**, and one written
+/// on four would admit the IANA VRRP **IPv6** block `00:00:5e:00:02:xx`, which no committed fixture
+/// exercises. ⚠️ Story 6.11's validation measured the four-octet widening leaving the whole suite, clippy,
+/// ten gates **and its own equality pin** green — because that pin enumerated the *last* octet and never
+/// crossed the boundary. *An enumeration cannot claim the completeness of a property.*
+///
+/// # ⚠️ The set is CLOSED, and HSRP is out BY DECISION rather than by omission
+///
+/// `vrrp-virtual-mac.toml`'s privacy record: *"The allowlist is CLOSED: HSRP (00:00:0c:07:ac — a Cisco
+/// OUI, not IANA) **and HSRPv2** stay out until a fixture commits those octets, each with its own
+/// prove-to-red."* Both are refused here, and a negative probe measures it — validation added HSRP to a
+/// draft of this predicate and the whole suite stayed GREEN.
+const IANA_VIRTUAL_ROUTER_PREFIX: [u8; 5] = [0x00, 0x00, 0x5e, 0x00, 0x01];
+
+/// Whether this hardware address is an IANA virtual-router address.
+///
+/// A property of the BYTES and of nothing else. ⚠️ **It deliberately does not consult
+/// `Fact::Mac::locally_administered`**: story 6.11's validation made a draft read that flag instead and
+/// the whole suite stayed GREEN, because the fixture's flag happens to agree — *so a connector reporting
+/// it wrongly would silently disable the disqualification and nothing would notice*.
+/// [`crate::observation::MacAddr::is_locally_administered`]'s own doc calls the bytes *"the ground truth a
+/// connector's reported flag can be cross-checked against"*, and this function is on the ground-truth
+/// side of that sentence.
+fn is_iana_virtual_router_mac(addr: MacAddr) -> bool {
+    addr.0[..5] == IANA_VIRTUAL_ROUTER_PREFIX
+}
+
+/// The rule id, spelled exactly as the committed corpus spells it.
+///
+/// **One committed trap names it**: `vrrp-virtual-mac-must-not-merge-master`, the VIP against the master
+/// of the minute.
+///
+/// # 🔴 Why a RULE identifier names something that is NOT a rule
+///
+/// Guy's arbitration of 2026-08-12 is *there is no rule*, and `epics.md`'s criterion says so in capitals:
+/// the disqualification is **a structural fact read at ingestion, not a rule that scores**. But
+/// [`crate::identity::cascade::Conclusion::NoMatch`] carries a [`RuleId`], and D19 wants the id left
+/// behind — *a rule that fires without one is undebuggable*. Measured, there is exactly one door:
+/// `NoMatch { rule }` is reachable only from a `RuleVerdict` carrying [`Verdict::Disqualifying`].
+///
+/// 🔑 **So the thing that is not a rule must be a `RuleVerdict`, and what makes it not a rule is not its
+/// arity but WHAT IT READS** — see [`verdict_for_virtual_mac`]. The sentence this section owes was already
+/// written one crate away, at `neighbour.rs:167-172`, and it is quoted rather than re-derived: *"D13 calls
+/// it disqualifying **as a grouping anchor** — which is an L2 judgement about how much a MAC is worth, not
+/// an L1 judgement about whether it is an address at all."*
+pub const L2_VIRTUAL_MAC_PREFIX: &str = "l2-virtual-mac-prefix";
+
+/// `l2-virtual-mac-prefix` — an IANA virtual-router address can never anchor a grouping.
+///
+/// # The verdict
+///
+/// [`Verdict::Disqualifying`] when **either** key's hardware address sits in the IANA virtual-router
+/// block; [`Verdict::Neutral`] otherwise. **The second producer of `Disqualifying` in this codebase and
+/// the first at L2** — the only other is `l1-distinct-mac`.
+///
+/// # 🔑 Why this takes a PAIR OF KEYS, which is what makes it a READING and not a rule
+///
+/// Guy's arbitration of 2026-09-24. The distinction is **not arity — it is what the function READS**:
+///
+/// | | takes | reads |
+/// |---|---|---|
+/// | a RULE | two [`L2Side`]s | the FACTS the sides carry |
+/// | a READING | one [`L2CandidatePair`] | the KEY, and nothing else |
+///
+/// **A function that cannot reach a [`Fact`] cannot score, and the compiler checks that** rather than a
+/// doc comment promising it. `L1Key` is `(L2DomainId, MacAddr)`, so the key is all this needs.
+///
+/// 🔴 **The obvious alternative was BUILT and MEASURED WRONG.** A reading over an [`L2Side`] must dig MACs
+/// out of the side's `facts`, and an observation bearing several MACs stands on several interfaces — so it
+/// answers `Disqualifying` for a perfectly ordinary interface because *some observation standing on it
+/// also bore a virtual MAC*, **which is the ordinary VRRP geometry**: a router port bears its own address
+/// and the VIP. ⚠️ And the committed corpus cannot tell the two shapes apart — 0 disagreements over all 31
+/// interfaces in every trap-named stream — so this decision is carried by synthetic guards alone.
+///
+/// # ⚠️ *Either* key, and what that does NOT mean
+///
+/// Story 6.11's contexting argued that the reading must be two-sided *"because the distinction it exists to
+/// draw is whether the two interfaces share the virtual MAC — one gateway re-seen versus the VIP against
+/// its master"*. 🔴 **That reason is false and implementing it is what showed so**: the failover
+/// re-sighting is `l1-exact-mac`'s business and its two observations land on the **same** interface, so
+/// they form no pair at all and this function never sees them. *What makes the pair the right argument is
+/// that being a grouping ANCHOR is a property of the pair, not that the predicate compares the two sides
+/// — it does not.*
+///
+/// **Both keys virtual is `Disqualifying` too**, and that is deliberate: two VIPs are two virtual
+/// gateways, so the pair is no more an anchor than a VIP against its master.
+///
+/// # ⚠️ The evidence is EMPTY, and that is the truthful value rather than a D19 lapse
+///
+/// [`RuleVerdict::evidence`] is documented as *"the observations the rule READ to say it"*. This reading
+/// read a key and no observation, so an empty vector is what is true; attaching ids it never looked at
+/// would be the invention D19 exists to prevent. ⚠️ **The cost is stated rather than hidden**: an operator
+/// meeting this refusal sees the rule and not the pair, and the pair is the caller's to record. Story 6.12
+/// is the first caller with both in hand.
+///
+/// # 🔴 The verdict this produces can never be NAMED beside an L1 `Disqualifying`, for ANY trap, ever
+///
+/// [`crate::identity::cascade::decide`] names the **lexicographically smallest** `Disqualifying`, and
+/// every `l1-*` id sorts before every `l2-*` id. So a vector mixing L1's verdict for the same pair in
+/// answers `NoMatch { rule: "l1-distinct-mac" }` and this rule is invisible. ⚠️ `l2.rs`'s module doc states
+/// that as a per-case argument measured on one family; **it is a total property of the naming convention
+/// meeting `min()`**, measured by story 6.11's validation and registered.
+///
+/// So this verdict reaches a `NoMatch` naming itself **only in an L2-only vector**, which is what story
+/// 6.12's plumbing owes. ✅ *Measured sufficient at unit level today: `Neutral` · `Neutral` · this
+/// `Disqualifying` gives `NoMatch { l2-virtual-mac-prefix }`, hence `Refused`, which `score` passes.*
+pub fn verdict_for_virtual_mac(pair: &L2CandidatePair) -> RuleVerdict {
+    let disqualifying =
+        is_iana_virtual_router_mac(pair.low().1) || is_iana_virtual_router_mac(pair.high().1);
+
+    RuleVerdict {
+        rule: RuleId(L2_VIRTUAL_MAC_PREFIX.to_string()),
+        verdict: if disqualifying {
+            Verdict::Disqualifying
+        } else {
+            Verdict::Neutral
+        },
+        // Empty under BOTH verdicts, and for one reason: this reading read no observation. See the doc.
+        evidence: Vec::new(),
+    }
+}
+
 /// Tests for the L2 rules, over SYNTHETIC inputs only.
 ///
 /// Nothing here reads `fixtures/` — this crate may not touch the filesystem (D47). The
@@ -473,6 +605,188 @@ mod tests {
 
     fn side(observations: &[Observation]) -> L2Side<'_> {
         L2Side::new(observations.iter().collect())
+    }
+
+    // ---- `l2-virtual-mac-prefix` (story 6.11): the reading, not a rule ----
+
+    /// The IANA virtual-router address the committed corpus uses, VRID 10.
+    fn virtual_mac() -> MacAddr {
+        MacAddr([0x00, 0x00, 0x5e, 0x00, 0x01, 0x0a])
+    }
+
+    /// An ordinary documentation address — RFC 7042, the shape `example_data.rs` ships.
+    fn ordinary_mac(last: u8) -> MacAddr {
+        MacAddr([0x02, 0x00, 0x5e, 0x00, 0x53, last])
+    }
+
+    fn key(addr: MacAddr) -> crate::identity::l1::L1Key {
+        (L2DomainId::from_uuid(Uuid::from_u128(1)), addr)
+    }
+
+    fn pair(a: MacAddr, b: MacAddr) -> L2CandidatePair {
+        L2CandidatePair::new(key(a), key(b)).expect("two distinct addresses are two interfaces")
+    }
+
+    /// AC1's core: the VIP against its master is refused, and the verdict NAMES this reading.
+    #[test]
+    fn a_virtual_router_address_disqualifies_the_pair_and_names_itself() {
+        let verdict = verdict_for_virtual_mac(&pair(virtual_mac(), ordinary_mac(0x8c)));
+
+        assert_eq!(
+            verdict.verdict,
+            Verdict::Disqualifying,
+            "an IANA virtual-router address can never anchor a grouping"
+        );
+        assert_eq!(
+            verdict.rule.0, L2_VIRTUAL_MAC_PREFIX,
+            "a verdict that refuses must say which reading refused, or the refusal is undebuggable (D19)"
+        );
+    }
+
+    /// 🔴 The oracle AC1 must name, and the WEAK one it must not.
+    ///
+    /// Validation measured that `Disqualifying` → `Opposes` leaves *"the trap scores a pass"* GREEN,
+    /// because a lone `Opposes` abstains on `AbsenceOfProof` and `(must-not-merge, Abstained)` is also a
+    /// PASS cell. ⚠️ **So "the trap passes" cannot tell this reading firing from it never firing at all** —
+    /// only the conclusion can, and only over an L2-ONLY vector.
+    #[test]
+    fn an_l2_only_vector_concludes_no_match_naming_this_reading() {
+        use crate::identity::cascade::{Conclusion, decide};
+        use crate::identity::l1::CURRENT_RULESET_VERSION;
+
+        let vip = [observation(1, 0x01, Some("doc-rtr-alpha"))];
+        let master = [observation(2, 0x02, Some("doc-rtr-alpha"))];
+        let vector = vec![
+            verdict_for_hostname(&side(&vip), &side(&master)),
+            verdict_for_hostname_agreement(&side(&vip), &side(&master)),
+            verdict_for_virtual_mac(&pair(virtual_mac(), ordinary_mac(0x8c))),
+        ];
+
+        let decision = decide(vector, CURRENT_RULESET_VERSION);
+
+        assert_eq!(
+            decision.conclusion,
+            Conclusion::NoMatch {
+                rule: RuleId(L2_VIRTUAL_MAC_PREFIX.to_string())
+            },
+            "the STRONG oracle: the conclusion is a refusal and it names this reading — 'the trap \
+             passes' is satisfied by a reading that never fired"
+        );
+    }
+
+    /// AC5: the width is FIVE octets, and the probe varies the FOURTH and FIFTH.
+    ///
+    /// 🔴 Validation widened a draft from five octets to four — admitting the IANA VRRP **IPv6** block
+    /// `00:00:5e:00:02:xx` — and left the whole suite, clippy, ten gates **and an equality pin** GREEN,
+    /// because that pin enumerated the *last* octet and never crossed the boundary. This one crosses it.
+    ///
+    /// ⚠️ And the fifth octet is what separates the block from `example_data.rs`'s thirty-odd
+    /// `00:00:5E:00:53:xx` documentation MACs: **a three-octet predicate disqualifies the whole example
+    /// inventory.**
+    #[test]
+    fn the_prefix_is_five_octets_and_the_neighbouring_blocks_are_not_it() {
+        assert!(
+            is_iana_virtual_router_mac(MacAddr([0x00, 0x00, 0x5e, 0x00, 0x01, 0x0a])),
+            "VRID 10 of the IPv4 virtual-router block is the case the corpus commits"
+        );
+        for fifth in [0x00u8, 0x02, 0x53, 0xff] {
+            assert!(
+                !is_iana_virtual_router_mac(MacAddr([0x00, 0x00, 0x5e, 0x00, fifth, 0x0a])),
+                "only the fifth octet 0x01 is the virtual-router block; 0x02 is IANA's IPv6 block and \
+                 0x53 is RFC 7042 documentation, which the product's own example inventory is full of"
+            );
+        }
+        assert!(
+            !is_iana_virtual_router_mac(MacAddr([0x00, 0x00, 0x5f, 0x00, 0x01, 0x0a])),
+            "the fourth-from-last octet is part of the prefix too"
+        );
+    }
+
+    /// AC7: the allowlist is CLOSED, and HSRP and HSRPv2 are out BY DECISION.
+    ///
+    /// 🔴 Validation added HSRP to a draft of the predicate — the widening `vrrp-virtual-mac.toml` forbids
+    /// in writing — and the whole suite, clippy and ten gates stayed GREEN. This is the one line that
+    /// measures the limit instead of stating it.
+    #[test]
+    fn hsrp_and_hsrpv2_are_out_by_decision_and_a_probe_says_so() {
+        assert!(
+            !is_iana_virtual_router_mac(MacAddr([0x00, 0x00, 0x0c, 0x07, 0xac, 0x0a])),
+            "HSRP's 00:00:0c:07:ac is a CISCO OUI, not IANA — out until a fixture commits it, with its \
+             own prove-to-red"
+        );
+        assert!(
+            !is_iana_virtual_router_mac(MacAddr([0x00, 0x00, 0x0c, 0x9f, 0xf0, 0x0a])),
+            "HSRPv2 likewise — and the corpus names BOTH, where this story's contexting quoted only one"
+        );
+    }
+
+    /// AC9: the BYTES decide, never the connector's reported flag.
+    ///
+    /// 🔴 Validation made a draft consult `Fact::Mac::locally_administered` and the suite stayed GREEN,
+    /// because the fixture's flag happens to agree. A connector reporting it wrongly would silently
+    /// disable the disqualification. ⚠️ Here the flag and the bytes CONTRADICT each other — `0x00` has the
+    /// U/L bit clear — and the bytes must still win.
+    #[test]
+    fn the_bytes_decide_even_when_a_connector_would_report_otherwise() {
+        let addr = virtual_mac();
+        assert!(
+            !addr.is_locally_administered(),
+            "the premise: an IANA virtual-router address has the U/L bit CLEAR, so a connector \
+             reporting 'locally administered' about it would be reporting the opposite of the bytes"
+        );
+        assert_eq!(
+            verdict_for_virtual_mac(&pair(addr, ordinary_mac(0x8c))).verdict,
+            Verdict::Disqualifying,
+            "the reading is a property of the bytes; no reported flag can turn it off"
+        );
+    }
+
+    /// AC8's other half: two virtual addresses are two virtual gateways, not one.
+    #[test]
+    fn two_virtual_router_addresses_are_still_not_a_grouping_anchor() {
+        let vrid_10 = MacAddr([0x00, 0x00, 0x5e, 0x00, 0x01, 0x0a]);
+        let vrid_20 = MacAddr([0x00, 0x00, 0x5e, 0x00, 0x01, 0x14]);
+
+        assert_eq!(
+            verdict_for_virtual_mac(&pair(vrid_10, vrid_20)).verdict,
+            Verdict::Disqualifying,
+            "two VIPs are two virtual gateways; the pair is no more an anchor than a VIP against its \
+             master"
+        );
+    }
+
+    /// Two ordinary addresses: the reading stays QUIET, which is most of its job.
+    #[test]
+    fn two_ordinary_addresses_are_left_alone() {
+        assert_eq!(
+            verdict_for_virtual_mac(&pair(ordinary_mac(0x8c), ordinary_mac(0x8d))).verdict,
+            Verdict::Neutral,
+            "a reading that spoke about every pair would be a rule, and a bad one"
+        );
+    }
+
+    /// AC6: the evidence is EMPTY under both verdicts, and that is the truthful value.
+    ///
+    /// [`RuleVerdict::evidence`] is *"the observations the rule READ to say it"*. This reading read a KEY.
+    /// Attaching ids it never looked at would be the invention D19 exists to prevent — and the cost, that
+    /// an operator sees the rule without the pair, is the caller's to close (story 6.12).
+    #[test]
+    fn the_reading_cites_no_observation_because_it_read_none() {
+        for (a, b) in [
+            (virtual_mac(), ordinary_mac(0x8c)),
+            (ordinary_mac(0x8c), ordinary_mac(0x8d)),
+        ] {
+            let verdict = verdict_for_virtual_mac(&pair(a, b));
+            assert!(
+                verdict.evidence.is_empty(),
+                "a reading of the key read no observation, so it cites none — {:?}",
+                verdict.verdict
+            );
+            assert_eq!(
+                verdict.rule.0, L2_VIRTUAL_MAC_PREFIX,
+                "and it names itself either way, so a reader can see WHICH reading was consulted"
+            );
+        }
     }
 
     // ---- D20's lock: the rule must STAY QUIET where it does not know ----

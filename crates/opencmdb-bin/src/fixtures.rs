@@ -929,8 +929,8 @@ mod tests {
     use opencmdb_core::identity::cascade::Verdict;
     use opencmdb_core::identity::l1::{L1Key, join};
     use opencmdb_core::identity::l2::{
-        L2_DIFFERENT_HOSTNAME, L2_HOSTNAME_AGREES, L2Side, verdict_for_hostname,
-        verdict_for_hostname_agreement,
+        L2_DIFFERENT_HOSTNAME, L2_HOSTNAME_AGREES, L2_VIRTUAL_MAC_PREFIX, L2Side,
+        verdict_for_hostname, verdict_for_hostname_agreement,
     };
     use opencmdb_core::observation::{
         ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, ObsId, Scope, Timestamp, VantageId,
@@ -5419,6 +5419,160 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         assert_eq!(
             seen, 1,
             "exactly one trap carries the collision temptation, and it is named so a corpus change              reds here instead of silently removing this test's subject"
+        );
+    }
+
+    // ---- `l2-virtual-mac-prefix`, against the committed corpus (story 6.11) ----
+
+    /// The double-literal pin, and 🔴 **its reason is DIFFERENT from story 6.7's and 6.9's.**
+    ///
+    /// Both earlier L2 stories carry a paragraph saying the trap gate cannot catch a misspelled rule id,
+    /// because an abstention names no rule. **That reasoning does not transfer.** `run_trap` compares
+    /// rules when both sides name one; 6.7's `Opposes` and 6.9's `Supports` both abstain, but **a
+    /// `Disqualifying` yields `Refused { rule }`, which DOES carry one** — so this is the first L2 trap in
+    /// the epic whose expected rule the gate's comparison could actually check.
+    ///
+    /// ⚠️ **The pin is still the only carrier today, for a completely different reason: there is no L2
+    /// runner to ask.** Saying which mechanism is at work is the point — *a paragraph inherited with its
+    /// old mechanism is this project's recurring defect.*
+    #[test]
+    fn the_l2_virtual_mac_prefix_id_matches_the_corpus_spelling() {
+        let mut found = 0usize;
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                if let Some(rule) = trap.expect.rule()
+                    && rule.0 == "l2-virtual-mac-prefix"
+                {
+                    found += 1;
+                }
+            }
+        });
+
+        assert_eq!(
+            found, 1,
+            "exactly one committed trap names this reading; a count that drifts in silence means the \
+             literal below has stopped being compared against anything"
+        );
+        assert_eq!(
+            L2_VIRTUAL_MAC_PREFIX, "l2-virtual-mac-prefix",
+            "the constant and the corpus's spelling are two independent literals, and this is the only \
+             place they meet"
+        );
+    }
+
+    /// AC1 end to end over the committed bytes: the VIP's pair is refused, and the refusal names itself.
+    ///
+    /// ⚠️ **The vector is L2-ONLY, and that is not tidiness.** `decide` names the lexicographically
+    /// smallest `Disqualifying`, and every `l1-*` id sorts before every `l2-*` id — so mixing L1's verdict
+    /// for the same pair in answers `NoMatch { l1-distinct-mac }` and this reading becomes invisible. That
+    /// is a **total** property of the naming convention meeting `min()`, not the per-family argument
+    /// `l2.rs`'s header states; the plumbing that guarantees an L2-only vector in production is 6.12's.
+    #[test]
+    fn the_virtual_mac_trap_is_refused_over_the_committed_bytes() {
+        use opencmdb_core::identity::blocking::L2CandidatePair;
+        use opencmdb_core::identity::cascade::{Conclusion, decide};
+        use opencmdb_core::identity::l1::CURRENT_RULESET_VERSION;
+        use opencmdb_core::identity::l2::verdict_for_virtual_mac;
+
+        let mut refused: Vec<String> = Vec::new();
+
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                let Some(rule) = trap.expect.rule() else {
+                    continue;
+                };
+                if rule.0 != L2_VIRTUAL_MAC_PREFIX {
+                    continue;
+                }
+                let stream = read_jsonl(&fixture_path(&trap.replay).unwrap())
+                    .unwrap_or_else(|e| panic!("reading {}: {e}", trap.replay));
+                let groups = join(&stream);
+                let [a, b] = trap.observations.as_slice() else {
+                    panic!("{}: this reading's trap names a pair", trap.id.0);
+                };
+                let key_of = |wanted: &ObsId| -> L1Key {
+                    *groups
+                        .iter()
+                        .find(|(_, members)| members.contains(wanted))
+                        .map(|(key, _)| key)
+                        .unwrap_or_else(|| panic!("{}: {wanted} lands on no interface", trap.id.0))
+                };
+                let candidate = L2CandidatePair::new(key_of(a), key_of(b)).unwrap_or_else(|| {
+                    panic!(
+                        "{}: the VIP and its master must be two DISTINCT interfaces for a pair to \
+                             exist at all",
+                        trap.id.0
+                    )
+                });
+
+                let decision = decide(
+                    vec![verdict_for_virtual_mac(&candidate)],
+                    CURRENT_RULESET_VERSION,
+                );
+                assert_eq!(
+                    decision.conclusion,
+                    Conclusion::NoMatch {
+                        rule: RuleId(L2_VIRTUAL_MAC_PREFIX.to_string())
+                    },
+                    "{}: the conclusion must REFUSE and NAME this reading — 'the trap scores a pass' is \
+                     satisfied by a reading that never fired, an abstention passing this column too",
+                    trap.id.0
+                );
+                refused.push(trap.id.0.clone());
+            }
+        });
+
+        assert_eq!(
+            refused,
+            vec!["vrrp-virtual-mac-must-not-merge-master".to_string()],
+            "exactly this trap is spoken to, and it is NAMED so a corrupted rule id — which makes the \
+             filter above iterate zero times — reds here as well as at the double-literal pin"
+        );
+    }
+
+    /// 🔴 **AC4's third pole, at the level where the corpus CANNOT see it.**
+    ///
+    /// `vrrp-virtual-mac-must-merge` is one virtual gateway re-seen across a failover, and it must MERGE.
+    /// The trap gate routes it to the **L1** runner by its `l1-` rule prefix, so an L2-level careless
+    /// reading never reaches it — validation measured that composing *refuse whenever the MAC is virtual*
+    /// with L1's `Decisive` for that pair refuses the re-sighting **with the trap gate GREEN**.
+    ///
+    /// 🔑 **What actually protects the pole is that the two observations land on ONE interface**, so they
+    /// form no `L2CandidatePair` at all and this reading is never consulted about them. That is a property
+    /// of the pair being of INTERFACES — and story 6.11's contexting had claimed the predicate
+    /// *distinguishes* the two cases, which it does not.
+    #[test]
+    fn the_failover_resighting_is_one_interface_so_the_reading_never_sees_it() {
+        use opencmdb_core::identity::blocking::L2CandidatePair;
+
+        let stream = read_jsonl(&fixture_path("scenario/replay/vrrp-virtual-mac.jsonl").unwrap())
+            .expect("the vrrp stream must read");
+        let groups = join(&stream);
+        let find = |n: &str| -> L1Key {
+            let wanted = ObsId::from_uuid(uuid::Uuid::parse_str(n).expect("a trap id is a uuid"));
+            *groups
+                .iter()
+                .find(|(_, members)| members.contains(&wanted))
+                .map(|(key, _)| key)
+                .expect("every observation of this stream lands on an interface")
+        };
+
+        let first = find("aeaeaeae-0000-4000-8000-000000000001");
+        let after_failover = find("aeaeaeae-0000-4000-8000-000000000004");
+
+        assert_eq!(
+            first, after_failover,
+            "the VIP before and after the failover is ONE interface — L1 is deterministic on \
+             (l2_domain, mac) and the MAC is byte-identical"
+        );
+        assert!(
+            L2CandidatePair::new(first, after_failover).is_none(),
+            "so no L2 pair exists for them, and this reading can never be asked about the re-sighting \
+             — which is what protects the must-merge pole, and NOT any two-sidedness of the predicate"
         );
     }
 
