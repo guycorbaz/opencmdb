@@ -143,13 +143,32 @@ impl<'a> L2Side<'a> {
 /// The guard is therefore **a property, never a list**: a name must contain at least one ASCII
 /// alphanumeric character. That is principled rather than defensive — RFC 1035 requires a DNS label
 /// to start with a letter — and it closes the invisible-character class and the punctuation class
-/// together, where an enumeration of invisible code points could only ever close the ones someone
-/// thought of. *An enumeration cannot claim the completeness of a property* (story 5.12's sentence,
-/// applied again).
+/// together **for a name made ENTIRELY of noise**, where an enumeration of invisible code points could
+/// only ever close the ones someone thought of. *An enumeration cannot claim the completeness of a
+/// property* (story 5.12's sentence, applied again).
 ///
-/// ⚠️ **Its limit, stated**: a name of only non-ASCII letters — a purely Cyrillic or CJK hostname —
+/// 🔴 **AND THE WHOLE-STRING QUALIFICATION IS LOAD-BEARING — measured, this claim was too broad.** A
+/// zero-width space ATTACHED TO A REAL NAME survives: `trim` does not remove U+200B and the property
+/// only asks for *at least one* alphanumeric, so `"\u{200B}nas-01"` and `"nas-01"` are two names.
+/// [`verdict_for_hostname_agreement`] answers `Neutral` there, which costs a merge and errs safely —
+/// but [`verdict_for_hostname`] answers **`Opposes`**, which is D20's named bug in the direction story
+/// 6.7's review closed **for the whole-string case only**. ⚠️ Not live through the shipped connector
+/// (`reverse_dns::sanitise` refuses U+200B) and live for any other producer and for this function as a
+/// domain primitive. Found by story 6.9's edge-case review layer; registered with story 6.12, which is
+/// the first caller that can reach it.
+///
+/// ⚠️ **A second limit, stated**: a name of only non-ASCII letters — a purely Cyrillic or CJK hostname —
 /// carries no ASCII alphanumeric and is therefore read as absent. That is a REFUSAL TO SPEAK, never
-/// a false `Opposes`, so it errs on D20's safe side; and no committed trap exercises it.
+/// a false `Opposes`, so it errs on D20's safe side; and no committed trap exercises it. (Re-measured
+/// by the same layer: `"Нас"` against `"Нас"` is `Neutral` under BOTH rules — the stated limit
+/// working.)
+///
+/// ⚠️ **A third, and the alphanumeric property cannot reach it at all**: a name that is syntactically
+/// perfect and identifies nobody. Measured — `localhost`, `unknown`, `android` and `1` each agree with
+/// themselves and yield **`Supports`**, and `reverse_dns::sanitise` carries no denylist of
+/// non-identifying names. Latent today because a lone `Supports` cannot merge; **the decision that
+/// changes that is the one Guy deferred to Epic 6's retrospective**, so it is registered rather than
+/// left for that retrospective to discover.
 ///
 /// # ⚠️ [`crate::observation::HostnameSource`] is deliberately IGNORED
 ///

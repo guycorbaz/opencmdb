@@ -204,13 +204,23 @@ registered, owner 6.12.
   locally-administered MACs differing — so **6.7's collapse does not recur here**, and the new test
   asserts it rather than assuming it. ⚠️ *The collapsed set is `["cloned-mac-must-not-merge"]` only
   WITHIN the `l2-different-hostname` guard's population, which is where that assertion lives; unscoped
-  it is false — **nine of the 25 pairs collapse**, the eight `l1-exact-mac` must-merge traps and
+  it is false — **nine of the 25 collapse**, leaving **16** the corpus can judge, the eight `l1-exact-mac` must-merge traps and
   `cloned-mac`, which independently reproduces story 6.6's own measurement.* Said in one line because 6.7 was bitten
   by the opposite.
 - 🔴 **THE D20 MIRROR IS LOUD IN THE CODE AND INVISIBLE TO THE CORPUS.** `BTreeSet` compares **equal**
-  when both sides are empty, so the naive `names_a == names_b` **SUPPORTS ON ABSENCE**. Measured over
-  all 26 trap-named pairs: **8 flip to `Supports` on total absence**, six of them `must-not-merge`
-  traps. ⚠️ **And not one of the eight is caught by the corpus** — ⚠️ *but the reason first given covers only
+  when both sides are empty, so the naive `names_a == names_b` **SUPPORTS ON ABSENCE**. Measured over the
+  pairs the corpus can actually judge: **8 of 16 flip to `Supports` on total absence**, six of them
+  `must-not-merge` traps.
+
+  🔴 *The DENOMINATOR took three tries and only the third is a measurement.* It read *"all 26
+  trap-named pairs"*; the blind layer corrected it to **25** from a context line of this story's own
+  diff (26 traps, one naming a single observation); and the edge layer then **measured** that `8`
+  reproduces under **neither** — the population that can be judged is **16**, because **nine of the 25
+  collapse onto one interface** and have no pair, and over 25 the count is **12**. 🔑 *The second
+  correction changed the denominator without re-deriving the numerator — an arithmetic repair where a
+  measurement was owed — and it was committed inside the commit whose subject is "the blind layer's ten
+  findings, repaired".* The numerator and its six-of-eight split were independently reproduced and are
+  right. ⚠️ **And not one of the eight is caught by the corpus** — ⚠️ *but the reason first given covers only
   SIX of them.* `(must-not-merge, Abstained)` being `score`'s **pass** cell accounts for the six
   `must-not-merge` traps; `hostname-absence-must-abstain` escapes through a different cell
   (`(MustAbstain, Abstained) => Pass`, and `score` ignores the cause) and `multi-nic-must-merge` is a
@@ -377,11 +387,15 @@ Driven by `cargo xtask mutate --baseline` against a live **`mariadb:10.11.11`** 
 first said "dropped and recreated first".** Dropping ONCE and running the rows in sequence is not
 enough: from row 2 on, story 6.6's registered non-determinism makes the driver refuse with *"the
 baseline is not clean"* (it refused six of eight that way, and one row then reported **15** red where 2
-are real). Dropping per row is not enough either: a **virgin** database reds **84** tests on the
-unmutated tree — story 6.5's registered `migrate!` race. **What works, and what the reported rows were
-measured under: drop, recreate, run ONE serial store-backed test to migrate, then `--baseline` per
-row.** *The header is what the next story copies, so it owes the whole recipe rather than its first
-step.*
+are real). ⚠️ *A second cause was published here and REFUTED within the hour*: this said a **virgin** database
+reds **84** tests on the unmutated tree, citing story 6.5's registered `migrate!` race. The edge-case
+layer then measured **0 failures on the first run after a DROP, reproduced twice — on a database of its
+own** — and identified the real cause of both its own dirty baselines and the auditor's: **three
+isolated review layers were handed ONE database**, so another layer's `DROP DATABASE` is
+indistinguishable from your own mutation. 🔑 *A cause needs a check, and the check here is a private
+store.* **What works: one database PER measuring process, dropped and recreated by its owner, then
+`--baseline` per row.** *The header is what the next story copies, so it owes the recipe that works
+rather than the one that looked like it.*
 
 | id | mutation | predicted | measured | carriers |
 |---|---|---|---|---|
@@ -390,11 +404,12 @@ step.*
 | **M3** | empty evidence on `Supports` | red 2 | ✅ **red 2** | `an_agreeing_verdict_carries…`, the corpus walk |
 | **M4** | corrupt `L2_HOSTNAME_AGREES` | red 2 | ✅ **red 2** | the double-literal pin **and** the corpus walk — whose red comes from its TERMINAL naming assertion, the walk itself iterating zero times |
 | **M5** | `Supports` → `Decisive` | red 3 | 🔴 **red 4 — CONTRADICTS** | the three predicted **plus `case_and_whitespace_do_not_stop_two_names_agreeing`** |
-| **M6** | drop `evidence.sort()` in the shared `evidence_of` | red 2 | ✅ **red 2** | 🔑 6.9's order test **AND 6.7's** `the_evidence_does_not_depend_on_the_argument_order`, from ONE site |
+| **M6** | drop `evidence.sort()` in the shared `evidence_of` | red 2 | ✅ **red 2** | 🔑 6.9's order test **AND 6.7's** `the_evidence_does_not_depend_on_the_argument_order`, from ONE site — ⚠️ *and clippy, which this row first omitted: the `mut` becomes unnecessary* |
 | **M7** | `==` → `names_a.is_subset(&names_b)` | red 1 | ✅ **red 1** | `a_superset_of_names_does_not_agree_with_its_subset`, **on its second assertion** — the one added before the pass |
 | **M8** | the `Supports` arm names `L2_DIFFERENT_HOSTNAME` | red 2 | ✅ **red 2** | both rule-naming assertions; AC4's real carrier proven |
 | **M9** | drop the ASCII-alphanumeric property from `hostnames_of` | red 3 | 🔴 **red 4 — CONTRADICTS** | `two_invisible…` (**which is the repair working**), `two_identical_punctuation…`, **and 6.7's `an_empty_hostname_is_an_absence_not_a_value` and `a_name_carrying_no_alphanumeric_is_not_a_name`** |
 | **M10** | `supports = false` — the rule never argues | red 6 | ✅ **red 6** | every test that reads the verdict, **AC3's new corpus test among them**, so the criterion the audit found uncarried is proven red before it passes |
+| **M11** | `len()` equal **and** `!is_disjoint` — "compare sizes first" | red 1 | ✅ **red 1** | `two_name_sets_of_equal_size_that_merely_cross_do_not_agree`, the guard written for it. 🔴 **This mutation left 1 060 tests, clippy and ten gates GREEN before that test existed** |
 
 ✅ **M10's prediction was right on its first attempt because it was derived from WHAT READS THE MUTATED
 VALUE** rather than from the criteria — M5's and M9's lesson, applied at its next use and confirmed.
@@ -511,6 +526,48 @@ and earns the same check — and a story that has spent its day on figures nobod
 where a borrowed figure slips in.* Two of its three one-line corrections held (`l1.rs:488`,
 `cascade.rs:13-14`); this one did not.
 
+## 4d. What the edge-case layer found by BUILDING, and the two things it refuted about my own record
+
+🔴 **GUY'S EQUALITY ARBITRATION WAS STILL CARRIED BY NOTHING, and the cause was the SHAPE of AC7's
+population rather than its absence.** It built the spelling a developer reaches for when they compare
+sizes first — `names_a.len() == names_b.len() && !names_a.is_disjoint(&names_b)` — and measured **1 060
+tests, clippy `--all-targets` and all ten gates GREEN**, while it answers `Supports` on
+`{doc-a, doc-b}` against `{doc-a, doc-c}`: *a crossing partial overlap of equal size*, which is exactly
+the semantics Guy refused. 🔑 **Both AC7 divergence guards are 2-vs-1 in cardinality**, so cardinality
+alone separates the readings there and any `len()`-gated reading passes them. *The both-orientations
+repair was the right instinct applied to the WRONG AXIS: it hardened DIRECTION and left CARDINALITY
+open.* Closed by **M11** and its guard. ✅ It also verified the mirror `is_superset` reds 3, so **no
+orientation escapes** — the axis really was the only hole.
+
+🔴 **AND THE CORPUS DENOMINATOR REPRODUCED UNDER NO READING — the second correction was arithmetic where
+a measurement was owed.** It built a probe over every trap: **26 traps, 25 naming two observations, 16
+real L2 pairs, 9 collapsing**; the flip count is **8 of 16**, and over 25 it is **12**. So *"8 of 25"* —
+which I wrote *while repairing the blind layer's off-by-one* — was wrong in the same act, because I
+changed the denominator and left the numerator standing. 🔑 *An arithmetic correction is not a
+re-measurement, and a repair commit is exactly where that substitution passes unnoticed.* ✅ The
+numerator and its six-of-eight split were independently reproduced and are right.
+
+⚠️ **Two limits it measured that the docs now state rather than imply**: the invisible-character class is
+closed only for a name made ENTIRELY of noise (a zero-width space attached to a real name still gives a
+false **`Opposes`** on story 6.7's rule); and a name can be syntactically perfect and identify nobody
+(`localhost`, `unknown`, `android`, `1` each agree with themselves and `Supports`). Both registered,
+both latent, and the second is made LIVE by precisely the decision Guy deferred.
+
+🔴 **IT REFUTED A CAUSE I HAD PUBLISHED AN HOUR EARLIER.** The §4 header said a virgin store reds 84 on
+the unmutated tree, citing story 6.5's `migrate!` race — the auditor's measurement, which I took on
+trust. The edge layer measured **0 failures on the first run after a DROP, twice, on a database of its
+own**, and found the real cause: **three isolated layers were handed ONE database**, so the auditor's
+dirty baselines and its own were cross-layer contention. 🔑 *A shared store makes another layer's
+`DROP DATABASE` indistinguishable from your own mutation*, and **isolation by worktree was the rule
+while isolation by STORE was not** — registered, because it is the same requirement one layer down.
+
+⚠️ **It also caught the branch moving under it** (two repair commits landed mid-measurement), said which
+tree produced each row, and re-measured its two headline findings on the new tip — and declined to claim
+two findings the repairs had already closed, confirming the closures by mutation instead. ⚠️ And it
+recorded an instrument defect of its own: a reset script pointing at the wrong directory printed
+`DROP_CREATE_EXIT=1`, and the nine failures that followed *would have been reported as a virgin-store
+measurement over a store that had never been dropped.*
+
 ## 5. Instrument defects of my own, each caught by disbelieving a result
 
 🔴 **I READ ANOTHER STORY'S MUTATION RESULTS AS MINE, and only a semantic tell caught it.** The
@@ -565,10 +622,11 @@ registered non-determinism row.
 
 ## 6. The figures, and what nothing owes
 
-⚠️ **1 046 → 1 061 tests**, +15 — twelve synthetic in `l2.rs` and **three** corpus-driven in
-`fixtures.rs`, the third being AC3's, which the acceptance audit found missing. ⚠️ *This read 1 060 and
-+14 until that test was written, which is the delta moving under a repair rather than a figure written
-in flight.*
+⚠️ **1 046 → 1 062 tests**, +16 — **thirteen** synthetic in `l2.rs` and **three** corpus-driven in
+`fixtures.rs`. ⚠️ *It read 1 060 / +14 before the acceptance audit found AC3 carried by nothing, and
+1 061 / +15 before the edge layer measured that Guy's equality arbitration was still carried by nothing.
+Two of the three review layers each cost this story one test, which is the delta moving under repairs
+rather than a figure written in flight.*
 `l2.rs` goes **255 → 404** code lines of the 2000-line ceiling, so no split is owed.
 
 ⚠️ **Neither manual owes a sentence.** This story ships no route, no screen and no production caller,
@@ -591,13 +649,14 @@ the block being loosened.
 | 2026-09-24 | **blind review layer**: ten findings, nine prose and one guard unable to fail; repaired, M9 added and it contradicted too |
 | 2026-09-24 | **acceptance-audit layer**: 8/8 rows reproduced, and **AC3 found delivering nothing** — its test written, M10 proves it red |
 | 2026-09-24 | its citation corrections applied — and **one of them reverted**, `reverse_dns.rs:137` being right as first written |
+| 2026-09-24 | **edge-case layer**: Guy's equality arbitration still uncarried (M11 closes it), the corpus denominator reproducing under no reading, and a cause of mine refuted an hour after publishing it |
 
 ⚠️ *This section did not exist for the story's first six commits, which is the SECOND of the three blind
 spots Epic 14's retrospective named for `cargo xtask record` and the second story running to miss it.*
 
 ## Record
 
-- live-count: bin=748 core=203 xtask=110
+- live-count: bin=748 core=204 xtask=110
 - base: 97e95dd07b47dde3524b8d669e8aa11f4fddc039
 - registered: A `Supports` rule cannot pass a `must-merge` trap
 - registered: The first producer of `Verdict::Supports` moves from story 6.8 to 6.9
@@ -606,6 +665,9 @@ spots Epic 14's retrospective named for `cargo xtask record` and the second stor
 - registered: A watcher must be proven to emit at least once before its silence is allowed to mean anything
 - registered: `architecture.md`'s line citations have drifted by a UNIFORM +30 across the identity engine
 - registered: Story 6.15's own criterion promises what story 6.9 measured to be impossible
+- registered: A hostname can be syntactically perfect and identify nobody
+- registered: An invisible character INSIDE a real name still produces a false `Opposes`
+- registered: A story's review layers must each get a DATABASE OF THEIR OWN
 - file: _bmad-output/implementation-artifacts/6-9-l2-hostname-agrees.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: _bmad-output/implementation-artifacts/sprint-status.yaml

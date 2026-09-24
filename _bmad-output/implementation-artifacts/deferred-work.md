@@ -6354,3 +6354,37 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   RED and is closed by Epic 6"***, which this measurement bears on directly; claim and bearing sit ~90
   lines apart in one file with nothing tying them. **Owner: Epic 6's RETROSPECTIVE**, together with the
   must-merge row, and it must look at `epics.md:2034`, story 6.15 and J4 in the same act.
+- ⚠️ **A hostname can be syntactically perfect and identify nobody, and no property in `hostnames_of` can
+  reach that.** Measured by story 6.9's edge-case layer: `localhost`, `unknown`, `android` and `1` each
+  agree with themselves, so `verdict_for_hostname_agreement` answers **`Supports`** — and
+  `reverse_dns::sanitise` refuses an empty name, an over-long one, a name with no ASCII alphanumeric, an
+  address and an `.in-addr.arpa` answer, **and carries no denylist of non-identifying names** (`grep -i
+  localhost` over that file returns nothing). `localhost` is what a misconfigured resolver hands back
+  for many addresses; `android` is what a phone announces by DHCP. ⚠️ **Sized honestly: LATENT, not
+  live** — a lone `Supports` cannot merge, which is story 6.9's own headline. 🔑 **But the decision that
+  changes that is exactly the one Guy deferred** (*what makes a merge at L2*, Epic 6's retrospective),
+  so **the deferred decision is what makes this channel live**, and the retrospective should meet it
+  written down rather than discover it. **Owner: Epic 6's retrospective**, with the must-merge row.
+- 🔴 **An invisible character INSIDE a real name still produces a false `Opposes` on story 6.7's rule.**
+  `hostnames_of`'s doc claimed its ASCII-alphanumeric property *"closes the invisible-character class and
+  the punctuation class together"*; measured, it closes the **whole-string** case only. `trim` does not
+  remove U+200B and the property asks for *at least one* alphanumeric, so `"\u{200B}nas-01"` and
+  `"nas-01"` are two names: `verdict_for_hostname_agreement` answers `Neutral` (costing a merge, erring
+  safely) and **`verdict_for_hostname` answers `Opposes`** — D20's named bug, in the direction story
+  6.7's code review closed for the whole-string case. ⚠️ Not live through the shipped connector
+  (`reverse_dns::sanitise` refuses U+200B) and live for `fixture_connector`, for any future connector,
+  and for `hostnames_of` as a domain primitive. The doc is narrowed to *"entirely of noise"* rather than
+  left claiming the class. **Owner: story 6.12**, the first caller that can reach it — or the first story
+  that gives the product a second hostname source.
+- ⚠️ **A story's review layers must each get a DATABASE OF THEIR OWN, and story 6.9 measured the cost of
+  not doing that.** Its three isolated layers were pointed at one container and one database
+  (`13419/opencmdb`) and all told to drop and recreate it, while the implementer measured against it
+  too — so the mutation driver refused baselines at **21, 107, 132 and 161** failures across two layers,
+  one row reported **15** red where 2 are real, and a reading of *"a virgin store races its own
+  migrations"* (story 6.5's registered race) was published as the cause. 🔴 **Refuted on a private
+  database: 0 failures on the first run after a DROP, reproduced twice.** 🔑 *A shared store makes
+  another layer's `DROP DATABASE` indistinguishable from your own mutation* — and the driver's refusal is
+  what stopped it becoming a finding, which is what story 6.4b built `--baseline` for. **The remedy is
+  one database per measuring process, named after the layer.** Isolation by worktree was already the
+  rule; isolation by STORE was not, and it is the same requirement one layer down. **Owner: the next
+  story that runs a three-layer review** — which is every story.
