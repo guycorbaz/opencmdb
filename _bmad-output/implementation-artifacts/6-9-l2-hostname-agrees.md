@@ -383,6 +383,19 @@ from *store tests silently returning*, so it declines rather than guess. The pas
 `mariadb:10.11` on port **13419** with the database dropped and recreated first, per story 6.6's
 registered non-determinism row.
 
+## 6. The figures, and what nothing owes
+
+⚠️ **1 046 → 1 060 tests**, +14 — twelve synthetic in `l2.rs`, two corpus-driven in `fixtures.rs`.
+`l2.rs` goes **255 → 404** code lines of the 2000-line ceiling, so no split is owed.
+
+⚠️ **Neither manual owes a sentence.** This story ships no route, no screen and no production caller,
+so nothing an operator reads changes; the administrator manual's grouping warning is about the **L1
+key** and stays true exactly as written.
+
+⚠️ **The block below carries `key: value` lines and nothing else** — `cargo xtask record` refused a
+prose paragraph inside it, which is the checker doing its job, and the prose moved here rather than
+the block being loosened.
+
 ## Record
 
 - live-count: bin=747 core=203 xtask=110
@@ -398,8 +411,3 @@ registered non-determinism row.
 - file: crates/opencmdb-core/src/identity/cascade.rs
 - file: crates/opencmdb-bin/src/fixtures.rs
 - file: crates/opencmdb-bin/src/scan_pass.rs
-
-⚠️ **1 046 → 1 060 tests**, +14 (twelve synthetic in `l2.rs`, two corpus-driven in `fixtures.rs`).
-`l2.rs` goes **255 → 404** code lines of the 2000-line ceiling. ⚠️ **Neither manual owes a sentence** —
-this story ships no route, no screen and no production caller, so nothing an operator reads changes;
-the admin manual's grouping warning is about the L1 key and stays true as written.
