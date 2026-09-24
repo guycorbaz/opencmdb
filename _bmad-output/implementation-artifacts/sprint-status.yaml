@@ -5065,8 +5065,10 @@ development_status:
   6-10-l2-different-switch: backlog
   #   ⏸️ WAITS with 6.8 and for the same measured reason: no connector emits a switch port.
   # 🔴 a STRUCTURAL FACT read at ingestion. Guy: *there is no rule* -- and the decision still NAMES `l2-virtual-mac-prefix`, so the corpus is not bumped
-  6-11-virtual-mac-anchor-is-not-a-rule: in-progress
-  #   🔑 NEXT, by Guy's reorder of 2026-09-23 and story 6.9's close on 2026-09-24.
+  6-11-virtual-mac-anchor-is-not-a-rule: done
+  #   ✅ DONE 2026-09-24: PR #208 squash-merged as `60d07f5`, CI green on head `c788ad9` (run
+  #       `36040392205`). Guy's arbitration: the reading takes an `L2CandidatePair`.
+  #   (Queued as NEXT by Guy's reorder of 2026-09-23 and story 6.9's close on 2026-09-24.)
   #   ⚠️ It inherits two things by NAME rather than by implication:
   #   (a) story 6.7's measurement that a cloned MAC does not present as two interfaces disagreeing
   #       but as ONE INTERFACE CONTRADICTING ITSELF — "the signal is not lost; the SHAPE is" — which
@@ -5080,7 +5082,19 @@ development_status:
   #   ⚠️ And story 6.9 leaves it a measured warning: three L2 `must-merge` traps cannot pass under
   #       the present algebra, so no L2 story should promise the trap gate will close.
   # 5.9b's precedent; ⚠️ two races registered at Epic 5 lose their shield here
-  6-12-resolver-writes-device-groupings: backlog
+  6-12-resolver-writes-device-groupings: ready-for-dev
+  #   🔑 NEXT, by Guy's reorder of 2026-09-23 and story 6.11's close on 2026-09-24 — the PIVOT:
+  #   the first story of this epic with a production caller, where `obelix` stops being two rows.
+  #   ⚠️ It inherits by NAME rather than by implication:
+  #   (a) story 6.11's registered row: no L2 rule can ever be NAMED in the presence of any L1
+  #       `Disqualifying` (`min()` over ids, and every `l1-*` sorts before every `l2-*`), so 6.12
+  #       is the caller that must guarantee an L2-only vector — in a TYPE rather than in prose;
+  #   (b) story 6.11's reading `verdict_for_virtual_mac(&L2CandidatePair)` gets its first
+  #       production caller here; until now every call site is under `#[cfg(test)]`;
+  #   (c) the two races registered at Epic 5 lose their shield here, and story 5.14b's tripwire
+  #       REDS by design (see the comments on either side of this key);
+  #   (d) story 6.9's warning stands: three L2 `must-merge` traps cannot pass under the present
+  #       algebra, so 6.12 must not promise the trap gate will close.
   # `link_candidate`'s first production writer; ⚠️ story 5.14b's tripwire REDS here by design
   6-13-first-ambiguous-with-its-candidates: backlog
   # FR16 -- `epics.md`'s story-5.14 clause, re-owned here at 5.14b's contexting
