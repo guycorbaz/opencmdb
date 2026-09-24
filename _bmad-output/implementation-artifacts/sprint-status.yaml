@@ -5065,7 +5065,7 @@ development_status:
   6-10-l2-different-switch: backlog
   #   ⏸️ WAITS with 6.8 and for the same measured reason: no connector emits a switch port.
   # 🔴 a STRUCTURAL FACT read at ingestion. Guy: *there is no rule* -- and the decision still NAMES `l2-virtual-mac-prefix`, so the corpus is not bumped
-  6-11-virtual-mac-anchor-is-not-a-rule: ready-for-dev
+  6-11-virtual-mac-anchor-is-not-a-rule: in-progress
   #   🔑 NEXT, by Guy's reorder of 2026-09-23 and story 6.9's close on 2026-09-24.
   #   ⚠️ It inherits two things by NAME rather than by implication:
   #   (a) story 6.7's measurement that a cloned MAC does not present as two interfaces disagreeing
