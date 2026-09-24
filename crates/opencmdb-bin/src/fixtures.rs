@@ -928,7 +928,10 @@ mod tests {
     };
     use opencmdb_core::identity::cascade::Verdict;
     use opencmdb_core::identity::l1::{L1Key, join};
-    use opencmdb_core::identity::l2::{L2_DIFFERENT_HOSTNAME, L2Side, verdict_for_hostname};
+    use opencmdb_core::identity::l2::{
+        L2_DIFFERENT_HOSTNAME, L2_HOSTNAME_AGREES, L2Side, verdict_for_hostname,
+        verdict_for_hostname_agreement,
+    };
     use opencmdb_core::observation::{
         ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, ObsId, Scope, Timestamp, VantageId,
     };
@@ -5181,6 +5184,241 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             "the third is excluded because its two observations collapse onto one interface, and \
              it is named here so a SECOND trap falling into this case reds a test instead of \
              vanishing — the whole point of naming rather than counting"
+        );
+    }
+
+    // ---- `l2-hostname-agrees`, against the committed corpus (story 6.9) ----
+
+    /// AC4's double-literal pin, on story 6.7's precedent and with its reason RE-MEASURED.
+    ///
+    /// 🔴 **`run_trap` cannot catch a misspelled id here either, and the mechanism is a DIFFERENT row
+    /// of D13's table.** Story 6.7's rule `Opposes`, and a lone `Opposes` abstains on
+    /// `AbsenceOfProof`; this rule `Supports`, and a lone `Supports` abstains on `Ambiguous` — weak
+    /// evidence. Both abstentions carry **no rule**, so the gate's `(Some, Some)` comparison never
+    /// fires; the two get there by different arms, which is why this reason is measured rather than
+    /// inherited. `l2.rs`'s `a_supports_only_verdict_abstains_as_ambiguous_and_names_no_rule` is the
+    /// executable half.
+    ///
+    /// ⚠️ **Two sites red when the constant is corrupted, by two different mechanisms.** The string
+    /// `"l2-hostname-agrees"` also sits at four hand-authored test sites keyed on the corpus TOML
+    /// rather than on the constant (`cascade.rs`, `l1_runner.rs`, `trap_gate.rs`, and this file's
+    /// `expected()`) — measured: **not one of the four reds**, because none of them reads it. What reds
+    /// is THIS test, which compares the two literals, and the walk below, which filters on the CONSTANT
+    /// and therefore iterates **zero** times, so its red comes from its terminal naming assertion.
+    ///
+    /// 🔴 _This read "the pin is one constant against five literals" and named `fixtures.rs` among the
+    /// four that do not red — putting this file on BOTH sides of one enumeration — while the story's own
+    /// addition made the occurrence count six. Found by the blind review layer from the diff alone._
+    #[test]
+    fn the_l2_hostname_agrees_id_matches_the_corpus_spelling() {
+        let mut found = 0usize;
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                if let Some(rule) = trap.expect.rule()
+                    && rule.0 == "l2-hostname-agrees"
+                {
+                    found += 1;
+                }
+            }
+        });
+
+        assert_eq!(
+            found, 1,
+            "exactly one committed trap names this rule; a count that drifts in silence means the \
+             literal below has stopped being compared against anything"
+        );
+        assert_eq!(
+            L2_HOSTNAME_AGREES, "l2-hostname-agrees",
+            "the constant and the corpus's spelling are two independent literals, and this is the \
+             only place they meet"
+        );
+    }
+
+    /// The one trap this rule speaks to, driven end to end over the committed bytes.
+    ///
+    /// 🔴 **It asserts the rule's VERDICT and NOT that the trap is answered**, because a lone
+    /// `Supports` cannot make a merge: `decide` reaches `Match` only through the arm that needs a
+    /// `Decisive`, so this trap — and story 6.8's two, which expect a merge from a `Supports` rule
+    /// just as this one does — scores a **fail** under the present algebra. Guy's decision of
+    /// 2026-09-24: measure it, register the divergence from `epics.md:1922`, and leave *what makes a
+    /// merge at L2* to Epic 6's retrospective, which may edit the epic where a story may not.
+    ///
+    /// ⚠️ **The terminal naming assertion is load-bearing and is not decoration.** The walk filters on
+    /// the rule id, so under a corrupted constant it iterates ZERO times and asserts nothing; naming
+    /// the trap is what keeps the double-literal pin above from being the sole carrier — measured in
+    /// both directions.
+    ///
+    /// ✅ **This trap's pair does NOT collapse**, unlike the third of story 6.7's: the two
+    /// locally-administered MACs differ, so `join` gives two distinct interfaces and a pair exists.
+    /// Said here because the opposite bit the sibling rule.
+    #[test]
+    fn the_agreeing_hostname_trap_is_supported_over_the_committed_bytes() {
+        let mut supported: Vec<String> = Vec::new();
+
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                let Some(rule) = trap.expect.rule() else {
+                    continue;
+                };
+                if rule.0 != L2_HOSTNAME_AGREES {
+                    continue;
+                }
+                let stream = read_jsonl(&fixture_path(&trap.replay).unwrap())
+                    .unwrap_or_else(|e| panic!("reading {}: {e}", trap.replay));
+                let groups = join(&stream);
+                let [a, b] = trap.observations.as_slice() else {
+                    panic!("{}: this rule's trap names a pair", trap.id.0);
+                };
+                let key_of = |wanted: &ObsId| -> L1Key {
+                    *groups
+                        .iter()
+                        .find(|(_, members)| members.contains(wanted))
+                        .map(|(key, _)| key)
+                        .unwrap_or_else(|| panic!("{}: {wanted} lands on no interface", trap.id.0))
+                };
+                let (ka, kb) = (key_of(a), key_of(b));
+                assert_ne!(
+                    ka, kb,
+                    "{}: the two observations must land on DIFFERENT interfaces for an L2 pair to \
+                     exist at all — story 6.7's third trap collapses here and this one must not",
+                    trap.id.0
+                );
+                let side_of = |key: L1Key| -> L2Side<'_> {
+                    L2Side::new(
+                        stream
+                            .iter()
+                            .filter(|o| groups[&key].contains(&o.obs_id))
+                            .collect(),
+                    )
+                };
+                let verdict = verdict_for_hostname_agreement(&side_of(ka), &side_of(kb));
+                assert_eq!(
+                    verdict.verdict,
+                    Verdict::Supports,
+                    "{}: the two interfaces report one hostname, so this rule must argue FOR \
+                     grouping them",
+                    trap.id.0
+                );
+                assert_eq!(
+                    verdict.rule.0, L2_HOSTNAME_AGREES,
+                    "{}: a verdict that argues names the rule that argued",
+                    trap.id.0
+                );
+                assert!(
+                    !verdict.evidence.is_empty(),
+                    "{}: a verdict that ARGUES leaves its observations behind (D19)",
+                    trap.id.0
+                );
+                supported.push(trap.id.0.clone());
+            }
+        });
+
+        assert_eq!(
+            supported,
+            vec!["shared-hardware-vm-must-merge".to_string()],
+            "exactly this trap is spoken to, and it is NAMED so a corrupted rule id — which makes \
+             the filter above iterate zero times — reds here as well as at the double-literal pin"
+        );
+    }
+
+    /// 🔴 **AC3: the corpus's OWN TEMPTATION — this rule fires on the family it must not win.**
+    ///
+    /// `hostname-collision-must-not-merge` is two printers sharing the factory default `doc-printer`
+    /// with distinct MACs. This rule reads a hostname and nothing else, so **it argues FOR the merge**
+    /// — and it is right to, because agreeing names are what it is about. What refuses the merge is
+    /// L1: the trap's own expectation names `l1-distinct-mac`, whose `Disqualifying` short-circuits
+    /// `decide`'s table.
+    ///
+    /// 🔑 *The rule is honest about what it sees, and the TABLE refuses the false merge — not the rule
+    /// declining to speak.* That is the whole reason `hostname-collision`'s header can say *"no
+    /// expectation names the tempting rule"* while the tempting rule fires: a trap's `rule` field names
+    /// the rule that DECIDES, never every rule that speaks.
+    ///
+    /// # ⚠️ What this test deliberately does NOT do
+    ///
+    /// It does not build a verdict vector mixing L1's verdict with this one. `l2.rs`'s module doc
+    /// forbids exactly that (*"combining L1's verdict for the same pair with an L2 rule's … erases this
+    /// level"*) and `deferred-work.md` registers the invariant with **story 6.12** as owner. So the
+    /// assertions here are: this rule SUPPORTS, and the trap's expectation names an **L1** rule. The
+    /// composition is 6.12's to build and 6.12's to guard.
+    ///
+    /// ⚠️ _This test did not exist when the story first claimed AC3 met: the measurement was taken by a
+    /// validation layer and never became a committed guard, and the acceptance-audit layer found the
+    /// criterion delivering nothing — its second clause satisfied **vacuously**, a prohibition met by
+    /// the absence of the test it constrains._
+    #[test]
+    fn the_rule_fires_on_the_collision_family_and_l1_is_what_refuses_it() {
+        let mut seen = 0usize;
+
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                if trap.id.0 != "hostname-collision-must-not-merge" {
+                    continue;
+                }
+                seen += 1;
+
+                let expected = trap
+                    .expect
+                    .rule()
+                    .expect("this trap names the rule that decides");
+                assert!(
+                    expected.0.starts_with("l1-"),
+                    "{}: the refusal is L1's — if this becomes an l2- rule the whole point of this                      test has changed and it must be rewritten, not renumbered",
+                    trap.id.0
+                );
+
+                let stream = read_jsonl(&fixture_path(&trap.replay).unwrap())
+                    .unwrap_or_else(|e| panic!("reading {}: {e}", trap.replay));
+                let groups = join(&stream);
+                let [a, b] = trap.observations.as_slice() else {
+                    panic!("{}: this trap names a pair", trap.id.0);
+                };
+                let key_of = |wanted: &ObsId| -> L1Key {
+                    *groups
+                        .iter()
+                        .find(|(_, members)| members.contains(wanted))
+                        .map(|(key, _)| key)
+                        .unwrap_or_else(|| panic!("{}: {wanted} lands on no interface", trap.id.0))
+                };
+                let (ka, kb) = (key_of(a), key_of(b));
+                assert_ne!(
+                    ka, kb,
+                    "{}: the two printers carry distinct MACs, so an L2 pair exists to judge",
+                    trap.id.0
+                );
+                let side_of = |key: L1Key| -> L2Side<'_> {
+                    L2Side::new(
+                        stream
+                            .iter()
+                            .filter(|o| groups[&key].contains(&o.obs_id))
+                            .collect(),
+                    )
+                };
+
+                let verdict = verdict_for_hostname_agreement(&side_of(ka), &side_of(kb));
+                assert_eq!(
+                    verdict.verdict,
+                    Verdict::Supports,
+                    "{}: both printers report doc-printer, so this rule MUST argue for the merge — a                      rule that went quiet here would be hiding the temptation rather than losing to                      L1",
+                    trap.id.0
+                );
+                assert_eq!(
+                    verdict.rule.0, L2_HOSTNAME_AGREES,
+                    "{}: and it names itself while losing",
+                    trap.id.0
+                );
+            }
+        });
+
+        assert_eq!(
+            seen, 1,
+            "exactly one trap carries the collision temptation, and it is named so a corpus change              reds here instead of silently removing this test's subject"
         );
     }
 

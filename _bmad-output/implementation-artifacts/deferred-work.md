@@ -6260,3 +6260,131 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   slice exists to fix: `"Documentation updated: %{n} field(s)"` passes the gate, the resolver AND
   the DOM check, which prints its own ✅ with the defect quoted beside it. **Owner: Epic 7**, with the
   per-field gesture that will mint more of these strings.
+
+- 🔴 **A `Supports` rule cannot pass a `must-merge` trap**, and it is three traps rather than one.
+  `decide` reaches `Conclusion::Match` through one arm only and that arm needs a `Decisive`; a lone
+  `Supports` lands on the row `architecture.md:1002` calls *weak evidence* and abstains as
+  `Ambiguous`, which `score.rs:276` scores a **fail** against a `must-merge` expectation — the cell
+  D18 calls cowardice. The corpus has **eleven** `must-merge` traps: eight name `l1-exact-mac`
+  (`Decisive`, which is how they pass today) and **three name an `l2-*` rule** —
+  `shared-hardware-vm-must-merge` (`l2-hostname-agrees`, story 6.9) plus `multi-nic-must-merge` and
+  `docker-veth-must-merge` (`l2-uplink-agrees`, **story 6.8**). `epics.md:1904` and `:1922` both
+  specify `Supports` and no L2 story prescribes `Decisive` anywhere. 🔑 So once an L2 runner exists
+  these three leave the *unanswerable* bucket and land in `failures`, `passed()` stays false and NFR4
+  cannot go green — for a reason Epic 6's constraint (2) does not name: **it did the arithmetic of the
+  BUCKET and not of the FAILURES column.** ⚠️ The word *"answered"* carries both readings, and it is
+  the word Guy arbitrated on for story 6.7. Measured end to end by story 6.9's gap-hunt with an
+  isolated control (`Supports alone → Fail`, `Decisive alone → Pass`, `two Supports → Fail`); pinned
+  executably by `l2.rs`'s `a_supports_only_verdict_abstains_as_ambiguous_and_names_no_rule`. **Guy,
+  2026-09-24: story 6.9 measures it and does not decide it. Owner: Epic 6's RETROSPECTIVE**, which may
+  edit `epics.md` where a story may not — and it must look at 6.8 in the same act. Refused with why:
+  making the rule `Decisive` (a shared hostname would become as strong as an exact MAC, so two
+  printers carrying the factory default `doc-printer` would merge at L2, which
+  `hostname-collision.toml` forbids in its own words) and bumping the corpus now (a planning act taken
+  with no production caller and no screen).
+- ⚠️ **The first producer of `Verdict::Supports` moves from story 6.8 to 6.9.** `epics.md:1894`'s
+  heading and `:1904` both call 6.8 *"the first producer of `Supports`"*; Guy's reorder of 2026-09-23
+  put 6.9 first, so 6.9 shipped it. `epics.md` is NOT edited — a story may not — and the two live doc
+  sentences that had gone stale WERE corrected in place with their first version struck
+  (`cascade.rs`'s module doc, which had been **false for `Opposes` since story 6.7**, and
+  `scan_pass.rs:760`, whose conclusion survives for the narrower reason that neither producer has a
+  production caller). **Owner: Epic 6's retrospective**, together with the row above.
+- ⚠️ **An L2 side's SCOPE and the hostname-agreement reading are one decision taken a story apart.**
+  An `L2Side` is *the observations that landed on one interface*, and what bounds that set is story
+  6.12's plumbing rather than `l2.rs`. Guy chose set EQUALITY for agreement on 2026-09-24, so **one
+  rename silences the rule for that interface permanently once a side spans more than one sweep**
+  (`{old, new}` never equals `{new}`) — where a non-empty-intersection reading would still support.
+  `resolver.rs:251` joins one sweep's batch today, and the corpus already holds a side with two
+  sightings an hour apart (`hostname-collision`'s side A). **Owner: story 6.12** — whichever scope it
+  gives a side, it owes a sentence about what that does to this rule.
+- ⚠️ **An FQDN and a short label are two spellings of one name, and `hostnames_of` treats them as
+  two.** Measured: `doc-a.example.net` against `doc-a` yields `Neutral` from
+  `verdict_for_hostname_agreement` **and `Opposes` from `verdict_for_hostname`** — D20's bug, live on
+  a real network the day a second hostname source exists, since DHCP, mDNS and NetBIOS emit a short
+  label where `arp_ping.rs` emits the PTR FQDN. ⚠️ Nothing is live today because
+  `reverse_dns.rs:137` strips the trailing dot and the product has ONE name source, **but that is a
+  property of one connector and not of `hostnames_of`**, which is deliberately blind to
+  `HostnameSource`. The product already owns a display-only normaliser (`page.rs:378 short_name`,
+  whose own doc says it *"shortens the DISPLAY and nothing else"*). **Owner: story 6.12**, or the
+  first story that gives the product a second hostname source, whichever comes first.
+- ⚠️ **A watcher must be proven to emit at least once before its silence is allowed to mean anything.**
+  Story 6.9 armed a CI monitor on `gh pr checks <n> --json name,bucket`; **`gh pr checks` has no
+  `--json` flag** in `gh 2.46.0`, so every poll captured a usage error instead of data and the monitor
+  expired after fifteen minutes with **zero events over a run that had already finished green at
+  3m33s**. 🔑 *A watcher whose data source never produces data cannot report success OR failure*, so
+  its silence carries no information at all — which is a level below what this project already
+  records. ⚠️ *This said "the two rows this register already holds"; the register holds **ONE**
+  (a watcher exiting 0 over zero checks), and the other two cases — a timeout in silence, and a
+  watcher killed while emitting nothing — are recorded in the TWINS and in no register row. **A
+  claim about what the register holds, made without reading the register**, which is story 6b.9's
+  class one turn further; the acceptance-audit layer measured it.* ⚠️ And the older row prescribes
+  reading `gh pr checks` where this one prescribes `gh pr view --json statusCheckRollup`: **two
+  commands, nothing tying them**, and the next reader has to pick. Prefer this one — the other
+  cannot be parsed. The
+  remedy is mechanical rather than a resolution: **run the watcher's own command once and look at its
+  output before trusting the watch.** The machine-readable route for checks is
+  `gh pr view --json statusCheckRollup`, and a run's own head sha comes from `gh run view --json
+  headSha`, which is what establishes CI green on the head commit rather than inherited. **Owner: the
+  next story that arms a watcher**, which is every story.
+- 🔴 **`architecture.md`'s line citations have drifted by a UNIFORM +30 across the identity engine, and
+  the drift is INHERITED rather than created by any one story.** D13's decision table sits at
+  `architecture.md:998-1004` and every citation in the engine names `:967-974`; the weak-evidence row is
+  at **`:1002`** where thirty-four sites in `cascade.rs` alone say `:972`. Measured: **34 drifted
+  citations in `cascade.rs`** and drifted citations in **five files** (`cascade.rs`, `l1.rs`, `l2.rs`,
+  `blocking.rs`, `resolver.rs`). ⚠️ **Story 6.9 propagated the stale `:972` into five NEW sites before
+  its acceptance-audit layer measured the real line**, and corrected its own five; it did **not** sweep
+  the inherited thirty-four, because a citation sweep across the engine belongs to a story that owns
+  those files and not to a hostname rule (story 14.4's precedent: four pre-existing stylesheet sites
+  REGISTERED rather than swept up). 🔑 *The cheap defence is the one story 6.7 paid for: a grep on an
+  opening phrase gives you where a quotation STARTS and says nothing about where it ends — and it says
+  nothing at all about a citation whose target moved.* **Owner: the next story that edits
+  `cascade.rs`'s or `l1.rs`'s doc comments substantively**, or a project review, whichever comes first.
+- 🔴 **Story 6.15's own criterion promises what story 6.9 measured to be impossible, and it reaches a
+  MILESTONE.** `epics.md:2034` says *"**`passed() == true`**: truth-table failures = 0 at the device
+  level, unanswerable = 0 … it closes NFR4 and milestone J4"*. Story 6.9 measured that three committed
+  `must-merge` traps — `shared-hardware-vm-must-merge` and story 6.8's `multi-nic-must-merge` and
+  `docker-veth-must-merge` — expect a MERGE from a rule the epic specifies as `Supports`, and `decide`
+  reaches `Match` only through the arm that needs a `Decisive`. So those three become **failures** once
+  an L2 runner exists, and `passed()` cannot be true through Epic 6's L2 rules **as specified**. ⚠️
+  **This row exists because the first version of story 6.9's must-merge row named constraint (2) and
+  story 6.8's criteria and NOT this one** — the criterion the finding refutes most directly, and the
+  one tied to J4; its acceptance-audit layer found that a retrospective working from that row would
+  have repaired constraint (2) and 6.8 and left 6.15's promise and the milestone standing. ⚠️ **And both
+  twins carry, from story 5.8, the endorsement *"which is what `epics.md:417` always said — NFR4 stays
+  RED and is closed by Epic 6"***, which this measurement bears on directly; claim and bearing sit ~90
+  lines apart in one file with nothing tying them. **Owner: Epic 6's RETROSPECTIVE**, together with the
+  must-merge row, and it must look at `epics.md:2034`, story 6.15 and J4 in the same act.
+- ⚠️ **A hostname can be syntactically perfect and identify nobody, and no property in `hostnames_of` can
+  reach that.** Measured by story 6.9's edge-case layer: `localhost`, `unknown`, `android` and `1` each
+  agree with themselves, so `verdict_for_hostname_agreement` answers **`Supports`** — and
+  `reverse_dns::sanitise` refuses an empty name, an over-long one, a name with no ASCII alphanumeric, an
+  address and an `.in-addr.arpa` answer, **and carries no denylist of non-identifying names** (`grep -i
+  localhost` over that file returns nothing). `localhost` is what a misconfigured resolver hands back
+  for many addresses; `android` is what a phone announces by DHCP. ⚠️ **Sized honestly: LATENT, not
+  live** — a lone `Supports` cannot merge, which is story 6.9's own headline. 🔑 **But the decision that
+  changes that is exactly the one Guy deferred** (*what makes a merge at L2*, Epic 6's retrospective),
+  so **the deferred decision is what makes this channel live**, and the retrospective should meet it
+  written down rather than discover it. **Owner: Epic 6's retrospective**, with the must-merge row.
+- 🔴 **An invisible character INSIDE a real name still produces a false `Opposes` on story 6.7's rule.**
+  `hostnames_of`'s doc claimed its ASCII-alphanumeric property *"closes the invisible-character class and
+  the punctuation class together"*; measured, it closes the **whole-string** case only. `trim` does not
+  remove U+200B and the property asks for *at least one* alphanumeric, so `"\u{200B}nas-01"` and
+  `"nas-01"` are two names: `verdict_for_hostname_agreement` answers `Neutral` (costing a merge, erring
+  safely) and **`verdict_for_hostname` answers `Opposes`** — D20's named bug, in the direction story
+  6.7's code review closed for the whole-string case. ⚠️ Not live through the shipped connector
+  (`reverse_dns::sanitise` refuses U+200B) and live for `fixture_connector`, for any future connector,
+  and for `hostnames_of` as a domain primitive. The doc is narrowed to *"entirely of noise"* rather than
+  left claiming the class. **Owner: story 6.12**, the first caller that can reach it — or the first story
+  that gives the product a second hostname source.
+- ⚠️ **A story's review layers must each get a DATABASE OF THEIR OWN, and story 6.9 measured the cost of
+  not doing that.** Its three isolated layers were pointed at one container and one database
+  (`13419/opencmdb`) and all told to drop and recreate it, while the implementer measured against it
+  too — so the mutation driver refused baselines at **21, 107, 132 and 161** failures across two layers,
+  one row reported **15** red where 2 are real, and a reading of *"a virgin store races its own
+  migrations"* (story 6.5's registered race) was published as the cause. 🔴 **Refuted on a private
+  database: 0 failures on the first run after a DROP, reproduced twice.** 🔑 *A shared store makes
+  another layer's `DROP DATABASE` indistinguishable from your own mutation* — and the driver's refusal is
+  what stopped it becoming a finding, which is what story 6.4b built `--baseline` for. **The remedy is
+  one database per measuring process, named after the layer.** Isolation by worktree was already the
+  rule; isolation by STORE was not, and it is the same requirement one layer down. **Owner: the next
+  story that runs a three-layer review** — which is every story.
