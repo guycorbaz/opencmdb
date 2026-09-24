@@ -5325,6 +5325,103 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         );
     }
 
+    /// 🔴 **AC3: the corpus's OWN TEMPTATION — this rule fires on the family it must not win.**
+    ///
+    /// `hostname-collision-must-not-merge` is two printers sharing the factory default `doc-printer`
+    /// with distinct MACs. This rule reads a hostname and nothing else, so **it argues FOR the merge**
+    /// — and it is right to, because agreeing names are what it is about. What refuses the merge is
+    /// L1: the trap's own expectation names `l1-distinct-mac`, whose `Disqualifying` short-circuits
+    /// `decide`'s table.
+    ///
+    /// 🔑 *The rule is honest about what it sees, and the TABLE refuses the false merge — not the rule
+    /// declining to speak.* That is the whole reason `hostname-collision`'s header can say *"no
+    /// expectation names the tempting rule"* while the tempting rule fires: a trap's `rule` field names
+    /// the rule that DECIDES, never every rule that speaks.
+    ///
+    /// # ⚠️ What this test deliberately does NOT do
+    ///
+    /// It does not build a verdict vector mixing L1's verdict with this one. `l2.rs`'s module doc
+    /// forbids exactly that (*"combining L1's verdict for the same pair with an L2 rule's … erases this
+    /// level"*) and `deferred-work.md` registers the invariant with **story 6.12** as owner. So the
+    /// assertions here are: this rule SUPPORTS, and the trap's expectation names an **L1** rule. The
+    /// composition is 6.12's to build and 6.12's to guard.
+    ///
+    /// ⚠️ _This test did not exist when the story first claimed AC3 met: the measurement was taken by a
+    /// validation layer and never became a committed guard, and the acceptance-audit layer found the
+    /// criterion delivering nothing — its second clause satisfied **vacuously**, a prohibition met by
+    /// the absence of the test it constrains._
+    #[test]
+    fn the_rule_fires_on_the_collision_family_and_l1_is_what_refuses_it() {
+        let mut seen = 0usize;
+
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                if trap.id.0 != "hostname-collision-must-not-merge" {
+                    continue;
+                }
+                seen += 1;
+
+                let expected = trap
+                    .expect
+                    .rule()
+                    .expect("this trap names the rule that decides");
+                assert!(
+                    expected.0.starts_with("l1-"),
+                    "{}: the refusal is L1's — if this becomes an l2- rule the whole point of this                      test has changed and it must be rewritten, not renumbered",
+                    trap.id.0
+                );
+
+                let stream = read_jsonl(&fixture_path(&trap.replay).unwrap())
+                    .unwrap_or_else(|e| panic!("reading {}: {e}", trap.replay));
+                let groups = join(&stream);
+                let [a, b] = trap.observations.as_slice() else {
+                    panic!("{}: this trap names a pair", trap.id.0);
+                };
+                let key_of = |wanted: &ObsId| -> L1Key {
+                    *groups
+                        .iter()
+                        .find(|(_, members)| members.contains(wanted))
+                        .map(|(key, _)| key)
+                        .unwrap_or_else(|| panic!("{}: {wanted} lands on no interface", trap.id.0))
+                };
+                let (ka, kb) = (key_of(a), key_of(b));
+                assert_ne!(
+                    ka, kb,
+                    "{}: the two printers carry distinct MACs, so an L2 pair exists to judge",
+                    trap.id.0
+                );
+                let side_of = |key: L1Key| -> L2Side<'_> {
+                    L2Side::new(
+                        stream
+                            .iter()
+                            .filter(|o| groups[&key].contains(&o.obs_id))
+                            .collect(),
+                    )
+                };
+
+                let verdict = verdict_for_hostname_agreement(&side_of(ka), &side_of(kb));
+                assert_eq!(
+                    verdict.verdict,
+                    Verdict::Supports,
+                    "{}: both printers report doc-printer, so this rule MUST argue for the merge — a                      rule that went quiet here would be hiding the temptation rather than losing to                      L1",
+                    trap.id.0
+                );
+                assert_eq!(
+                    verdict.rule.0, L2_HOSTNAME_AGREES,
+                    "{}: and it names itself while losing",
+                    trap.id.0
+                );
+            }
+        });
+
+        assert_eq!(
+            seen, 1,
+            "exactly one trap carries the collision temptation, and it is named so a corpus change              reds here instead of silently removing this test's subject"
+        );
+    }
+
     /// Exactly one committed trap names fewer than two observations, and none names more.
     ///
     /// The residue is asserted rather than quoted: the two pair-based tests above skip these traps,
