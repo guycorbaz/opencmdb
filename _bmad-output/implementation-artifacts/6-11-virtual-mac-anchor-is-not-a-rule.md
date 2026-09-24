@@ -339,6 +339,53 @@ in **four** committed lists (`l1_runner.rs`'s `expected_unanswered()` and its de
 **nothing**: the gate stays **26/15/11**. *A story whose criterion reads "driven end to end" owes that
 sentence.*
 
+## 2b. Prove-to-red — predictions written to a file BEFORE the first run
+
+Driven by `cargo xtask mutate --baseline` against a live `mariadb:10.11.11` on port **13419**, **in a
+database of this story's own** (`opencmdb_611`, created and then *verified to exist* rather than assumed).
+Carriers named per row; no *"every red assertion-carried"* headline claimed.
+
+| id | mutation | predicted | measured | carriers |
+|---|---|---|---|---|
+| **V1** | five octets → four (admits IANA's IPv6 block) | red 1 | ✅ **red 1** | `the_prefix_is_five_octets…` — 🔴 **validation measured this GREEN against a pin that varied the LAST octet** |
+| **V2** | add HSRP `00:00:0c:07:ac` | red 1 | ✅ **red 1** | `hsrp_and_hsrpv2_are_out…` — 🔴 **validation measured this GREEN across the whole suite** |
+| **V3** | `Disqualifying` → `Opposes` | red 3+walk = 4 | 🔴 **red 5 — CONTRADICTS** | the four predicted **plus `the_bytes_decide_even_when_a_connector_would_report_otherwise`** |
+| **V4** | reach a `Fact` through the function's OWN argument | compile-fail | ✅ **`error[E0599]: no method named `facts` found for `&L2CandidatePair``** | 🔑 **the compiler, and nothing else** |
+| **V5** | *either* key virtual → *both* | red 3 | 🔴 **red 4 — CONTRADICTS** | the same missed carrier as V3 |
+| **V6** | corrupt `L2_VIRTUAL_MAC_PREFIX` | red 2 | ✅ **red 2** | the double-literal pin **and** the walk's terminal naming assertion (its filter then iterates zero times) |
+| **V7** | a non-empty evidence vector | red 1 | ✅ **red 1** | `the_reading_cites_no_observation…` alone — 6.7's and 6.9's evidence tests read their own rules |
+| **V8** | the reading emits `L2_DIFFERENT_HOSTNAME` | red 4 | ✅ **red 4** | both `rule.0` comparisons **and** the two tests asserting the CONCLUSION names it |
+
+**Eight rows: six conforming, two contradicting.** ✅ *And the three rows derived mechanically — V6, V7,
+V8 — all three conformed, against two divergences from the four enumerated by hand. That contrast is the
+row worth keeping.*
+
+🔑 **V4 IS THE ROW THAT SETTLES GUY'S ARBITRATION, and it is carried by `rustc` rather than by prose.** The
+reading takes an `L2CandidatePair`, so reaching a `Fact` through its own argument **does not compile**.
+*What makes it a reading rather than a rule is checkable, not promised* — and the mutation had to go
+through the ARGUMENT to measure that, which is the second lesson below.
+
+🔴 **V3 AND V5 DIVERGED FOR ONE DEFECT OF MINE, AND IT IS THE THIRD TIME IN TWO STORIES.** I wrote the
+correct rule — *every test reading the verdict variant or the conclusion* — and then **enumerated by hand
+under it** instead of applying it, missing a test that asserts `Disqualifying` while being *about* the
+connector's flag. ⚠️ **And V5's prediction was derived from V3's WRONG LIST rather than re-derived**, so one
+error propagated to the next row. 🔑 *The remedy is mechanical and not vigilance*: `grep -c
+'Verdict::Disqualifying'` returns six sites in one second, one of them production. **V6, V7 and V8 were
+derived that way, with the reasoning written into the prediction file before the run — and V6 and V7 both
+conformed.** Stories 6.9 (M5, M9) and 6.11 (V3, V5) have now paid four times for *a carrier list derived
+from what the tests are about instead of from what they read.*
+
+⚠️ **TWO DRIVER REFUSALS AND ONE NEAR-MISS OF MINE.** `ANCHOR MISSED` on V4's first form, because
+`cargo fmt` had split the line the anchor quoted — **the second time in this session a formatter
+invalidated an anchor**, and the refusal is the right behaviour: *the driver declined to measure rather
+than measure something else.* 🔴 **And V4's first FORM was a mutation named for one thing and applied to
+another**: written on `is_iana_virtual_router_mac`, which takes a `MacAddr` in a module where `Fact` is
+imported, so it would have compiled for a reason having nothing to do with the arbitration — **and I had
+typed `--expect green` for it while this story's prediction file said `compile-fail`.** 🔑 *What caught it
+was neither a guard nor a review but the contradiction between the written prediction and the typed
+command* — the prediction file arbitrating against its own author, which is the one use for it nobody
+designs.
+
 ## 3. What this story must NOT do
 
 - **Not implement the reading inside L1.** Story 5.5 refused it there with two pinning tests and the
@@ -396,7 +443,13 @@ cause. **It held: no layer reported a dirty baseline it could not explain.**
 
 ## Record
 
-- live-count: bin=748 core=204 xtask=110
+- live-count: bin=751 core=212 xtask=110
 - base: 8b3682844ca5f90caea894289ff66be3d3bfa595
-- registered:
+- registered: The `float-free` gate reds on a STORY NUMBER written inside an assertion message
 - file: _bmad-output/implementation-artifacts/6-11-virtual-mac-anchor-is-not-a-rule.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: crates/opencmdb-core/src/identity/l2.rs
+- file: crates/opencmdb-bin/src/fixtures.rs
+- file: CLAUDE.md
+- file: docs/project-context.md
