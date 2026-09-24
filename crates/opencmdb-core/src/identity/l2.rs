@@ -614,9 +614,25 @@ mod tests {
         MacAddr([0x00, 0x00, 0x5e, 0x00, 0x01, 0x0a])
     }
 
-    /// An ordinary documentation address — RFC 7042, the shape `example_data.rs` ships.
+    /// An ordinary address of the shape the COMMITTED CORPUS uses — locally administered, `0x02…`.
+    ///
+    /// ⚠️ *Its doc said "RFC 7042, the shape `example_data.rs` ships" and both halves were false*: RFC
+    /// 7042's documentation block is `00-00-5E-00-53-xx` and the product's example inventory really does
+    /// ship that, starting `0x00`. `0x02` is the corpus's privacy shape. The blind review layer found it —
+    /// **and the consequence was load-bearing**, see [`example_inventory_mac`].
     fn ordinary_mac(last: u8) -> MacAddr {
         MacAddr([0x02, 0x00, 0x5e, 0x00, 0x53, last])
+    }
+
+    /// An address of the shape the PRODUCT'S OWN example inventory ships — RFC 7042, `00:00:5E:00:53:xx`.
+    ///
+    /// 🔴 **This is the population that makes the five-octet width load-bearing, and no test read it until
+    /// the blind review layer said so.** It shares the IANA OUI `00:00:5e` with the virtual-router block
+    /// and differs only at the FIFTH octet, so every guard built on [`ordinary_mac`] — which starts `0x02`
+    /// — stays GREEN under a three- or four-octet widening. *The story's stated reason for the width was
+    /// guarded one test thinner than its record implied.*
+    fn example_inventory_mac(last: u8) -> MacAddr {
+        MacAddr([0x00, 0x00, 0x5e, 0x00, 0x53, last])
     }
 
     fn key(addr: MacAddr) -> crate::identity::l1::L1Key {
@@ -762,6 +778,39 @@ mod tests {
             verdict_for_virtual_mac(&pair(ordinary_mac(0x8c), ordinary_mac(0x8d))).verdict,
             Verdict::Neutral,
             "a reading that spoke about every pair would be a rule, and a bad one"
+        );
+    }
+
+    /// 🔴 **The product's OWN example inventory must be left alone, and this is the guard that says so.**
+    ///
+    /// `example_data.rs` ships thirty-odd `00:00:5E:00:53:xx` addresses, which **share the IANA OUI
+    /// `00:00:5e`** with the virtual-router block and differ only at the fifth octet. So a predicate
+    /// written on three or four octets would disqualify **every device the product shows a demonstration
+    /// operator** — and every other guard here is built on an address starting `0x02`, which such a
+    /// widening leaves alone.
+    ///
+    /// ⚠️ *This test did not exist until the blind review layer noticed that `ordinary_mac`'s doc claimed
+    /// this shape while its bytes were the corpus's. The story's justification for the five-octet width was
+    /// real and carried by one test fewer than the record said.*
+    #[test]
+    fn the_products_own_example_inventory_is_not_a_virtual_router() {
+        for last in [0x01u8, 0x10, 0x53, 0xff] {
+            assert!(
+                !is_iana_virtual_router_mac(example_inventory_mac(last)),
+                "00:00:5e:00:53:{last:02x} is an RFC 7042 documentation address the product SHIPS — it \
+                 shares the IANA OUI and differs at the fifth octet, which is exactly what the width is \
+                 for"
+            );
+        }
+        assert_eq!(
+            verdict_for_virtual_mac(&pair(
+                example_inventory_mac(0x01),
+                example_inventory_mac(0x10)
+            ))
+            .verdict,
+            Verdict::Neutral,
+            "so two of them are an ordinary pair, and a widened predicate would refuse to group the \
+             product's entire example inventory"
         );
     }
 
