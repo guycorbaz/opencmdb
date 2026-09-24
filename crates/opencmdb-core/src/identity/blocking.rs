@@ -278,6 +278,9 @@ impl L2CandidatePair {
 /// [`crate::observation::Fact`], so the narrowing is inexpressible in this function — the TYPE
 /// carries what a guard would have claimed to. It IS expressible at the call site, where it was
 /// measured leaving the whole suite green; that is registered against the first caller (story 6.12).
+/// ✅ *Carried there since story 6.12*: `l2_pass::judge` hands this function every key of the sweep,
+/// and `the_production_universe_is_every_pair_of_the_sweeps_interfaces` counts `n(n-1)/2` — a
+/// narrowing at the call site now reds it (mutation M2, five reds).
 ///
 /// # The count
 ///

@@ -531,6 +531,9 @@ fn seen_window(
 /// `cascade.rs` says Epic 6's cascade ends it. On that day the evidence of verdicts 2..n would
 /// vanish with nothing red. Registered with Epic 6 rather than pre-solved: unioning evidence across
 /// a vector is a decision about what a link MEANS, and no producer exists to decide it against.
+/// ⚠️ *Story 6.12 did not end it*: the L2 pass writes its three-verdict decisions through
+/// `l2_repo`, which stores the verdict vector and no observation ids (Guy's arbitration F) — this
+/// function still sees L1's single-verdict decisions only.
 async fn write_link(
     conn: &mut MySqlConnection,
     observation: &Observation,
@@ -710,6 +713,12 @@ fn same_decision(
 ///   `IS NOT NULL`. *"A decision names the rule that settled it"* is not met by an empty name, and
 ///   D19 wants the id left behind because a rule that fires without one is undebuggable.
 ///   `0003_resolver_guards.sql` carries the same refusal in DDL, as a second line of defence.
+///
+/// ✅ **Story 6.12 produced the first `Ambiguous` and it does NOT come through here**: an L2 ambiguity is
+/// written by `l2_pass` into `l2_pair_decision`, whose two NOT NULL interface columns ARE its
+/// candidates — so the invariant this guard protects holds there by construction. Routed through this
+/// guard inside the sweep's transaction, the same decision rolled back every L1 link (measured by
+/// 6.12's validation). What follows is therefore still true of L1 alone.
 ///
 /// ⚠️ **Nothing fills `candidates_for_link` yet**: the only call site passes `&[]`, and this pass
 /// writes no `link_candidate` row because L1 has no ambiguity to hold candidates for. So the day a

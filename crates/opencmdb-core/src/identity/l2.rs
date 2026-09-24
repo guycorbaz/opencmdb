@@ -42,8 +42,9 @@
 //! 6.12 arrives.)_
 //!
 //! `l1.rs` says the two organs do not consult each other; **nothing had ever said it about
-//! `decide`'s ARGUMENT**, and this paragraph is that sentence. The invariant is registered against
-//! story 6.12, which should consider closing it in a TYPE rather than in prose.
+//! `decide`'s ARGUMENT**, and this paragraph is that sentence. ✅ **Story 6.12 closed the ordinary path
+//! in a function rather than in prose**: [`decide_pair`] takes a pair and two sides and builds the vector
+//! itself, so the resolver never holds one. ⚠️ A TRIPWIRE, not a barrier — `cascade::decide` stays `pub`.
 //!
 //! # ⚠️ How a wrong rule id is caught here, and how it is NOT
 //!
@@ -555,8 +556,9 @@ pub const L2_VIRTUAL_MAC_PREFIX: &str = "l2-virtual-mac-prefix";
 /// [`RuleVerdict::evidence`] is documented as *"the observations the rule READ to say it"*. This reading
 /// read a key and no observation, so an empty vector is what is true; attaching ids it never looked at
 /// would be the invention D19 exists to prevent. ⚠️ **The cost is stated rather than hidden**: an operator
-/// meeting this refusal sees the rule and not the pair, and the pair is the caller's to record. Story 6.12
-/// is the first caller with both in hand.
+/// meeting this refusal sees the rule and not the pair, and the pair is the caller's to record. ✅ Story
+/// 6.12 records it: `l2_pair_decision` stores the pair beside the rule, so the refusal is never shown
+/// without the two interfaces it refused.
 ///
 /// # 🔴 The verdict this produces can never be NAMED beside an L1 `Disqualifying`, for ANY trap, ever
 ///

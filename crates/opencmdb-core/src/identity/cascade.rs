@@ -21,7 +21,9 @@
 //! falsified it, which is story 6.6's recorded class — a true sentence about what does not exist yet,
 //! left standing past the day it started existing._
 //!
-//! ⚠️ **Neither of the two L2 producers has a PRODUCTION caller**, and story 6.12 is the first. 🔴 _This
+//! ✅ **The L2 producers have had a PRODUCTION caller since story 6.12** — `l2::decide_pair`, called by
+//! `opencmdb-bin`'s `l2_pass` after every sweep. _(This read "neither … has a PRODUCTION caller, and
+//! story 6.12 is the first" until that story made it false.)_ 🔴 _The sentence before THAT
 //! read "**none of them** has a production caller", which is FALSE for the three verdicts L1 emits:
 //! `resolver.rs` calls [`crate::identity::l1::decide_pair`] and
 //! [`crate::identity::l1::decide_singleton`] in production, and the pass has run in the shipped binary

@@ -1,6 +1,7 @@
 # Story 6.12: The resolver writes device groupings
 
-Status: **contexted, VALIDATED and ARBITRATED 2026-09-24 — `ready-for-dev`.** §0 carries three findings
+Status: **developed and verified 2026-09-24 — `review`, not `done`, because that is the merge's business.**
+Code review by three isolated layers is next. Contexted, validated and arbitrated the same day: §0 carries three findings
 that falsify the premise this story was queued on; both validation layers tried to refute them and **all
 three survive**. The validation added four HIGH findings against contexting's recommendation (§0.5).
 **Guy took all seven decisions on 2026-09-24 (§0.6), and the criteria in §3 are written for them.**
@@ -436,25 +437,26 @@ true; `write_link`'s evidence doc.
 
 ## 4. Tasks (for the dev agent, after arbitration)
 
-- [ ] T0 — read §0, and §0.6 above all: the arbitration is recorded, and it narrows the epic's letter.
-- [ ] T1 — `l2::decide_pair` in `opencmdb-core/src/identity/l2.rs` (composes the three rules; returns
+- [x] T0 — read §0, and §0.6 above all: the arbitration is recorded, and it narrows the epic's letter.
+- [x] T1 — `l2::decide_pair` in `opencmdb-core/src/identity/l2.rs` (composes the three rules; returns
       `Decision` via `cascade::decide`; evidence decision per §1). `float-free` then walks the same 5 files.
       ⚠️ Story numbers in assertion MESSAGES red `float-free` (`6.12` is digit-dot-digit) — write them in
       doc comments.
-- [ ] T2 — migration `0012_*` (re-runnable: `IF NOT EXISTS`, `0010`'s conditional idiom for any `ALTER`;
+- [x] T2 — migration `0012_*` (re-runnable: `IF NOT EXISTS`, `0010`'s conditional idiom for any `ALTER`;
       recovery recipe in the header on `0006`'s model); binary collations (D64); `CHECK`s named.
-- [ ] T3 — `device_repo.rs`: insert / load-current / close for the L2 table, `DB_TEST_LOCK` in every DB
+- [x] T3 — `device_repo.rs` *(shipped as `l2_repo.rs`: it holds no device, and a name promising one
+      would be the first false sentence of the module)*: insert / load-current / close for the L2 table, `DB_TEST_LOCK` in every DB
       test, raw-SQL probes for each CHECK.
-- [ ] T4 — the L2 pass in the resolver (or a sibling `l2_pass.rs` if `resolver.rs` grows past comfort),
+- [x] T4 — the L2 pass in the resolver (or a sibling `l2_pass.rs` if `resolver.rs` grows past comfort),
       inside the same `transact`, after L1, reusing `join`'s groups as sides.
-- [ ] T5 — AC4's `obelix` test, AC5's replay, AC6's probe, AC2's seam.
-- [ ] T5b — the twenty `DELETE FROM interface` test cleanups: give the new child table its own purge and
+- [x] T5 — AC4's `obelix` test, AC5's replay, AC6's probe, AC2's seam.
+- [x] T5b — the twenty `DELETE FROM interface` test cleanups: give the new child table its own purge and
       clean it first at every site (or extract ONE shared cleanup helper — decide and say which).
-- [ ] T6 — prove-to-red: predictions written to a file BEFORE the first run; carriers **derived by
+- [x] T6 — prove-to-red: predictions written to a file BEFORE the first run; carriers **derived by
       grepping the mutated token**, never recalled; `cargo xtask mutate --baseline` on a VIRGIN database of
       the story's own.
-- [ ] T7 — register: answer / re-own / close every §2 row; add what the story raises; `cargo xtask record`.
-- [ ] T8 — docs-current-before-push: `CLAUDE.md`, `docs/project-context.md`, the story's Change Log and
+- [x] T7 — register: answer / re-own / close every §2 row; add what the story raises; `cargo xtask record`.
+- [x] T8 — docs-current-before-push: `CLAUDE.md`, `docs/project-context.md`, the story's Change Log and
       §6. **No manual sentence is owed unless a screen changes.**
 
 ## 5. What this story must NOT do
@@ -503,9 +505,16 @@ UNKNOWN passes (5.14).
 
 ## 6. What the operator gains
 
-**Nothing visible, under every option in §0.4** (§0.3) — the **sixth** consecutive engine-spine story in
-that shape. Under (A2) the store gains the persisted question the next story can show; under (A1) it gains
-nothing on any real input.
+**Nothing visible** — verified rather than asserted: no route, no screen, no template, and no view reads
+`l2_pair_decision` (`an_l2_decision_changes_nothing_the_reach_section_counts` pins the one query four
+screens share). **The run of engine-spine stories giving the operator nothing is SIX** — 6.5, 6.6, 6.7,
+6.9, 6.11, 6.12 — and the register row that counts it says so.
+
+🔑 **What is different about this one is that it WRITES on a real network.** From the first sweep after
+it ships, `obelix`'s two NICs persist as ONE `Ambiguous` pair, and any VRRP address on the LAN as
+`NoMatch` pairs naming `l2-virtual-mac-prefix`. The store holds the question; story 6.14, which follows
+directly by Guy's decision, is where the operator sees it and lifts it. ⚠️ **And it writes no device, on
+any input** — criterion 1's *"writes `device` rows"* is not met, by decision, and registered.
 
 ## 7. Change Log
 
@@ -514,6 +523,120 @@ nothing on any real input.
 | 2026-09-24 | contexted on `6b3c04e`; three findings falsifying the queued premise (§0.1–§0.3); four decisions posed to Guy (§0.4) |
 | 2026-09-24 | validated by two fresh-context layers, each with its own database — **§0.1–§0.3 survive both**; the fact-check refuted my xtask count (110, not 111), restored criterion 3's dropped clauses, added five register rows and a fourth screen; the gap-hunt BUILT (A2)+(B) and found four HIGHs against it (§0.5): the grain, cross-sweep churn, two guards that cannot fail, and the tripwire promise; three decisions added (E–G) |
 | 2026-09-24 | **Guy's arbitration: all seven decisions on the recommendation** (§0.6); `obelix` confirmed two NICs; 6.14 to follow directly; `epics.md` to be corrected by a planning act |
+| 2026-09-24 | the planning act merged (PR #210, `ddbc5f0`); this branch rebased onto it |
+| 2026-09-24 | implemented: `l2::decide_pair`, migration `0012`, `l2_repo.rs`, `l2_pass.rs`, the pass wired after L1 in `resolve_within`; `resolver.rs`'s false *"Not wired"* doc and blanket `allow(dead_code)` removed |
+| 2026-09-24 | mutation pass: nine rows, eight conforming; **M6 contradicted** (2 red for 1) and exposed an unbounded constraint-name needle, bounded |
+| 2026-09-24 | register: nineteen owned rows answered, re-owned or closed in place; four new rows |
+
+## 8. Dev Agent Record
+
+### What was built, and the decisions the dev took (each reversible, each mine)
+
+- **`l2::decide_pair(pair, a, b)`** (`opencmdb-core`) — the three L2 rules composed in one fixed order,
+  `CURRENT_RULESET_VERSION` reused (the L2 rules change no L1 decision, so no bump). Five unit tests.
+- **Migration `0012_l2_pair_decision.sql`** — keyed on `(interface_low, interface_high, is_current)`, where
+  `is_current` is `1`/NULL so closed versions drop out of the key (the `current_subject` idiom); outcomes
+  `no_match`/`abstained` only, cause `ambiguous` only; `verdicts` holds `rule=verdict;…` and no ids.
+  🔑 **The coupling CHECK compares two never-NULL expressions** — `(valid_to = OPEN_END) = (is_current IS
+  NOT NULL)` — so it cannot evaluate to UNKNOWN. ⚠️ **Mine: the interface FKs are `ON DELETE CASCADE`**,
+  so the twenty `DELETE FROM interface` test cleanups (T5b) needed no edit; production never deletes an
+  interface, and no row here means anything once one is gone. `link_candidate` chose RESTRICT; the
+  difference is stated in the migration.
+- **`l2_repo.rs`** — not `device_repo.rs` (it holds no device). The writer refuses `Match`
+  (`l2_match_not_persisted`) and `AbsenceOfProof` by name before the schema does; `close_l2_decision`
+  refuses the sentinel and an unknown or already-closed row.
+- **`l2_pass.rs`** — `judge` / `judge_within` (the seam, AC2). Per pair: no row + persisted → insert;
+  same decision → unchanged; different and persisted → close + append; now `AbsenceOfProof` → close with
+  no successor; an earlier instant than the current version → `InstantRegressed`. ⚠️ **Mine: the instant a
+  decision is reached is the LATEST `observed_at` of the two sides' observations** — derived, never the
+  clock.
+- **`resolve_within`** records the interface each key landed on and calls `judge` after the L1 tail, in the
+  same transaction; `Resolution` gains an `l2` field.
+- **AC4's guard variant** (routing the L2 write through `guard_decision(&[])`) was **not re-run as a
+  mutation here**: `guard_decision` is private to `resolver.rs`, and the validation's gap-hunt measured that
+  exact composition rolling back every L1 link. The test that would red is
+  `obelix_persists_one_ambiguous_pair_and_the_sweeps_l1_links_commit_with_it` (it asserts both the commit
+  and the L1 links) — **stated as reasoned, not measured on this tree.**
+
+### Mutation pass — predictions written first (`scratchpad/mut-6-12/predictions.txt`), carriers derived by grep
+
+`cargo xtask mutate --baseline` on a store of the story's own (`story_6_12`, port 13419); M6 on a VIRGIN
+store with no baseline, since a migration edit cannot share a store with its unmutated baseline.
+
+| id | mutation | predicted | measured | carriers |
+|---|---|---|---|---|
+| M1 | `decide_pair` drops `l2-hostname-agrees` (the only `Supports`) | red:12 | ✅ red 12 | 2 core (`decide_pair` tests) + 10 `l2_pass` tests |
+| M2 | `judge`'s universe narrowed to its first pair (6.6's call-site narrowing) | red:5 | ✅ red 5 | three_nics, vrrp, absence, production_universe, purge |
+| M3 | `judge_within` ignores the universe it was handed | red:1 | ✅ red 1 | `only_the_pairs_the_blocker_proposed_are_judged` |
+| M4 | `is_persisted`: `AbsenceOfProof` → persisted | red | ✅ red **26** | 15 resolver, 3 fault_injection, 3 l2_pass, 2 l2_repo, 1 page, 1 scan_pass, 1 sighting_repo — every multi-interface sweep in the suite |
+| M5 | `carries()` stops comparing `verdicts` | red:1 | ✅ red 1 | `each_decision_bearing_column_is_compared` |
+| M6 | `0012`'s coupling in `identity_link`'s UNKNOWN-prone form | red:1 | 🔴 **red 2** | + `a_marker_other_than_one_is_refused` — see below |
+| M7 | the writer's ordering refusal dropped | red:1 | ✅ red 1 | `the_writer_refuses_what_the_table_would_refuse` |
+| M9 | a decayed pair treated as unchanged (never vacated) | red:2 | ✅ red 2 | decays, past |
+| M10 | the instant-regression guard neutered | red:1 | ✅ red 1 | `a_pair_rejudged_in_the_past_is_refused` |
+
+🔴 **M6 is the finding, and it is two findings.** *(a)* My prediction listed the test ABOUT the coupling,
+not every test inserting a row the coupling judges: with `is_current = 2` on a current row the mutated
+coupling refuses FIRST, so the marker test met a different constraint name. **The fifth named instance of
+enumerating carriers by what a test is about rather than by what reads the mutated token** — derived by
+grep for Rust tokens and by hand for a CHECK, and the hand is where it failed. *(b)* Reading why exposed a
+real defect: `refused_by` matched the constraint name as an **unbounded substring**, and
+`l2_pair_decision_current` is a substring of `l2_pair_decision_current_value` — so the coupling tests could
+not tell the two refusals apart. Bounded by the backticks MariaDB prints. ⚠️ *That the bounded needle reds
+where the unbounded one would not was reasoned, not re-measured by a mutation.*
+
+✅ **M4's 26 is itself a measurement worth keeping**: the suite carries 21 PRE-EXISTING tests (26 minus this story's five)
+whose sweeps the L2 pass now judges, and every one of them fails loudly if `AbsenceOfProof` is ever persisted — the
+decision G is carried far beyond this story's own tests.
+
+### Verification (story branch, 2026-09-24)
+
+- `cargo test --workspace --locked`, `RUSTFLAGS="-D warnings"`, VIRGIN store: **777 + 219 + 110**, 34 s;
+  without a store: same counts, 5 s — the clock is the tell.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings` green; `cargo fmt --all` clean;
+  `cargo xtask ci` **ten gates green** (`file-size` largest 1954; `float-free` still 5 files; `ddl-collation`
+  accepts `0012`); `cargo doc`: no new warning (the same twenty-five as `master`).
+- **Browser gates not run**: no template, asset or route changed, and AC8's byte-identity is carried by
+  the reach-count test rather than by a browser.
+
+### File List
+
+- `crates/opencmdb-core/src/identity/l2.rs` — `decide_pair` + five tests; module doc corrected
+- `crates/opencmdb-core/src/identity/mod.rs`, `cascade.rs`, `blocking.rs` — sentences 6.12 falsified
+- `crates/opencmdb-bin/migrations/0012_l2_pair_decision.sql` — new
+- `crates/opencmdb-bin/src/l2_repo.rs` — new, with fourteen tests
+- `crates/opencmdb-bin/src/l2_pass.rs` — new, with twelve tests
+- `crates/opencmdb-bin/src/resolver.rs` — the L2 call, `Resolution::l2`, docs corrected, blanket `allow` removed
+- `crates/opencmdb-bin/src/repo.rs` — `DecidedBy::token` made `pub(crate)`
+- `crates/opencmdb-bin/src/main.rs` — two `mod` lines
+- `_bmad-output/implementation-artifacts/deferred-work.md` — nineteen rows answered/re-owned/closed, four new
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/6-12-resolver-writes-device-groupings.md`
+- `CLAUDE.md`, `docs/project-context.md`
+
+## Record
+
+- live-count: bin=777 core=219 xtask=110
+- base: ddbc5f0d75d2eea87b34b57aefc156c4e978f93d
+- registered: Story 6.12's first criterion
+- registered: Story 5.14b's tripwire `the_production_pass_produces_no_ambiguous_abstention` can never red
+- registered: Two interfaces seen only in DIFFERENT sweeps are never paired
+- registered: A flapping reverse-DNS answer churns L2 history
+- file: CLAUDE.md
+- file: docs/project-context.md
+- file: _bmad-output/implementation-artifacts/6-12-resolver-writes-device-groupings.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: crates/opencmdb-bin/migrations/0012_l2_pair_decision.sql
+- file: crates/opencmdb-bin/src/l2_pass.rs
+- file: crates/opencmdb-bin/src/l2_repo.rs
+- file: crates/opencmdb-bin/src/main.rs
+- file: crates/opencmdb-bin/src/repo.rs
+- file: crates/opencmdb-bin/src/resolver.rs
+- file: crates/opencmdb-core/src/identity/blocking.rs
+- file: crates/opencmdb-core/src/identity/cascade.rs
+- file: crates/opencmdb-core/src/identity/l2.rs
+- file: crates/opencmdb-core/src/identity/mod.rs
 
 ## References
 

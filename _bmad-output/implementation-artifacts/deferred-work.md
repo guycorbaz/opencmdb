@@ -2234,6 +2234,7 @@ project's reviews have caught repeatedly, so the distinction is kept explicit he
   `device` absent the disjunction has ONE arm, and a supertype over one subtype enforces nothing —
   it is the speculation the *"create tables only when the story needs them"* rule refuses.
   **Owner: Epic 6, with `device`.** Deferred, not dropped.
+  ✅ **CLOSED — stale since story 6.5** shipped `entity` and `device` (`0006`); found by story 6.12's validation.
 
 - ⚠️ **No `state` column on `interface`.** D21's extended `entity.state`
   (`active|dormant|…`, [architecture.md:1477-1479]) and F17's lifecycle are read by nothing before
@@ -2480,6 +2481,7 @@ mutations independently. **Five entries deferred, each measured rather than susp
   writer actor, but that precondition is stated nowhere in `resolve`'s signature or doc.
   **Owner: the first story that gives the resolver more than one writer** — the wiring decision 3
   defers.
+  ↺ **Story 6.12 (Guy, 2026-09-24)**: one race with the row "TWO CONCURRENT PASSES MINT TWO INTERFACES FOR ONE MAC" and issue #161 — re-owned to the FR6 scheduler story, the first that can run two passes at once. 6.12 mints no interface it did not already mint.
 - ⚠️ **`widen_interface_seen_window` ignores `rows_affected()`**, so widening a non-existent
   interface returns `Ok(())`. This is the silent-success shape story 5.9's code review closed in
   `close_identity_link`, reappearing in the neighbouring function. Only ever called with an id the
@@ -2510,11 +2512,13 @@ mutations independently. **Five entries deferred, each measured rather than susp
   nothing red. Not pre-solved: unioning evidence across a vector is a decision about what a link
   MEANS, and no producer exists to decide it against. **Owner: Epic 6**, with the first multi-verdict
   `Decision`.
+  ⚠️ **Story 6.12 did not end it**: its three-verdict decisions go through `l2_repo`, storing the vector and no ids (decision F); `write_link` still sees L1's single-verdict decisions only. Owner unchanged.
 - ⚠️ **Nothing fills `guard_decision`'s `candidates_for_link`.** The only call site passes `&[]`, and
   the pass writes no `link_candidate` row, because L1 has no ambiguity to hold candidates for. So the
   day a producer of `Ambiguous` arrives, the guard would refuse a LEGITIMATE ambiguity rather than
   let it be written with its candidates — the inverse of FR16. The signature already takes the slice
   so it need not change under whoever fills it. **Owner: Epic 6**, the first producer of `Ambiguous`.
+  ✅ **ANSWERED for L2 by story 6.12**, the first producer of `Ambiguous`: it writes through `l2_pair_decision`, whose two NOT NULL interface columns ARE the candidate set. The guard stays L1's, where no `Ambiguous` arises.
 - ⚠️ **`resolve` takes a bare `&mut MySqlConnection`, so D21's "never split across two transactions"
   is a PRECONDITION, not a structure.** Measured: called on a pooled connection under autocommit, a
   pass that then failed left **2 interfaces and 2 links committed**. Taking a unit-of-work type
@@ -2630,6 +2634,7 @@ Three-layer review of `master...a82fa3a`; **all three layers ran their own live
   the resolver writes no candidate. **Owner: Epic 6**, the first producer of `Ambiguous`; a
   `snapshot_candidates` compared alongside would turn the blindness into a red the day it stops
   being empty.
+  ✅ **At L2, story 6.12's snapshot compares the pair, which IS the candidate set** (`purge_and_replay_reproduces_every_l2_decision`). L1's blindness stands: L1 writes no candidate.
 - ⚠️ **The purge and the replay run in TWO transactions, and the composed shape runs nowhere.**
   `purge_engine_links` commits, and only then does the replay open its own transaction. If the
   replay fails — a unique collision with an operator row is exactly that case, and
@@ -3077,6 +3082,7 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   ARP/ping connector emits no MAC, so nothing scanned reaches the `interface` mint at all. **The
   connector story that gives it a MAC REMOVES THAT SHIELD and must carry this race with it.**
   Owner: that story, jointly with whoever adds the UNIQUE index.
+  ↺ **Story 6.12 (Guy, 2026-09-24)**: re-owned to the FR6 scheduler story (#161), reconciled with the earlier row "Two concurrent passes can mint two interfaces for one L1 key". Reachability, stated: `spawn_scan_loop` runs one pass at a time, so two instances on one store are needed. ⚠️ A device mint written as read-then-insert would reproduce it one level up — owner: the first story that produces an L2 `Match`.
 - **⚠️ The two `arp_ping` pins are a TRIPWIRE, not a barrier, and the difference is measured.** A
   `Fact::Mac` added at the emit site inside `poll` — rather than inside `emitted_facts` — leaves all
   502 tests green while the real binary mints an interface and places a link. That bypass is the
@@ -3102,6 +3108,7 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   `a_superseded_link_is_not_counted`, whose doc calls its row *"superseded"* while its `valid_to` is
   still `OPEN_END`. The guard is genuine; its stated justification is not, and it now stands in the
   way of the DDL repair. **Owner: unassigned.**
+  ⚠️ **Not inherited by story 6.12's sibling table**: `l2_pair_decision_current` compares two never-NULL expressions, and `a_current_interval_without_its_marker_is_refused` proves the UNKNOWN row refused by name. `identity_link`'s own CHECK is unchanged; owner still unassigned.
 - **⚠️ Two entries of story 5.14's §8 were never appended** — `:2700` (`observed_at` stability across
   passes) and the page-less deployment — while two bullets that are not §8 rows were. Recorded here
   so the omission is not read as a disposition. `:2700` stands: the accumulation IS its consequence,
@@ -5144,6 +5151,7 @@ it re-derivable.*
   ONE gesture: measured at this story's validation, adopting `interface` without a producer leaves
   **65 tests red**, because a backfill repairs the rows that exist and nothing repairs the rows the
   next scan writes.
+  ↺ **Re-owned by story 6.12 to story 6.18** (Guy, 2026-09-24, decision C): 6.12 persists L2 decisions in a SIBLING table, so the `identity_link` widening this row bundled with the adoption no longer exists and the bundle's premise is gone. 6.18 is the first story that writes an interface's `entity.state`.
 - ⚠️ **`entity.state` ships the architecture's SIX values where `epics.md:1826` names two** — a
   divergence taken deliberately, because shipping the subset buys an `ALTER` running at boot on a
   published product the day a lifecycle story needs `superseded`. **Owner: Epic 6's retrospective**,
@@ -5239,6 +5247,7 @@ it re-derivable.*
   COLUMN is immutable*, which is the matcher class `entity_id_immutable`'s own doc declines twice —
   and D15's migration mechanism (`state = 'pending_migration'`) is the thing that will legitimately
   write to this table. **Owner: story 6.12.**
+  ↺ **Re-owned by story 6.12 to story 6.18**, with the adoption: 6.12 writes no `entity` row.
 
 - ⚠️ **An UPDATABLE VIEW over `declared_attribute` re-points a testimony and `entity-id-immutable`
   cannot see it** — the gate names a table, not the aliases of it. Caught today only by `authorship`,
@@ -5278,6 +5287,7 @@ Four rows. All four were produced by the two-layer validation, and each names an
   ten gates GREEN**. *Block on the uplink* is the most tempting L2 narrowing there is — it is the
   signal `l2-uplink-agrees` scores on — and the committed corpus is **blind to it (1000‰)**. **Owner:
   story 6.12**, the first caller: it must carry the guard, and it may not assume 6.6 carries one.
+  ✅ **CARRIED by story 6.12**: `l2_pass::judge` hands `l2_candidates` every key of the sweep and `the_production_universe_is_every_pair_of_the_sweeps_interfaces` counts `n(n-1)/2` — mutation M2 (the universe narrowed at the call site) reds five tests.
 
 - ⚠️ **`blocking.rs` and `l1.rs` cite `architecture.md` ~25 lines off, and story 6.6 INHERITED the
   drift into a section promising it was measured.** `blocking.rs` names `:988-993`, `:1004-1007`,
@@ -5396,6 +5406,7 @@ Two rows. Both were produced by BUILDING the rule, not by reading the story.
   the first to wire the pass and therefore the first that could commit it — and it should consider
   whether the invariant belongs in a TYPE rather than in a sentence, on story 5.6's precedent
   (*closed in the type*).
+  ✅ **CLOSED on the ordinary path by story 6.12**: `l2::decide_pair` builds the vector itself from the three L2 rules, so the resolver never holds one; `the_vector_holds_the_three_l2_rules_and_nothing_else` pins it and mutation M1 reds twelve. ⚠️ A tripwire, not a barrier — `cascade::decide` stays `pub`.
 
 ## Deferred from: story 6.7's CODE REVIEW (2026-08-30)
 
@@ -5408,6 +5419,7 @@ Two rows, plus one re-ownership.
   for whom a shared walk would be more than tidiness. ⚠️ It is still not obviously a DRY violation to
   collapse: the two walk different populations and only one of their containment assertions is
   non-tautological, *a difference a shared helper would hide.*
+  ↺ **Re-owned by story 6.12 to Epic 6's RETROSPECTIVE**: 6.12 held its real population through `l2_pass`, not through `fixtures.rs`, and touched neither walk — the question is still posed and still not answered, which is why it moves to where epics decide rather than to a third story.
 
 - ⚠️ **A hostname of only non-ASCII letters reads as ABSENT.** Story 6.7's noise guard requires at
   least one ASCII alphanumeric — a property rather than a list, which is what closes the
@@ -5422,6 +5434,7 @@ Two rows, plus one re-ownership.
   reachable through the corpus and reachable by a caller building a malformed group. **Owner: story
   6.12**, which builds that plumbing — and which should decide whether de-duplication belongs in the
   rule or in the caller's group construction, rather than adding it in both.
+  ⚠️ **Moot for PERSISTENCE since story 6.12** — `l2_pair_decision` stores the verdict vector and no observation ids (Guy's decision F) — and live for any in-memory reader. ↺ **Re-owned to story 6.14**, the first that will display a decision's evidence.
 
 ## Raised by the operator, using the product (2026-08-30, v0.3.1)
 
@@ -5490,6 +5503,7 @@ One row, and v0.3.0 is what made it live.
   two variants on one token, never a variant missing from `ALL`. Story 14.1 adds its own `IpPolicy`
   row and names these two rather than fixing them, because widening a guard over enums it does not own
   is scope. **Owner: whichever story next touches `EntityState` or `EntityKind` — story 6.12 by name.**
+  ↺ **Story 6.12 touched neither enum**: re-owned by name to story 6.18.
 
 - ⚠️ **Epic 14 has FIVE stories and `epics.md` describes FOUR.✅ **CLOSED by Epic 14's FINAL retrospective, 2026-09-22.** TEN delivered; `epics.md` carries all ten and 14.4c's provenance (Guy's decision 2).** Story 14.2 was split at its
   implementation on 2026-09-11 (Guy) into 14.2 *the screen* and **14.2b *the operator's hands***,
@@ -6321,6 +6335,7 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   `resolver.rs:251` joins one sweep's batch today, and the corpus already holds a side with two
   sightings an hour apart (`hostname-collision`'s side A). **Owner: story 6.12** — whichever scope it
   gives a side, it owes a sentence about what that does to this rule.
+  ✅ **ANSWERED by story 6.12** (Guy, decision D): a side is ONE sweep's observations on one interface, so set equality compares names from one sweep and a rename silences nothing across sweeps. ⚠️ The cost, stated: two interfaces seen only in DIFFERENT sweeps are never paired (registered below).
 - ⚠️ **An FQDN and a short label are two spellings of one name, and `hostnames_of` treats them as
   two.** Measured: `doc-a.example.net` against `doc-a` yields `Neutral` from
   `verdict_for_hostname_agreement` **and `Opposes` from `verdict_for_hostname`** — D20's bug, live on
@@ -6331,6 +6346,7 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   `HostnameSource`. The product already owns a display-only normaliser (`page.rs:378 short_name`,
   whose own doc says it *"shortens the DISPLAY and nothing else"*). **Owner: story 6.12**, or the
   first story that gives the product a second hostname source, whichever comes first.
+  ↺ **Story 6.12 drops itself as owner**: not live through the shipped connector (one name source, trailing dot stripped). Owner: the first story that gives the product a second hostname source.
 - ⚠️ **A watcher must be proven to emit at least once before its silence is allowed to mean anything.**
   Story 6.9 armed a CI monitor on `gh pr checks <n> --json name,bucket`; **`gh pr checks` has no
   `--json` flag** in `gh 2.46.0`, so every poll captured a usage error instead of data and the monitor
@@ -6400,6 +6416,7 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   and for `hostnames_of` as a domain primitive. The doc is narrowed to *"entirely of noise"* rather than
   left claiming the class. **Owner: story 6.12**, the first caller that can reach it — or the first story
   that gives the product a second hostname source.
+  ↺ **Story 6.12 drops itself as owner**, on the same measurement: `reverse_dns::sanitise` refuses it. Owner: the first story that gives the product a second hostname source.
 - ⚠️ **A story's review layers must each get a DATABASE OF THEIR OWN, and story 6.9 measured the cost of
   not doing that.** Its three isolated layers were pointed at one container and one database
   (`13419/opencmdb`) and all told to drop and recreate it, while the implementer measured against it
@@ -6432,6 +6449,7 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   in FOUR places while adding no such row** — its blind review layer counted the claim against the diff.
   *A section that says "registered" is not a registration* (story 6b.9's class), and `cargo xtask record`
   cannot catch it, because the story never claimed the second row it was missing. **Owner: story 6.12.**
+  ✅ **CARRIED by story 6.12** through `l2::decide_pair` (an L2-only vector on the ordinary path) — see the ONE-LEVEL row above, closed by the same function.
 - 🔴 **EPIC 6's ENGINE SPINE HAS STOPPED COUNTING ITS RUN OF STORIES THAT GIVE THE OPERATOR NOTHING, and
   the run is FIVE.** Measured: stories **6.5, 6.6, 6.7, 6.9 and 6.11** each record *"What the operator
   gains: NOTHING"* — no route, no screen, no write, no production caller — and story 6.12 is the promised
@@ -6443,3 +6461,33 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   first time.** Raised by story 6.11's acceptance-audit layer, which asked the question three review layers
   had historically failed to ask and which this story's own §6 had not. **Owner: Epic 6's RETROSPECTIVE** —
   a count is not a story's to decide, and the number is the thing.
+  ⚠️ **Story 6.12 makes it SIX** — its pass has a production caller and WRITES on a real network, and still changes no screen: no view reads `l2_pair_decision`. Story 6.14 is where the run can end.
+
+## Story 6.12 — the L2 pass persists its decisions about pairs of interfaces
+
+- 🔴 **Story 6.12's first criterion — *"it writes `device` rows and their memberships"* — is NOT MET, by
+  decision.** No L2 rule emits `Decisive`, and `decide` reaches `Match` only through one, so no real input
+  produces a grouping of two interfaces; a device written only under a hand-built verdict would be a guard
+  placed where the defect cannot occur. `insert_device` keeps NO production caller, and `l2_repo` refuses a
+  `Match` by name (`l2_match_not_persisted`) so the first one fails loudly rather than being dropped.
+  ⚠️ When it arrives it needs a device mint with **no read-then-insert window** (a derived id, e.g. UUIDv5
+  of the pair — reasoned, not measured), which is where the epic's *"a device grouping that keys on
+  interfaces reaches the same code"* bites. **Owner: whichever story first produces an L2 `Decisive` — the
+  question *"what makes a merge at L2"* is Epic 6's RETROSPECTIVE's**, registered by story 6.9.
+- 🔴 **Story 5.14b's tripwire `the_production_pass_produces_no_ambiguous_abstention` can never red on an L2
+  ambiguity.** Its slice forms ONE interface, so **zero** L2 pairs (measured by 6.12's validation), and it
+  reads `count_engine_reach`, which reads `identity_link` only — while L2 ambiguities live in
+  `l2_pair_decision`. *A tripwire over a slice with no L2 pair is a guard placed where the defect cannot
+  occur*, and story 6.13's criterion that it *"REDS here, by design"* was unmeetable under every option
+  (`epics.md` annotated by Guy's act, PR #210). **Owner: story 6.14** — a slice with two interfaces and a
+  shared name, read from wherever the screen reads L2 decisions.
+- ⚠️ **Two interfaces seen only in DIFFERENT sweeps are never paired.** Guy's decision D judges the
+  interfaces one sweep carried, so a machine whose second NIC answers only when the first does not is
+  never judged as a pair. The price of never vacating an interface that missed a sweep (story 5.14's
+  measurement). **Owner: Epic 6's RETROSPECTIVE.**
+- ⚠️ **A flapping reverse-DNS answer churns L2 history.** A PTR answering on one sweep and not the next
+  turns `obelix`'s `Supports` into `Neutral`: the pair decays to `AbsenceOfProof` and is CLOSED, then
+  re-opened at the next answering sweep — two history rows per flap. Reasoned from decisions F and G and
+  covered by `a_pair_that_decays_to_absence_of_proof_is_closed_with_no_successor`; **not measured on the
+  NAS**, where the rate is unknown. **Owner: story 6.14**, the first to show the decision — and the first
+  place its churn would be visible.

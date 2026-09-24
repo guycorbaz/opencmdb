@@ -575,9 +575,14 @@ mod tests {
         .map_err(|e| e.to_string())
     }
 
+    /// The constraint is matched WITH the backticks MariaDB prints around it (`` CONSTRAINT `name`
+    /// failed ``). ⚠️ Unbounded, `l2_pair_decision_current` is a substring of
+    /// `l2_pair_decision_current_value`, so the needle could not tell the two refusals apart — found by
+    /// mutation M6 contradicting its prediction, not by reading.
     fn refused_by(result: Result<(), String>, constraint: &str) {
         let error = result.expect_err("the schema must refuse this row");
-        assert!(error.contains(constraint), "{constraint} in {error}");
+        let needle = format!("`{constraint}`");
+        assert!(error.contains(&needle), "{needle} in {error}");
     }
 
     /// The control: a valid ambiguity row is accepted — so each refusal below is about its one column.
