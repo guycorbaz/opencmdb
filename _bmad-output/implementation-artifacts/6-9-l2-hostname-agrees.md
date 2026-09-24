@@ -280,9 +280,17 @@ and a **superset/subset** pair. 🔴 Without it, M2 and M7 ship the refused read
 
 **AC8 — no regression**: ten gates, clippy `--all-targets`, `RUSTFLAGS="-D warnings"`, fmt, and the
 suite under both store conditions. ⚠️ **The two browser gates are NOT claimed**: this story renders
-nothing. ⚠️ **And the clock is no longer the tell** — measured with no store, the suite now takes
-**5.82 s** (budget tests: `page.rs:3222`, `diagnostic.rs:1386`/`:1464`), against 0.21 s at 6.7. A
-store run must be established some other way.
+nothing.
+
+⚠️ **The clock is still a tell, and what stopped working is narrower than the validation said —
+corrected with the measurement rather than repeated.** The fact-check layer measured **5.82 s** with
+no store against story 6.7's recorded **0.21 s** and concluded *the clock no longer discriminates*.
+Re-measured here on the shipped tree: **5.05 s without a store** and **24.52 s against a VIRGIN
+store**, a factor of ~5 — so the store/no-store comparison still works. 🔑 **What broke is comparing
+today's no-store run against a HISTORICAL no-store figure**: the suite now carries deliberate budget
+tests (`page.rs:3222`, `diagnostic.rs:1386`/`:1464`) worth ~5 s with no database at all, so 6.7's
+0.21 s is no longer the baseline to hold a run against. *A dated figure and a living one in the same
+comparison: it is always the living one that has moved.*
 
 ---
 
@@ -299,12 +307,99 @@ store run must be established some other way.
 
 ---
 
+## 4. Prove-to-red — eight mutations, predictions written to a file BEFORE the first run
+
+Driven by `cargo xtask mutate --baseline` against a live `mariadb:10.11` on port **13419**, the
+database dropped and recreated first. **Seven conform; ONE contradicts, and the contradiction is the
+finding.** No *"every red assertion-carried"* headline is claimed — the carriers are named per row.
+
+| id | mutation | predicted | measured | carriers |
+|---|---|---|---|---|
+| **M1** | drop `both_sides_offer_a_name` (D20's lock) | red 3 | ✅ **red 3** | `two_absent…`, `two_invisible…`, `two_identical_punctuation…` — and `one_named_side_and_one_silent_side…` **GREEN as predicted**, so it is kept and NOT claimed as a lock carrier |
+| **M2** | reading (b): `!names_a.is_disjoint(&names_b)` | red 3 | ✅ **red 3** | the three AC7 guards. 🔴 **This was GREEN across the whole suite before AC7 existed** — Guy's decision is carried now |
+| **M3** | empty evidence on `Supports` | red 2 | ✅ **red 2** | `an_agreeing_verdict_carries…`, the corpus walk |
+| **M4** | corrupt `L2_HOSTNAME_AGREES` | red 2 | ✅ **red 2** | the double-literal pin **and** the corpus walk — whose red comes from its TERMINAL naming assertion, the walk itself iterating zero times |
+| **M5** | `Supports` → `Decisive` | red 3 | 🔴 **red 4 — CONTRADICTS** | the three predicted **plus `case_and_whitespace_do_not_stop_two_names_agreeing`** |
+| **M6** | drop `evidence.sort()` in the shared `evidence_of` | red 2 | ✅ **red 2** | 🔑 6.9's order test **AND 6.7's** `the_evidence_does_not_depend_on_the_argument_order`, from ONE site |
+| **M7** | `==` → `names_a.is_subset(&names_b)` | red 1 | ✅ **red 1** | `a_superset_of_names_does_not_agree_with_its_subset`, **on its second assertion** — the one added before the pass |
+| **M8** | the `Supports` arm names `L2_DIFFERENT_HOSTNAME` | red 2 | ✅ **red 2** | both rule-naming assertions; AC4's real carrier proven |
+
+🔴 **M5's divergence is about MY PREDICTION METHOD, not about the code, and I am not rewriting the
+prediction after the fact.** I enumerated the carriers by listing the tests written **for the
+criterion** rather than the tests that read the mutated **value** — and *any* test asserting
+`Verdict::Supports` carries a `Supports → Decisive` mutation whatever criterion it was written for.
+There are four. 🔑 The transferable form: **a carrier list derived from criteria is a guess; a carrier
+list derived from the mutated value is a measurement.** The driver said exactly what story 6.4b built
+it to say.
+
+🔑 **M6 IS THE STORY'S TOOLING DELIVERABLE.** The first attempt at this row was **REFUSED** by the
+driver with `ANCHOR MATCHED 2 TIMES`, the second site being `verdict_for_hostname`'s own inline copy —
+so replacing both would have repaired the very guard the mutation was meant to red, *which is what
+establishes the two as independent representations of one convention*. `evidence_of` is extracted and
+shared, and M6 now reds **every rule that argues** from a single site.
+
+🔑 **M7 confirms a finding this pass produced BEFORE it ran.** Predicting the mutation showed that
+AC7's population was **asymmetric**: `is_subset` is directional, and with the superset on the LEFT it
+answers `false`, so the guard would have stayed GREEN under the mutation it names. Both orientations
+are asserted now and M7 reds on the second. *A guard written for a directional operator and exercised
+in one direction is a guard placed where half the defect cannot occur* — this epic's dominant class,
+caught by prediction rather than by reading.
+
+## 5. Instrument defects of my own, each caught by disbelieving a result
+
+🔴 **I READ ANOTHER STORY'S MUTATION RESULTS AS MINE, and only a semantic tell caught it.** The
+session scratchpad is shared across stories and I named my logs by POSITION (`m5.log`, `m6.log`…), so
+story 14.5's logs of 2026-09-21 sat under exactly the names my own pass was about to write. Three of
+them read as clean conforming results — one `CompileFailure` matching its prediction, one `red:1`
+naming a test, one `Green` — and **nothing mechanical said they were three days old**: not the
+filename, not the format, not an exit code. What said it was that `M5` named `declares_a_vlan` and
+`M7` named *a subnet correction writes its label and its VLAN*, and this story has nothing to do with
+VLANs. 🔑 **The remedy is a NAMESPACE and not vigilance** — the logs live in a per-story directory
+now, cleared before the pass — because *a stale measurement under a fresh name is indistinguishable
+from a measurement*, and this project's recorded class is exactly that: **a measurement taken on one
+artefact and attributed to another**. Four fabricated rows were one `grep` away from the table.
+
+⚠️ **And I committed the pipeline-status trap while recreating the database** — `DROP_EXIT=1` was the
+`grep`'s status, not the command's. Caught because the output printed `recreated`, which contradicted
+the 1. This project's own rule says to read `$?` from a file; I read it after a pipe, in the same
+session whose notes name the defect.
+
+🔴 **A THIRD, and it is the one that would have cost the most: my waiter's needle was CASE-SENSITIVE
+where the driver shouts.** The chain that was to run M6–M8 waited on `contradicts`; the driver prints
+**`🔴 THE OUTCOME CONTRADICTS THE PREDICTION`**. So M5's divergence — the one real finding of the pass
+— never woke the chain, and **three mutations silently never ran**. 🔑 *A waiter that cannot match the
+failure message waits for ever, and a waiter that never fires is indistinguishable from a pass still
+running* — this project's *silence is not a green*, one layer down: not a watcher that exits 0 over
+nothing, but a watcher that **cannot see the one outcome worth waking for**. Caught by polling the
+files directly instead of trusting the waiter, which is the same defence the register already records
+for CI watchers. ⚠️ **And the shape is the story's own subject**: my needle was written for the happy
+path and blind to the red, exactly as a guard written for a criterion is blind to the value the
+mutation moves.
+
+⚠️ **The driver REFUSED the store-free run, and the refusal is a result**: this story needs no store,
+and `cargo xtask mutate` still answers `2` — *"`DATABASE_URL` is unset, so every store-backed test
+passes by RETURNING and the totals are identical to a real run"*. It cannot tell *no store needed*
+from *store tests silently returning*, so it declines rather than guess. The pass ran against a live
+`mariadb:10.11` on port **13419** with the database dropped and recreated first, per story 6.6's
+registered non-determinism row.
+
 ## Record
 
-- live-count: bin=745 core=191 xtask=110
+- live-count: bin=747 core=203 xtask=110
 - base: e7e5143ae3f4c0192944bd9723c5788cf3734590
-- registered: a `Supports` rule cannot pass a `must-merge` trap
-- registered: the first producer of `Verdict::Supports` moves from story 6.8 to 6.9
-- registered: an L2 side's scope and the agreement reading are one decision
-- registered: an FQDN and a short label are two spellings of one name
+- registered: A `Supports` rule cannot pass a `must-merge` trap
+- registered: The first producer of `Verdict::Supports` moves from story 6.8 to 6.9
+- registered: An L2 side's SCOPE and the hostname-agreement reading are one decision taken a story apart
+- registered: An FQDN and a short label are two spellings of one name
 - file: _bmad-output/implementation-artifacts/6-9-l2-hostname-agrees.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: crates/opencmdb-core/src/identity/l2.rs
+- file: crates/opencmdb-core/src/identity/cascade.rs
+- file: crates/opencmdb-bin/src/fixtures.rs
+- file: crates/opencmdb-bin/src/scan_pass.rs
+
+⚠️ **1 046 → 1 060 tests**, +14 (twelve synthetic in `l2.rs`, two corpus-driven in `fixtures.rs`).
+`l2.rs` goes **255 → 404** code lines of the 2000-line ceiling. ⚠️ **Neither manual owes a sentence** —
+this story ships no route, no screen and no production caller, so nothing an operator reads changes;
+the admin manual's grouping warning is about the L1 key and stays true as written.
