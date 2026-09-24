@@ -6307,3 +6307,15 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   `HostnameSource`. The product already owns a display-only normaliser (`page.rs:378 short_name`,
   whose own doc says it *"shortens the DISPLAY and nothing else"*). **Owner: story 6.12**, or the
   first story that gives the product a second hostname source, whichever comes first.
+- ⚠️ **A watcher must be proven to emit at least once before its silence is allowed to mean anything.**
+  Story 6.9 armed a CI monitor on `gh pr checks <n> --json name,bucket`; **`gh pr checks` has no
+  `--json` flag** in `gh 2.46.0`, so every poll captured a usage error instead of data and the monitor
+  expired after fifteen minutes with **zero events over a run that had already finished green at
+  3m33s**. 🔑 *A watcher whose data source never produces data cannot report success OR failure*, so
+  its silence carries no information at all — which is a level below the two rows this register
+  already holds (a watcher exiting 0 over zero checks, and one killed while emitting nothing). The
+  remedy is mechanical rather than a resolution: **run the watcher's own command once and look at its
+  output before trusting the watch.** The machine-readable route for checks is
+  `gh pr view --json statusCheckRollup`, and a run's own head sha comes from `gh run view --json
+  headSha`, which is what establishes CI green on the head commit rather than inherited. **Owner: the
+  next story that arms a watcher**, which is every story.

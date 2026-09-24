@@ -364,6 +364,20 @@ artefact and attributed to another**. Four fabricated rows were one `grep` away 
 the 1. This project's own rule says to read `$?` from a file; I read it after a pipe, in the same
 session whose notes name the defect.
 
+🔴 **A FOURTH, and it is the sharpest of the four: a CI watcher that was blind BY CONSTRUCTION, and
+it stayed silent over a run that had already SUCCEEDED.** The monitor armed on PR #205 polled
+`gh pr checks 205 --json name,bucket` — and **`gh pr checks` has no `--json` flag at all** in the
+installed `gh 2.46.0`, so every poll captured a usage error instead of data: `jq` failed, the
+terminal-state break never fired, and the diffing step emitted nothing. It expired after fifteen
+minutes with **zero events** while the run had finished green at **3m33s**. 🔑 *A watcher whose data
+source never produces data cannot report success OR failure*, so its silence carried no information
+whatever — and this project's register already holds two watcher rows of a weaker kind (one exiting 0
+over zero checks, one killed and emitting nothing). **The rule this adds: a watcher must be proven to
+emit at least once before its silence is allowed to mean anything** — I armed it without ever checking
+that its command produces output in this environment. The machine-readable route here is
+`gh pr view --json statusCheckRollup`, and the conclusion was read from `gh run view` in the end,
+which is what confirmed CI green on `e7e5143` **itself** rather than inherited.
+
 🔴 **A THIRD, and it is the one that would have cost the most: my waiter's needle was CASE-SENSITIVE
 where the driver shouts.** The chain that was to run M6–M8 waited on `contradicts`; the driver prints
 **`🔴 THE OUTCOME CONTRADICTS THE PREDICTION`**. So M5's divergence — the one real finding of the pass
@@ -404,6 +418,7 @@ the block being loosened.
 - registered: The first producer of `Verdict::Supports` moves from story 6.8 to 6.9
 - registered: An L2 side's SCOPE and the hostname-agreement reading are one decision taken a story apart
 - registered: An FQDN and a short label are two spellings of one name
+- registered: A watcher must be proven to emit at least once before its silence is allowed to mean anything
 - file: _bmad-output/implementation-artifacts/6-9-l2-hostname-agrees.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: _bmad-output/implementation-artifacts/sprint-status.yaml
