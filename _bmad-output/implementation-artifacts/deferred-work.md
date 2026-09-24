@@ -6429,3 +6429,14 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   in FOUR places while adding no such row** — its blind review layer counted the claim against the diff.
   *A section that says "registered" is not a registration* (story 6b.9's class), and `cargo xtask record`
   cannot catch it, because the story never claimed the second row it was missing. **Owner: story 6.12.**
+- 🔴 **EPIC 6's ENGINE SPINE HAS STOPPED COUNTING ITS RUN OF STORIES THAT GIVE THE OPERATOR NOTHING, and
+  the run is FIVE.** Measured: stories **6.5, 6.6, 6.7, 6.9 and 6.11** each record *"What the operator
+  gains: NOTHING"* — no route, no screen, no write, no production caller — and story 6.12 is the promised
+  first with one. ⚠️ **Epic 6b counted its own run out loud**, story by story (*"four … six … eight … ten
+  well-lit dead ends"*), *and the engine spine states the fact per story and never the series.* 🔑
+  `CLAUDE.md`'s own headline of 2026-08-30 is that three outside reviews measured epics 4–5 as *"43 stories
+  and nothing operator-visible"*, and that *"what drifted is the RATIO of rigour to reach"* — **so a record
+  that carries the fact and not the count is in the exact form in which that drift became invisible the
+  first time.** Raised by story 6.11's acceptance-audit layer, which asked the question three review layers
+  had historically failed to ask and which this story's own §6 had not. **Owner: Epic 6's RETROSPECTIVE** —
+  a count is not a story's to decide, and the number is the thing.

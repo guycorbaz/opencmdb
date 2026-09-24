@@ -299,12 +299,35 @@ sentence**, rather than re-deriving it (§0.2).
 IS an identity** at the very ingestion boundary AC1's wording names. ✅ M7 measures the L1-level
 misreading at **ten** reds; **M8 measures the ingestion-level one at ONE**, named for a different property.
 
-**AC4 — the three poles hold, AND the third gets a SYNTHETIC guard at L2** (§0.4). 🔴 *The corpus cannot
+**AC4 — the three poles hold; the third's guard is a CORPUS one where the criterion said SYNTHETIC, and
+that substitution is flagged rather than ticked.** ⚠️ *AC4's letter asks for a synthetic guard at L2;
+`the_failover_resighting_is_one_interface_so_the_reading_never_sees_it` reads the committed stream, so it
+is a corpus guard.* 🔴 **And the edge layer measured that it reds under NO mutation of this story's code**
+— the careless *always refuse* reading reds `two_ordinary_addresses_are_left_alone` **alone**, because the
+failover test never calls `verdict_for_virtual_mac` at all. So what carries the pole at L2 is
+`two_ordinary_addresses_are_left_alone`, and what the failover test carries is **`l1::join`'s collapse — a
+property this story did not write**. 🔑 *§0.4 said "the pole needs a synthetic guard at L2, and saying so
+is the criterion"; the guard that shipped is at L1, which is Epic 6's dominant class in its recorded
+shape.* Both are kept, each now saying which it is. ⚠️ **And its second assertion is entailed by its
+first** — `L2CandidatePair::new(a, a)` returns `None` by construction, so given `first == after_failover`
+it cannot fail; it is a **fourth** carrier of a property whose own type doc says *"do not record them as
+two guards"*. Kept as a premise, not counted as an oracle. (§0.4). 🔴 *The corpus cannot
 see the form of the defect this story can commit*: composing the careless reading with L1's `Decisive`
 refuses the failover re-sighting **with the trap gate green**, because the gate routes that trap to the L1
 runner by its `l1-` prefix.
 
-**AC5 — the byte width is FIVE octets and the pin varies the FOURTH and FIFTH, not the sixth.** 🔴 **M1**
+**AC5 — the byte width is FIVE octets, and the probe varies octets 0, 1, 2, 3 and 4.** ⚠️ *This read
+"the pin varies the FOURTH and FIFTH, not the sixth" — it named the end it had been bitten on and left the
+other open, which is the enumeration its own rule forbids. The edge layer measured that comparing
+`addr.0[1..5]` left the whole suite and ten gates GREEN, under which `02:00:5e:00:01:0a` — **the shape the
+corpus's own privacy rewrite produces** — reads as a virtual-router address. Octets 0 and 1 are probed
+now.* 🔴 **And "the pin" names an artefact that does not exist**: §0.2 decided to *"keep the
+representations separate and pin them equal"*, and **no such cross-representation test was written** —
+`is_iana_virtual_router_mac` is compared with nothing in `opencmdb-bin`. ⚠️ Two qualifications the audit
+supplied and §0.2 did not: only `is_synthetic_mac`'s IANA clause is pinnable at all (the other clause is
+*locally administered and not multicast*), and both representations ARE independently probed
+(`fixtures.rs:2860`) — they are simply **not tied**, which is the drift §0.2 set out to prevent.
+**Registered rather than improvised at the end of a review.** 🔴 **M1**
 widened five to four — admitting the IANA VRRP **IPv6** block — and left 755 tests, clippy, ten gates
 **and the equality pin itself GREEN**. ⚠️ And the width is load-bearing against the product's own
 `example_data.rs`, whose thirty-odd `00:00:5E:00:53:xx` documentation MACs share the IANA OUI: **a
@@ -327,13 +350,29 @@ half as `Disqualifying` would disqualify **40 of 42 committed anchors**. Its own
 measured on the reference LAN at **19 U/L of 64 neighbours, 11 of them Docker MACs derived from the host's
 own IPv4** — *not a false signal, an empty one*. The story must name #162 and say it does not close it.
 
-**AC8 — the quantifier over a side's observations is DECIDED.** 🔴 **M4** changed *any observation bears a
+**AC8 — NOT MET AS WRITTEN: its nouns name the shape Guy's arbitration removed.** ⚠️ *The criterion says
+"the quantifier over **a side's observations**", and after the arbitration this function reads two `L1Key`s
+and **no side and no observation at all** — so there is no such quantifier. Its cited M4 describes a defect
+the shape made unrepresentable, and its second half ("an **empty** side → `Neutral`") is unrepresentable
+too, a pair always being two keys.* ✅ **What shipped is the adjacent decision** — *either* key virtual
+against *both* — carried by `two_virtual_router_addresses_are_still_not_a_grouping_anchor`, by V5 (red 4)
+and, since the review, by `the_virtual_address_is_found_when_it_sorts_high_in_the_pair` for the `high()`
+half that **nothing carried**. 🔑 *The criterion was never rewritten after the arbitration that invalidated
+its nouns, which is how a criterion comes to be met by an artefact it does not name.* 🔴 **M4** changed *any observation bears a
 virtual MAC* to *all do* → **GREEN**, because the master trap's side A holds two observations and **both**
 bear it, so the corpus exercises only where the quantifiers coincide. The mixed side is where they
 diverge. ⚠️ Also uncovered and measured: an **empty** side → `Neutral` (safe), and **both sides virtual** →
 `Disqualifying` (right, for two different VRIDs, and named by no criterion).
 
-**AC9 — the reading trusts the BYTES, not the connector's flag, and a test says so.** 🔴 **M6** made it
+**AC9 — MET BY THE TYPE, not by the test the criterion names.** ✅ `L2CandidatePair` carries no `Fact`,
+so `locally_administered` is unreachable through the parameter and **V4's `E0599` is the real carrier**.
+⚠️ *The named test contributes exactly ONE unique assertion — the premise that a VRRP MAC has the U/L bit
+clear — and then duplicates the verdict assertion of `a_virtual_router_address_disqualifies_the_pair…`,
+which is precisely why V3 and V5 reddened it as "the missed carrier": it reds because it re-asserts
+`Disqualifying`, not because it separates bytes from flag.* And its cited M6 describes a defect the
+arbitration made unrepresentable. 🔑 *A milder form of the epic's dominant class: not a guard where the
+defect cannot occur, but a guard whose distinctive content is a premise while its verdict half is a
+duplicate — and the story did not say so until its audit layer did.* 🔴 **M6** made it
 consult `locally_administered` → **GREEN**, because the fixture's flag happens to be `false`. ⚠️ *A
 connector lying about that flag would silently disable the disqualification and nothing would notice* —
 and `MacAddr::is_locally_administered()` is documented as *"the ground truth a connector's reported flag
@@ -341,8 +380,11 @@ can be cross-checked against"* while **nothing cross-checks**.
 
 **AC10 — no regression**: ten gates, clippy `--all-targets`, `RUSTFLAGS="-D warnings"`, fmt, both store
 conditions. ⚠️ **`float-free` measures 5 files if the reading extends `l2.rs` and 6 if a sibling opens** —
-a function of §0.1b's decision, to be **measured and not predicted**. `file-size` is a non-issue
-(`l2.rs` at 425 code lines against 2000). ⚠️ **The two browser gates are NOT claimed**: this story renders
+a function of §0.1b's decision, to be **measured and not predicted**. `file-size` is a non-issue — **measured, not recalled: `l2.rs` at 599 code lines
+of 2000** by the gate's own rule (the lines before the first top-level `#[cfg(test)]`). ⚠️ *This read
+"425 code lines", a figure reproducible on NO commit: the file was 255 before story 6.9, 434 at this
+story's base, and this story grows it. AC10 promised to measure and recalled instead — story 14.6's
+"596 lines" class.* ⚠️ **The two browser gates are NOT claimed**: this story renders
 nothing, and saying so is the criterion.
 
 **AC11 — the trap gate does NOT move, and the story prices that.** 🔴 The trap is hard-coded as unanswerable
@@ -459,12 +501,46 @@ cause. **It held: no layer reported a dirty baseline it could not explain.**
 
 ---
 
+## 5. Change Log
+
+| when | what |
+|---|---|
+| 2026-09-24 | contexted; three questions posed, of which §0.1's answer was mine and wrong |
+| 2026-09-24 | validated by two fresh-context layers — **§0.1's recommended shape refuted by both, from two different roads**; §0.3 widened by one; the L2-only vector measured sufficient |
+| 2026-09-24 | **Guy's arbitration**: the reading takes an `L2CandidatePair`, so *what it reads* carries the claim |
+| 2026-09-24 | implemented; eight mutations, six conforming, two contradicting for one defect of mine |
+| 2026-09-24 | `float-free` RED on a story number in an assertion message; reworded, bisection recorded |
+| 2026-09-24 | **blind layer**: fourteen findings, of which the width guarded one test thinner than the record said — V1b re-measured at red 2 |
+| 2026-09-24 | **edge layer**: three GREENS — the `high()` half carried by nothing, octets 0–1 unpinned, and a `thread_local` side channel scoring off a fact with ten gates green |
+| 2026-09-24 | **audit layer**: 8/8 rows reproduced, and the `float-free` class found **already registered by story 5.4b with its example and its trigger** — discharged there rather than duplicated |
+| 2026-09-24 | clippy RED on a tree I had just committed (`non_snake_case`); **the driver refused to measure over it** |
+
+⚠️ *This section did not exist for the story's first nine commits — the SECOND of the three regions
+`cargo xtask record` declines to read, and the **third consecutive story** to miss it.*
+
+## 6. What the operator gains, and the run nobody was counting
+
+**Nothing** — verified rather than asserted: no route, no screen, no write, no migration, no dependency,
+and every one of this reading's call sites is inside a `#[cfg(test)]` module. Story 6.12 is the first with
+a production caller.
+
+🔴 **And the audit layer asked the question this project made its own diagnostic, which the story had not:
+how long has the run been?** Within Epic 6's engine spine, **stories 6.5, 6.6, 6.7, 6.9 and 6.11 each
+record "What the operator gains: NOTHING" — five consecutive stories.** Epic 6b counted its own run out
+loud, story by story, up to *"ten well-lit dead ends"*; the engine spine states the fact per story and
+**never the series**. 🔑 *`CLAUDE.md`'s own headline of 2026-08-30 is that epics 4–5 were "43 stories and
+nothing operator-visible", and that "what drifted is the RATIO of rigour to reach" — and five stories into
+an identical shape, the record carries the fact and not the count, which is the form in which that drift
+became invisible the first time.* Registered for Epic 6's retrospective, because a count is not a story's
+to decide and the number is the thing.
+
 ## Record
 
-- live-count: bin=751 core=213 xtask=110
+- live-count: bin=751 core=214 xtask=110
 - base: 8b3682844ca5f90caea894289ff66be3d3bfa595
-- registered: The `float-free` gate reds on a STORY NUMBER written inside an assertion message
 - registered: No L2 rule can ever be NAMED in the presence of any L1 `Disqualifying`
+- registered: Story 6.11's `float-free` red is NOT a new row
+- registered: EPIC 6's ENGINE SPINE HAS STOPPED COUNTING ITS RUN
 - file: _bmad-output/implementation-artifacts/6-11-virtual-mac-anchor-is-not-a-rule.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: _bmad-output/implementation-artifacts/sprint-status.yaml

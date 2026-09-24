@@ -460,7 +460,7 @@ const IANA_VIRTUAL_ROUTER_PREFIX: [u8; 5] = [0x00, 0x00, 0x5e, 0x00, 0x01];
 /// than measured, so it is stated as inference** — this project's rule being that a cause needs a check.
 /// The blind review layer found the contradiction between the two docs.
 /// [`crate::observation::MacAddr::is_locally_administered`]'s own doc calls the bytes *"the ground truth a
-/// connector's reported flag can be cross-checked against"*, and this function is on the ground-truth
+/// connector's reported `locally_administered` flag can be cross-checked against"*, and this function is on the ground-truth
 /// side of that sentence.
 fn is_iana_virtual_router_mac(addr: MacAddr) -> bool {
     addr.0[..5] == IANA_VIRTUAL_ROUTER_PREFIX
@@ -508,13 +508,26 @@ pub const L2_VIRTUAL_MAC_PREFIX: &str = "l2-virtual-mac-prefix";
 /// `error[E0599]: no method named `facts` found for reference `&identity::blocking::L2CandidatePair` in
 /// the current scope`. `L1Key` is `(L2DomainId, MacAddr)`, so the key is all this needs.
 ///
-/// 🔴 **AND THE PROMISE STOPS THERE, which is narrower than this story first wrote it.** It said *"a
-/// function that cannot reach a `Fact` cannot SCORE"* — and its own mutation table contains the
-/// counterexample two rows away: changing this function's verdict from `Disqualifying` to `Opposes`
-/// **compiles**, and reddens five tests rather than `rustc`. So **nothing prevents this returning
-/// `Decisive`**, and that residue is a TRIPWIRE carried by tests, never a compiler guarantee — story
-/// 6.6's precedent, which stated the analogous limit instead of crediting the compiler with it. Found by
-/// the blind review layer, against this story's own table.
+/// 🔴 **AND IT IS A TRIPWIRE, NOT A BARRIER — read it as *a future story will not reach a fact through
+/// this function by accident*, never as *such a reach cannot exist*.** `blocking.rs`'s `l2_candidates`
+/// states the identical narrowing for `decide` one file over, and stories 5.12 and 6b.4b set the
+/// precedent of narrowing a promise in writing rather than letting it stand.
+///
+/// Two measurements size it, both from story 6.11's review layers:
+///
+/// - *"cannot SCORE"* was the first wording, and this story's **own mutation table refutes it two rows
+///   away**: changing the verdict from `Disqualifying` to `Opposes` **compiles** and reds five tests
+///   rather than `rustc`. **Nothing prevents this returning `Decisive`.**
+/// - 🔴 **And a `Fact` CAN reach this function without the compiler objecting.** The edge-case layer built
+///   a module-level `thread_local` holding observations, left the signature untouched, made the verdict
+///   depend on a fact inside it — and measured **1 073 tests, `clippy --all-targets` and all ten gates
+///   GREEN**, with the function answering `Disqualifying` for an ordinary pair whenever the channel held
+///   a virtual fact. *That is §0.1's measured-wrong shape reproduced under the shape chosen to make it
+///   unrepresentable.*
+///
+/// 🔑 So what the argument type buys is exact and worth stating exactly: **a fact cannot arrive THROUGH
+/// the parameter**, which is what `error[E0599]` measures. It buys nothing about a side channel and
+/// nothing about which verdict variant is returned.
 ///
 /// 🔴 **The obvious alternative was BUILT and MEASURED WRONG.** A reading over an [`L2Side`] must dig MACs
 /// out of the side's `facts`, and an observation bearing several MACs stands on several interfaces — so it
