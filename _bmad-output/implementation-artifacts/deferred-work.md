@@ -5337,8 +5337,11 @@ Three rows. Three isolated layers on a different model; two of the three found r
 One row, and it is an ARBITRATION's other half rather than a defect.
 
 - 🔑 **A CLONED MAC PRESENTS AS ONE INTERFACE CONTRADICTING ITSELF, and that is a STRUCTURAL FACT
-  rather than a pair rule.** ↺ **RE-OWNED 2026-09-24, from story 6.11 to Epic 6's RETROSPECTIVE**, and
-  the refusal is reasoned rather than deferred. Story 6.11 shipped the virtual-MAC reading and thereby
+  rather than a pair rule. Owner: story 6.11.**
+  ↺ **RE-OWNED 2026-09-24, from story 6.11 to Epic 6's RETROSPECTIVE** — the title above is left exactly
+  as it stood, because ⚠️ *editing it is what moved the bold boundary and made `cargo xtask record` report
+  the row as GONE: a row is identified by its first bold title (Guy, 2026-09-20), so a re-ownership goes
+  BESIDE the title and never inside it.* The refusal is reasoned rather than deferred. Story 6.11 shipped the virtual-MAC reading and thereby
   established the precedent this case needs — *a structural fact can be read, can be named, and can enter
   the verdict vector without being a rule* — but the two are **not the same act**: the virtual-MAC case
   reads a RESERVED PREFIX off a key the join already separates, while a cloned MAC is a case the
