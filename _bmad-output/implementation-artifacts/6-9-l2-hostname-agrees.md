@@ -604,6 +604,8 @@ spots Epic 14's retrospective named for `cargo xtask record` and the second stor
 - registered: An L2 side's SCOPE and the hostname-agreement reading are one decision taken a story apart
 - registered: An FQDN and a short label are two spellings of one name
 - registered: A watcher must be proven to emit at least once before its silence is allowed to mean anything
+- registered: `architecture.md`'s line citations have drifted by a UNIFORM +30 across the identity engine
+- registered: Story 6.15's own criterion promises what story 6.9 measured to be impossible
 - file: _bmad-output/implementation-artifacts/6-9-l2-hostname-agrees.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: _bmad-output/implementation-artifacts/sprint-status.yaml
