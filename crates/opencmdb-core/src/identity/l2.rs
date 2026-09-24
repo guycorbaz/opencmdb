@@ -827,7 +827,7 @@ mod tests {
     /// writing that the master trap is asymmetric in argument order, and then every test was written with
     /// the virtual side low.
     #[test]
-    fn the_virtual_address_is_found_when_it_sorts_HIGH_in_the_pair() {
+    fn the_virtual_address_is_found_when_it_sorts_high_in_the_pair() {
         // A Cisco OUI: below 00:00:5e, so `L2CandidatePair` puts the VIP on `high()`.
         let low_oui = MacAddr([0x00, 0x00, 0x0c, 0xaa, 0xbb, 0xcc]);
         let built = pair(low_oui, virtual_mac());
