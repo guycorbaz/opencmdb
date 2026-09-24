@@ -10,8 +10,23 @@
 //! **Rules now produce verdicts, and `decide` has a caller** — [`crate::identity::l1`], which joins
 //! observations on the scope-qualified key and answers a pair with one [`RuleVerdict`]. ⚠️ Be exact
 //! about how far that goes: L1 emits **three** of the five verdicts — [`Verdict::Decisive`],
-//! [`Verdict::Disqualifying`] and [`Verdict::Neutral`]. **[`Verdict::Supports`] and
-//! [`Verdict::Opposes`] still have no producer**, and gain one with Epic 6's `l2-*` rules.
+//! [`Verdict::Disqualifying`] and [`Verdict::Neutral`]. ~~**[`Verdict::Supports`] and
+//! [`Verdict::Opposes`] still have no producer**, and gain one with Epic 6's `l2-*` rules.~~
+//!
+//! 🔴 _Struck rather than deleted, because the sentence was FALSE for one half of itself for four
+//! weeks. [`crate::identity::l2::verdict_for_hostname`] has produced [`Verdict::Opposes`] since story
+//! 6.7 (2026-08-30) and [`crate::identity::l2::verdict_for_hostname_agreement`] produces
+//! [`Verdict::Supports`] since story 6.9 (2026-09-24) — so **all five verdicts now have a producer**,
+//! and none of them has a PRODUCTION caller: story 6.12 is the first. The stale half was found by a
+//! validation layer reading this file, not by either story that falsified it, which is story 6.6's
+//! recorded class — a true sentence about what does not exist yet, left standing past the day it
+//! started existing._
+//!
+//! ⚠️ **What a `Supports` still cannot do is MERGE.** `Conclusion::Match` is reached through one arm
+//! only and that arm needs a `Decisive`; a lone `Supports` lands on the weak-evidence row below and
+//! abstains as [`IdentityAbstentionCause::Ambiguous`]. Story 6.9 measured that the three committed
+//! `must-merge` traps naming an `l2-*` rule therefore cannot score a pass, and Guy left *what makes a
+//! merge at L2* to Epic 6's retrospective.
 //!
 //! The vocabulary is chosen before the engine on purpose — the same order D19 imposed on the metrics
 //! harness in Epic 4, *"a metric written after the engine is bent to fit the engine"* — and because

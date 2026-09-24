@@ -6260,3 +6260,50 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   slice exists to fix: `"Documentation updated: %{n} field(s)"` passes the gate, the resolver AND
   the DOM check, which prints its own ✅ with the defect quoted beside it. **Owner: Epic 7**, with the
   per-field gesture that will mint more of these strings.
+
+- 🔴 **A `Supports` rule cannot pass a `must-merge` trap**, and it is three traps rather than one.
+  `decide` reaches `Conclusion::Match` through one arm only and that arm needs a `Decisive`; a lone
+  `Supports` lands on the row `architecture.md:972` calls *weak evidence* and abstains as
+  `Ambiguous`, which `score.rs:276` scores a **fail** against a `must-merge` expectation — the cell
+  D18 calls cowardice. The corpus has **eleven** `must-merge` traps: eight name `l1-exact-mac`
+  (`Decisive`, which is how they pass today) and **three name an `l2-*` rule** —
+  `shared-hardware-vm-must-merge` (`l2-hostname-agrees`, story 6.9) plus `multi-nic-must-merge` and
+  `docker-veth-must-merge` (`l2-uplink-agrees`, **story 6.8**). `epics.md:1904` and `:1922` both
+  specify `Supports` and no L2 story prescribes `Decisive` anywhere. 🔑 So once an L2 runner exists
+  these three leave the *unanswerable* bucket and land in `failures`, `passed()` stays false and NFR4
+  cannot go green — for a reason Epic 6's constraint (2) does not name: **it did the arithmetic of the
+  BUCKET and not of the FAILURES column.** ⚠️ The word *"answered"* carries both readings, and it is
+  the word Guy arbitrated on for story 6.7. Measured end to end by story 6.9's gap-hunt with an
+  isolated control (`Supports alone → Fail`, `Decisive alone → Pass`, `two Supports → Fail`); pinned
+  executably by `l2.rs`'s `a_supports_only_verdict_abstains_as_ambiguous_and_names_no_rule`. **Guy,
+  2026-09-24: story 6.9 measures it and does not decide it. Owner: Epic 6's RETROSPECTIVE**, which may
+  edit `epics.md` where a story may not — and it must look at 6.8 in the same act. Refused with why:
+  making the rule `Decisive` (a shared hostname would become as strong as an exact MAC, so two
+  printers carrying the factory default `doc-printer` would merge at L2, which
+  `hostname-collision.toml` forbids in its own words) and bumping the corpus now (a planning act taken
+  with no production caller and no screen).
+- ⚠️ **The first producer of `Verdict::Supports` moves from story 6.8 to 6.9.** `epics.md:1866`'s
+  heading and `:1877` both call 6.8 *"the first producer of `Supports`"*; Guy's reorder of 2026-09-23
+  put 6.9 first, so 6.9 shipped it. `epics.md` is NOT edited — a story may not — and the two live doc
+  sentences that had gone stale WERE corrected in place with their first version struck
+  (`cascade.rs`'s module doc, which had been **false for `Opposes` since story 6.7**, and
+  `scan_pass.rs:760`, whose conclusion survives for the narrower reason that neither producer has a
+  production caller). **Owner: Epic 6's retrospective**, together with the row above.
+- ⚠️ **An L2 side's SCOPE and the hostname-agreement reading are one decision taken a story apart.**
+  An `L2Side` is *the observations that landed on one interface*, and what bounds that set is story
+  6.12's plumbing rather than `l2.rs`. Guy chose set EQUALITY for agreement on 2026-09-24, so **one
+  rename silences the rule for that interface permanently once a side spans more than one sweep**
+  (`{old, new}` never equals `{new}`) — where a non-empty-intersection reading would still support.
+  `resolver.rs:251` joins one sweep's batch today, and the corpus already holds a side with two
+  sightings an hour apart (`hostname-collision`'s side A). **Owner: story 6.12** — whichever scope it
+  gives a side, it owes a sentence about what that does to this rule.
+- ⚠️ **An FQDN and a short label are two spellings of one name, and `hostnames_of` treats them as
+  two.** Measured: `doc-a.example.net` against `doc-a` yields `Neutral` from
+  `verdict_for_hostname_agreement` **and `Opposes` from `verdict_for_hostname`** — D20's bug, live on
+  a real network the day a second hostname source exists, since DHCP, mDNS and NetBIOS emit a short
+  label where `arp_ping.rs` emits the PTR FQDN. ⚠️ Nothing is live today because
+  `reverse_dns.rs:137` strips the trailing dot and the product has ONE name source, **but that is a
+  property of one connector and not of `hostnames_of`**, which is deliberately blind to
+  `HostnameSource`. The product already owns a display-only normaliser (`page.rs:378 short_name`,
+  whose own doc says it *"shortens the DISPLAY and nothing else"*). **Owner: story 6.12**, or the
+  first story that gives the product a second hostname source, whichever comes first.

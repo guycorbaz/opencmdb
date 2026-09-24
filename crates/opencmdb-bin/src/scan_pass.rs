@@ -757,9 +757,15 @@ mod tests {
     ///
     /// The slice below: two observations sharing one MAC, plus one carrying no MAC. That is what the
     /// shipped connector's shape can reach, plus the one case that mints an interface. **It is not a
-    /// claim about every possible input** — `Verdict::Supports` and `Verdict::Opposes` have no
-    /// producer at all today (`cascade.rs`), which is the structural reason no `Ambiguous` can
+    /// claim about every possible input** — ~~`Verdict::Supports` and `Verdict::Opposes` have no
+    /// producer at all today (`cascade.rs`)~~, which is the structural reason no `Ambiguous` can
     /// arise, and Epic 6 owns giving them one.
+    ///
+    /// 🔴 **Struck: both now have a producer** — `l2::verdict_for_hostname` since story 6.7,
+    /// `l2::verdict_for_hostname_agreement` since story 6.9 — **and the conclusion survives for a
+    /// narrower reason**: neither has a PRODUCTION caller, so the pass this test drives still cannot
+    /// see an L2 verdict. **Story 6.12 is the first caller, and it is what turns this tripwire red**,
+    /// exactly as story 5.14b's comment said it would.
     #[tokio::test]
     async fn the_production_pass_produces_no_ambiguous_abstention() {
         let _guard = crate::DB_TEST_LOCK.lock().await;

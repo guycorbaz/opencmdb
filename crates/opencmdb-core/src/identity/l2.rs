@@ -53,6 +53,13 @@
 //! gate's rule comparison never fires. Measured end to end: corrupting this module's rule id leaves
 //! the trap PASSING.
 //!
+//! ⚠️ **The same hole on the other rule, through a DIFFERENT arm — measured, not inherited.** A
+//! verdict set that only SUPPORTS lands on the weak-evidence row and abstains on
+//! `IdentityAbstentionCause::Ambiguous`. Different cause, different arm of the table, and the same
+//! consequence: no rule is named, so a misspelled id is invisible to the trap path there too. Story
+//! 6.9 re-measured that rather than reading it off this paragraph, because *the same conclusion
+//! reached by a different mechanism is a second measurement and not a corollary*.
+//!
 //! The id is therefore pinned by a DOUBLE-LITERAL test — the constant against the corpus's own
 //! spelling — which is L1's idiom.
 //!
@@ -65,7 +72,7 @@
 use std::collections::BTreeSet;
 
 use crate::identity::cascade::{RuleVerdict, Verdict};
-use crate::observation::{Fact, Observation};
+use crate::observation::{Fact, ObsId, Observation};
 use crate::trap::RuleId;
 
 /// The rule id, spelled exactly as the committed corpus spells it.
@@ -222,21 +229,163 @@ pub fn verdict_for_hostname(a: &L2Side<'_>, b: &L2Side<'_>) -> RuleVerdict {
     let opposes = both_sides_offer_a_name && names_a.is_disjoint(&names_b);
 
     if opposes {
-        let mut evidence: Vec<_> = a
-            .observations
-            .iter()
-            .chain(b.observations.iter())
-            .map(|observation| observation.obs_id)
-            .collect();
-        evidence.sort();
         RuleVerdict {
             rule: RuleId(L2_DIFFERENT_HOSTNAME.to_string()),
             verdict: Verdict::Opposes,
-            evidence,
+            evidence: evidence_of(a, b),
         }
     } else {
         RuleVerdict {
             rule: RuleId(L2_DIFFERENT_HOSTNAME.to_string()),
+            verdict: Verdict::Neutral,
+            evidence: Vec::new(),
+        }
+    }
+}
+
+/// The observations both sides stand on, **sorted** — what a verdict that ARGUES leaves behind.
+///
+/// D19: *"a rule that fires without leaving its `rule_id` in the database is a rule we cannot
+/// debug"*. The sort is what makes the evidence of a pair independent of which side was the left
+/// argument, on `verdict_for_pair`'s measured precedent.
+///
+/// # 🔑 Why this is a function and not two inline blocks
+///
+/// It was two, and the mutation driver is what said so: story 6.9's prove-to-red **refused** the
+/// mutation that drops the sort with `ANCHOR MATCHED 2 TIMES`, the second site being
+/// [`verdict_for_hostname`]'s own copy. *Two representations of one convention with nothing tying
+/// them* — replacing both would have repaired the guard the mutation was meant to red, which is
+/// exactly what establishes that they were independent. They are one now, so a mutation of the order
+/// reds every rule that argues.
+///
+/// ⚠️ **It is NOT de-duplicated**, and that is stated rather than discovered: a side holding one
+/// observation twice, or a multi-homed observation standing on both sides, puts an [`ObsId`] in
+/// twice. Unreachable through the corpus today; **story 6.12's plumbing is where it becomes
+/// possible**, and it is registered there rather than guarded here.
+fn evidence_of(a: &L2Side<'_>, b: &L2Side<'_>) -> Vec<ObsId> {
+    let mut evidence: Vec<_> = a
+        .observations
+        .iter()
+        .chain(b.observations.iter())
+        .map(|observation| observation.obs_id)
+        .collect();
+    evidence.sort();
+    evidence
+}
+
+/// The rule id, spelled exactly as the committed corpus spells it.
+///
+/// **Exactly one committed trap names it** — `shared-hardware-vm-must-merge`, whose two observations
+/// carry distinct locally-administered MACs and the shared hostname `doc-vm-alpha`, so the L1 join
+/// gives two distinct interfaces and a pair exists to judge. ⚠️ Unlike
+/// [`L2_DIFFERENT_HOSTNAME`]'s three, none is lost to a collapse.
+///
+/// # ⚠️ The constant is one literal among five, and only two of them are tied to it
+///
+/// The string `"l2-hostname-agrees"` also appears at four hand-authored test sites (`cascade.rs`,
+/// `l1_runner.rs`, `trap_gate.rs`, `fixtures.rs`), every one keyed on the corpus TOML rather than on
+/// this constant — **measured: none of the four reds when this constant is corrupted.** What does red
+/// is the double-literal pin in `fixtures.rs` and that file's corpus walk, and the walk only because
+/// it carries a terminal naming assertion: without it the walk iterates **zero** times under the
+/// same mutation and the pin is the sole carrier. *A claim of sole carriership is worth exactly the
+/// mutation that checked it* — this one was checked, in both directions.
+pub const L2_HOSTNAME_AGREES: &str = "l2-hostname-agrees";
+
+/// `l2-hostname-agrees` — two interfaces reporting the same name argue for being one device.
+///
+/// # The verdict
+///
+/// [`Verdict::Supports`] when **both** sides offer a name and the two name sets are **equal**;
+/// [`Verdict::Neutral`] otherwise. This is **the first producer of `Supports` in this codebase** —
+/// story 6.8 was to have been, and Guy's reorder of 2026-09-23 moved it here because `Fact::Uplink`
+/// has no connector producer while `Fact::Hostname` has had one since PR #143.
+///
+/// # 🔴 Why `Neutral` and not `Supports` on absence — D20's lock, and the CORPUS wrote it first
+///
+/// `BTreeSet` compares **equal** when both sides are empty, so a rule that only asks *"are the names
+/// the same?"* **SUPPORTS ON ABSENCE** — two interfaces that name nothing arguing they are one
+/// machine. `fixtures/scenario/traps/hostname-absence.toml:15` prescribes the lock in so many words,
+/// two epics before this rule existed: *"an empty string is not a matchable value (`"" == ""` is not
+/// hostname agreement)"*.
+///
+/// ⚠️ **And no trap can red it.** Measured over all 26 trap-named pairs, the unlocked form flips
+/// **8** of them to `Supports` on total absence — six being `must-not-merge` traps — and **not one is
+/// caught**, because a lone false `Supports` still yields `Abstained { Ambiguous }` and
+/// `(must-not-merge, Abstained)` is `score`'s load-bearing PASS cell. *The lock is carried by
+/// synthetic guards alone, and the tests below are all that stand between the product and it.*
+///
+/// 🔑 **The stakes are not symmetric with [`verdict_for_hostname`]'s.** A false `Opposes` leaves two
+/// rows where one belongs and the operator can still act; *a false merge cannot be undone by looking
+/// harder* (Guy, story 6.7).
+///
+/// # ⚠️ EQUALITY, not a shared name — Guy's decision of 2026-09-24
+///
+/// A side is a group of observations, so it may offer several names. `Supports` requires the sets to
+/// be **equal**: a partial overlap stays `Neutral` here exactly as it stays `Neutral` in
+/// [`verdict_for_hostname`], so the two rules are silent together in the middle. The argument is the
+/// false-merge asymmetry above and **not** symmetry for its own sake — a non-empty *intersection*
+/// would assert that one shared name settles which name is current, which is the sentence
+/// [`verdict_for_hostname`]'s own doc refuses, read backwards.
+///
+/// ⚠️ **Two tempting arguments for this reading were measured and do NOT hold**, and are recorded so
+/// nobody re-derives the decision from them: *Supports and Opposes are mutually exclusive* is true
+/// under **every** reading anyone would write (0 violations over 64 adversarial subset pairs, under
+/// equality, intersection, subset and the unlocked form alike), because supporting implies sharing a
+/// name implies not being disjoint; and the emptiness lock above is a **cost** of this reading rather
+/// than a reason for it, since `!is_disjoint` is already `false` for two empty sets.
+///
+/// ⚠️ **The committed corpus cannot separate the two readings**: every side in it offers at most one
+/// name, so they agree on all 26 rows and diverge on 30 of the 64 synthetic pairs. The tests below
+/// carry the decision, and a partial-overlap population is what makes it reversible at the right
+/// price.
+///
+/// # ⚠️ What this rule's silence is, and what it is not
+///
+/// Where a name is absent, the silence is **data availability**: `prd.md:880` measures hostname
+/// *"unusable on nearly half of known clients (absent on 71, empty string on 11, and never null)"*,
+/// and because this rule needs **both** sides of a pair to carry one, availability enters **squared**
+/// — on the reference LAN, ~70 % per interface is ~49 % per pair.
+///
+/// Where two sources spell one name differently, the silence is **normalisation**, which is a
+/// different thing and is not closed here: an FQDN against a short label is `Neutral` here while
+/// [`verdict_for_hostname`] confidently **`Opposes`**. Nothing is live today — the one connector that
+/// emits a name strips the trailing dot at `reverse_dns.rs:137` — but *that is a property of one
+/// connector and not of [`hostnames_of`]*, so the question is registered with story 6.12 rather than
+/// answered by a sentence.
+///
+/// # 🔴 A `Supports` cannot make a merge, and the trap that names this rule therefore FAILS
+///
+/// [`crate::identity::cascade::decide`] reaches `Conclusion::Match` through one arm only, which
+/// requires a `Decisive`; a lone `Supports` lands on the row `architecture.md:972` calls **weak
+/// evidence** and abstains as `Ambiguous`, which `score` scores a **fail** against a `must-merge`
+/// expectation. So `shared-hardware-vm-must-merge` — and story 6.8's two traps, which expect a merge
+/// from a `Supports` rule just as this one does — cannot score a pass under the present algebra.
+///
+/// ⚠️ **Guy's decision of 2026-09-24 is that this story MEASURES that and does not decide it**: the
+/// rule's verdict is `Supports` under every option on the table, so no code here depends on the
+/// answer — only the trap's score does. *What makes a merge at L2* is Epic 6's retrospective's, which
+/// may edit `epics.md` where a story may not.
+pub fn verdict_for_hostname_agreement(a: &L2Side<'_>, b: &L2Side<'_>) -> RuleVerdict {
+    let names_a = hostnames_of(a);
+    let names_b = hostnames_of(b);
+
+    // 🔴 D20'S LOCK, MIRRORED — and the mirror is the dangerous half.
+    //
+    // Two empty `BTreeSet`s are EQUAL, so without this line absence SUPPORTS: two interfaces that
+    // name nothing would argue they are one machine. `hostname-absence.toml:15` asked for this line
+    // before the rule existed, and no trap in the corpus can red its loss.
+    let both_sides_offer_a_name = !names_a.is_empty() && !names_b.is_empty();
+    let supports = both_sides_offer_a_name && names_a == names_b;
+
+    if supports {
+        RuleVerdict {
+            rule: RuleId(L2_HOSTNAME_AGREES.to_string()),
+            verdict: Verdict::Supports,
+            evidence: evidence_of(a, b),
+        }
+    } else {
+        RuleVerdict {
+            rule: RuleId(L2_HOSTNAME_AGREES.to_string()),
             verdict: Verdict::Neutral,
             evidence: Vec::new(),
         }
@@ -541,6 +690,315 @@ mod tests {
             verdict_for_hostname(&L2Side::new(Vec::new()), &side(&right)).verdict,
             Verdict::Neutral,
             "an empty side observed nothing; it cannot disagree"
+        );
+    }
+
+    // ---- `l2-hostname-agrees` (story 6.9): D20's lock on the DANGEROUS side ----
+
+    /// 🔴 **The story's centre, and the corpus asked for it two epics early.**
+    ///
+    /// Two empty `BTreeSet`s are EQUAL, so without the emptiness check this rule SUPPORTS on
+    /// absence — two interfaces that name nothing arguing they are one machine.
+    /// `hostname-absence.toml:15` prescribes it in so many words: *"an empty string is not a
+    /// matchable value (`"" == ""` is not hostname agreement)"*.
+    ///
+    /// ⚠️ **No trap in the corpus can red this.** Measured over all 26 trap-named pairs, the
+    /// unlocked form flips 8 of them to `Supports` on total absence and not one is caught, because a
+    /// lone false `Supports` abstains as `Ambiguous` and `(must-not-merge, Abstained)` is `score`'s
+    /// PASS cell. This test and its two neighbours are the only carriers.
+    #[test]
+    fn two_absent_hostnames_do_not_agree() {
+        let left = [observation(1, 0x01, None)];
+        let right = [observation(2, 0x02, None)];
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&left), &side(&right)).verdict,
+            Verdict::Neutral,
+            "two silences are not an agreement, and a false merge cannot be undone by looking harder"
+        );
+    }
+
+    /// The same lock reached through a channel `trim` does not close.
+    ///
+    /// `"\u{200B}".trim().is_empty()` is `false` in Rust, so a zero-width space survives trimming.
+    /// [`hostnames_of`]'s ASCII-alphanumeric property is what makes both sides read as ABSENT here;
+    /// without it two invisible "names" would agree.
+    #[test]
+    fn two_invisible_hostnames_do_not_agree() {
+        let left = [observation(1, 0x01, Some("\u{200B}"))];
+        let right = [observation(2, 0x02, Some("\u{2062}"))];
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&left), &side(&right)).verdict,
+            Verdict::Neutral,
+            "an invisible character is not a name, so two of them are not an agreement"
+        );
+    }
+
+    /// ⚠️ **Pure punctuation, which the story's first draft did not name.**
+    ///
+    /// The guard is a PROPERTY (*a name carries at least one ASCII alphanumeric*) and not a list of
+    /// invisible code points, so it closes this class in the same act — *an enumeration cannot claim
+    /// the completeness of a property*. Two IDENTICAL punctuation strings are the sharp case: set
+    /// equality would hold on them.
+    #[test]
+    fn two_identical_punctuation_strings_do_not_agree() {
+        let left = [observation(1, 0x01, Some("---"))];
+        let right = [observation(2, 0x02, Some("---"))];
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&left), &side(&right)).verdict,
+            Verdict::Neutral,
+            "two identical non-names are still not names; equality of noise is not agreement"
+        );
+    }
+
+    /// ⚠️ **Kept, and deliberately NOT claimed as a carrier of the lock above.**
+    ///
+    /// Under set equality this case is already `Neutral` by inequality — `{doc-nas-01}` is not `{}` —
+    /// so dropping the emptiness check leaves this test GREEN. Measured: that mutation reds its two
+    /// neighbours and not this one. It is here because it catches other mutations, and the story says
+    /// which two carry D20's lock rather than counting three.
+    #[test]
+    fn one_named_side_and_one_silent_side_do_not_agree() {
+        let left = [observation(1, 0x01, Some("doc-nas-01"))];
+        let right = [observation(2, 0x02, None)];
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&left), &side(&right)).verdict,
+            Verdict::Neutral,
+            "one side naming nothing cannot agree with one that does"
+        );
+    }
+
+    // ---- what the rule DOES say ----
+
+    /// AC1's positive, and AC4's real carrier: the VERDICT names this rule.
+    ///
+    /// ⚠️ The rule-id assertion is here on purpose. Without it, a `Supports` arm emitting
+    /// [`L2_DIFFERENT_HOSTNAME`] ships with the whole suite green — measured, and the double-literal
+    /// pin in `fixtures.rs` cannot see it, because that pin compares a constant with the corpus's
+    /// spelling and never looks at a verdict.
+    #[test]
+    fn two_present_and_equal_hostnames_agree() {
+        let left = [observation(1, 0x01, Some("doc-vm-alpha"))];
+        let right = [observation(2, 0x02, Some("doc-vm-alpha"))];
+
+        let verdict = verdict_for_hostname_agreement(&side(&left), &side(&right));
+
+        assert_eq!(
+            verdict.verdict,
+            Verdict::Supports,
+            "two interfaces reporting one name argue for being one device"
+        );
+        assert_eq!(
+            verdict.rule.0, L2_HOSTNAME_AGREES,
+            "a verdict that argues must name the rule that argued, not its sibling"
+        );
+    }
+
+    /// Case folding and surrounding whitespace, on the agreement side.
+    ///
+    /// [`hostnames_of`] folds ASCII case and trims, so these are ONE name. The mirror of
+    /// `hostnames_differing_only_in_case_are_the_same_name`, which measures that
+    /// [`verdict_for_hostname`] does not oppose them; here the same normalisation must let them
+    /// AGREE, and a rule blind to one direction would be the D20 bug on the merge side.
+    #[test]
+    fn case_and_whitespace_do_not_stop_two_names_agreeing() {
+        let left = [observation(1, 0x01, Some("  NAS-01\t"))];
+        let right = [observation(2, 0x02, Some("nas-01"))];
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&left), &side(&right)).verdict,
+            Verdict::Supports,
+            "one name spelled two ways is one name, on this rule as on its sibling"
+        );
+    }
+
+    // ---- AC7: the population that carries Guy's decision of 2026-09-24 ----
+
+    /// 🔴 **The decision's ONLY carrier, and the committed corpus cannot supply it.**
+    ///
+    /// Guy chose set EQUALITY over a non-empty intersection. A partial overlap is where the two
+    /// readings diverge: equality says `Neutral`, intersection says `Supports`. Measured — with
+    /// `!names_a.is_disjoint(&names_b)` in place of the equality, the whole suite stayed GREEN before
+    /// this test existed, and so did a third plausible spelling (`is_subset`).
+    ///
+    /// ⚠️ Every side in the committed corpus offers at most one name, so the two readings agree on all
+    /// 26 trap-named pairs and diverge on 30 of 64 synthetic ones. *A decision a story takes out loud
+    /// and no guard can red is a decision the next story reverses silently.*
+    #[test]
+    fn a_partial_overlap_of_name_sets_does_not_agree() {
+        let left = [
+            observation(1, 0x01, Some("doc-old")),
+            observation(2, 0x01, Some("doc-shared")),
+        ];
+        let right = [observation(3, 0x02, Some("doc-shared"))];
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&left), &side(&right)).verdict,
+            Verdict::Neutral,
+            "a rule that supports on a partial overlap claims to know which name is current"
+        );
+    }
+
+    /// The same decision on its other shape — a subset rather than a crossing overlap, IN BOTH
+    /// ORIENTATIONS.
+    ///
+    /// `is_subset` is the third spelling a developer reaches for, and it was measured GREEN across the
+    /// whole suite. Equality refuses it: a side that names strictly more is not the same side.
+    ///
+    /// 🔴 **Both orientations are asserted because ONE of them is not enough, and my own prove-to-red
+    /// is what said so.** `names_a.is_subset(&names_b)` is directional: with the superset on the LEFT
+    /// it answers `false` and this test would have stayed GREEN under the very mutation it names. *A
+    /// guard written for a directional operator and exercised in one direction is a guard placed where
+    /// half the defect cannot occur* — the epic's dominant class, caught here by predicting the
+    /// mutation before running it rather than by reading.
+    #[test]
+    fn a_superset_of_names_does_not_agree_with_its_subset() {
+        let many = [
+            observation(1, 0x01, Some("doc-a")),
+            observation(2, 0x01, Some("doc-b")),
+        ];
+        let few = [observation(3, 0x02, Some("doc-a"))];
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&many), &side(&few)).verdict,
+            Verdict::Neutral,
+            "one side naming strictly more is not agreement, under equality"
+        );
+        assert_eq!(
+            verdict_for_hostname_agreement(&side(&few), &side(&many)).verdict,
+            Verdict::Neutral,
+            "nor is it agreement the other way round — and this is the orientation a subset test \
+             would answer TRUE on"
+        );
+    }
+
+    /// 🔑 **What the decision BUYS, stated as the property that actually discriminates.**
+    ///
+    /// On a partial overlap the two rules are silent TOGETHER — neither supports nor opposes.
+    /// ⚠️ This replaces the mutual-exclusivity property the story first prescribed, which was
+    /// measured to hold under **every** reading (0 violations over 64 adversarial subset pairs) and
+    /// therefore could not red on the decision it was cited to carry: *a guard placed where the defect
+    /// cannot occur reads as coverage and is none*.
+    #[test]
+    fn on_a_partial_overlap_both_hostname_rules_stay_silent() {
+        let left = [
+            observation(1, 0x01, Some("doc-old")),
+            observation(2, 0x01, Some("doc-shared")),
+        ];
+        let right = [observation(3, 0x02, Some("doc-shared"))];
+        let (a, b) = (side(&left), side(&right));
+
+        assert_eq!(
+            verdict_for_hostname_agreement(&a, &b).verdict,
+            Verdict::Neutral,
+            "agreement needs the sets to be equal"
+        );
+        assert_eq!(
+            verdict_for_hostname(&a, &b).verdict,
+            Verdict::Neutral,
+            "opposition needs the sets to share nothing; a partial overlap is neither"
+        );
+    }
+
+    // ---- AC6: what a verdict that ARGUES leaves behind ----
+
+    /// D19, on the merge side: a `Supports` carries both sides' observations, sorted.
+    ///
+    /// Measured: returning an empty vector here left the whole suite green before this test existed.
+    /// The sort is shared with [`verdict_for_hostname`] through [`evidence_of`], which is why a
+    /// mutation of the order now reds every rule that argues rather than one of two copies.
+    #[test]
+    fn an_agreeing_verdict_carries_its_observations_in_order() {
+        let left = [observation(9, 0x01, Some("doc-vm-alpha"))];
+        let right = [observation(3, 0x02, Some("doc-vm-alpha"))];
+
+        let forward = verdict_for_hostname_agreement(&side(&left), &side(&right));
+        let backward = verdict_for_hostname_agreement(&side(&right), &side(&left));
+
+        assert!(
+            !forward.evidence.is_empty(),
+            "a verdict that ARGUES leaves its observations behind (D19)"
+        );
+        assert_eq!(
+            forward.evidence, backward.evidence,
+            "the evidence of a pair does not depend on which side was the left argument"
+        );
+        assert!(
+            forward.evidence.windows(2).all(|w| w[0] <= w[1]),
+            "sorted, so the order is a property of the pair and not of the call"
+        );
+    }
+
+    /// A `Neutral` carries none, and it names this rule anyway.
+    ///
+    /// The convention [`verdict_for_hostname`] established: D19 is about a verdict that ARGUES, and a
+    /// `Neutral` does not — but the rule id is what lets a reader see WHICH rule declined.
+    #[test]
+    fn a_neutral_agreement_carries_no_evidence_and_still_names_its_rule() {
+        let left = [observation(1, 0x01, Some("doc-a"))];
+        let right = [observation(2, 0x02, Some("doc-b"))];
+
+        let verdict = verdict_for_hostname_agreement(&side(&left), &side(&right));
+
+        assert_eq!(verdict.verdict, Verdict::Neutral);
+        assert!(
+            verdict.evidence.is_empty(),
+            "a verdict that does not argue leaves nothing behind"
+        );
+        assert_eq!(
+            verdict.rule.0, L2_HOSTNAME_AGREES,
+            "a Neutral still says which rule declined"
+        );
+    }
+
+    // ---- the fact §0.0 rests on, made executable ----
+
+    /// 🔴 **A `Supports` CANNOT MAKE A MERGE, and this test is what says so when D13 changes.**
+    ///
+    /// [`crate::identity::cascade::decide`] reaches `Match` through one arm only, and that arm needs a
+    /// `Decisive`. A lone `Supports` lands on the row `architecture.md:972` calls *weak evidence* and
+    /// abstains as `Ambiguous` — which `score` scores a **fail** against a `must-merge` expectation,
+    /// the cell D18 calls cowardice.
+    ///
+    /// 🔑 So `shared-hardware-vm-must-merge`, the one trap that names this rule, cannot score a pass;
+    /// nor can story 6.8's two, which expect a merge from a `Supports` rule just as this one does.
+    /// **Guy's decision of 2026-09-24: this story measures that and does not decide it** — *what makes
+    /// a merge at L2* is Epic 6's retrospective's, which may edit `epics.md`.
+    ///
+    /// ⚠️ It is also AC4's reason, re-measured rather than inherited from story 6.7: that story's
+    /// abstention was `AbsenceOfProof` from an `Opposes`, this one is `Ambiguous` from a `Supports` —
+    /// **two different rows of the table** — and both carry no rule, so `run_trap`'s `(Some, Some)`
+    /// comparison never fires and a misspelled id cannot make a trap red.
+    #[test]
+    fn a_supports_only_verdict_abstains_as_ambiguous_and_names_no_rule() {
+        use crate::identity::cascade::{Conclusion, IdentityAbstentionCause, decide};
+        use crate::identity::l1::CURRENT_RULESET_VERSION;
+
+        let left = [observation(1, 0x01, Some("doc-vm-alpha"))];
+        let right = [observation(2, 0x02, Some("doc-vm-alpha"))];
+        let verdict = verdict_for_hostname_agreement(&side(&left), &side(&right));
+        assert_eq!(
+            verdict.verdict,
+            Verdict::Supports,
+            "the premise of this test"
+        );
+
+        let decision = decide(vec![verdict], CURRENT_RULESET_VERSION);
+
+        assert_eq!(
+            decision.conclusion,
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::Ambiguous
+            },
+            "a lone Supports is weak evidence: it abstains, so no composition of this rule alone \
+             can answer a must-merge trap, and no misspelled id can be caught through the trap path"
+        );
+        assert!(
+            !matches!(decision.conclusion, Conclusion::Match { .. }),
+            "only a Decisive produces a Match, and no L2 rule the epic specifies is one"
         );
     }
 }

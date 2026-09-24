@@ -5043,7 +5043,15 @@ development_status:
   #   only in the fixture connector, so building this now means an engine story validated against
   #   fixtures alone — the exact shape the 2026-08-30 freeze was called for.
   # and the measured floor: hostname is unusable on nearly half of known clients
-  6-9-l2-hostname-agrees: ready-for-dev
+  6-9-l2-hostname-agrees: in-progress
+  #   🔴 Validated 2026-09-24 by two fresh-context layers, and the validation found what the
+  #   contexting had explained away: a `Supports` rule CANNOT pass a `must-merge` trap, because
+  #   `decide` reaches `Match` only through the arm that needs a `Decisive`. Three L2 traps carry
+  #   that contradiction, story 6.8's two included. Guy (2026-09-24): 6.9 MEASURES it and does not
+  #   decide it; the merge question is Epic 6's RETROSPECTIVE's, which may edit `epics.md`.
+  #   Second arbitration: hostname agreement requires set EQUALITY, not a shared name — on the
+  #   false-merge asymmetry, and NOT on the two arguments validation refuted (mutual exclusivity
+  #   holds under every reading; the emptiness lock is a cost of equality, not a reason for it).
   #   🔑 NEXT, by Guy's reorder of 2026-09-23 (`epics.md` edited — a planning act, not a story's).
   #   The epic was FROZEN at 6.7 on 2026-08-30; **half of the freeze's stated reason has dissolved
   #   and half has not**. The freeze named three facts *"no connector produces"* — hostname, MAC,
