@@ -13,7 +13,12 @@ as the first of the checker's three blind spots, and predicted in writing that t
 would migrate to exactly what it declines to read. They did, here, in the next story.*
 
 **Epic 6**, reordered by Guy on 2026-09-23: **6.9 → 6.11 → 6.12**, with 6.8 and 6.10 waiting for a
-connector that emits an uplink or a switch port. **Base:** `e7e5143`, clean tree.
+connector that emits an uplink or a switch port. **Base:** `97e95dd` — the reorder's own
+squash-merge on `master` (PR #205), which is what makes this story's promise *`epics.md` not edited*
+true rather than merely written. ⚠️ *It read `e7e5143` until `cargo xtask record` refused it: that
+commit lived on an unpushed `plan/` branch, so the branch point with `master` was one commit EARLIER
+and a later base hides what the branch touched first. The checker found a topology defect, not a
+number.*
 
 ⚠️ Both layers verified that `e7e5143` differs from its parent in **four documents and no code**, so
 every measurement below transfers.
@@ -421,7 +426,7 @@ the block being loosened.
 ## Record
 
 - live-count: bin=747 core=203 xtask=110
-- base: e7e5143ae3f4c0192944bd9723c5788cf3734590
+- base: 97e95dd07b47dde3524b8d669e8aa11f4fddc039
 - registered: A `Supports` rule cannot pass a `must-merge` trap
 - registered: The first producer of `Verdict::Supports` moves from story 6.8 to 6.9
 - registered: An L2 side's SCOPE and the hostname-agreement reading are one decision taken a story apart
@@ -434,3 +439,5 @@ the block being loosened.
 - file: crates/opencmdb-core/src/identity/cascade.rs
 - file: crates/opencmdb-bin/src/fixtures.rs
 - file: crates/opencmdb-bin/src/scan_pass.rs
+- file: CLAUDE.md
+- file: docs/project-context.md
