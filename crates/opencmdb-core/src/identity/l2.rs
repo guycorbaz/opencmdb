@@ -450,8 +450,15 @@ const IANA_VIRTUAL_ROUTER_PREFIX: [u8; 5] = [0x00, 0x00, 0x5e, 0x00, 0x01];
 ///
 /// A property of the BYTES and of nothing else. ⚠️ **It deliberately does not consult
 /// `Fact::Mac::locally_administered`**: story 6.11's validation made a draft read that flag instead and
-/// the whole suite stayed GREEN, because the fixture's flag happens to agree — *so a connector reporting
-/// it wrongly would silently disable the disqualification and nothing would notice*.
+/// the whole suite stayed GREEN — *so a connector reporting it wrongly would silently disable the
+/// disqualification and nothing would notice*.
+///
+/// 🔴 *The cause first written here was **"because the fixture's flag happens to agree"**, and it is
+/// FALSE — the test forty lines below pins the opposite, that an IANA address has the U/L bit CLEAR so
+/// the flag and the bytes CONTRADICT each other.* What the green really showed is that validation's test
+/// set carried no assertion on the virtual fixture's verdict at all; ⚠️ **that reading is inferred rather
+/// than measured, so it is stated as inference** — this project's rule being that a cause needs a check.
+/// The blind review layer found the contradiction between the two docs.
 /// [`crate::observation::MacAddr::is_locally_administered`]'s own doc calls the bytes *"the ground truth a
 /// connector's reported flag can be cross-checked against"*, and this function is on the ground-truth
 /// side of that sentence.
@@ -496,8 +503,18 @@ pub const L2_VIRTUAL_MAC_PREFIX: &str = "l2-virtual-mac-prefix";
 /// | a RULE | two [`L2Side`]s | the FACTS the sides carry |
 /// | a READING | one [`L2CandidatePair`] | the KEY, and nothing else |
 ///
-/// **A function that cannot reach a [`Fact`] cannot score, and the compiler checks that** rather than a
-/// doc comment promising it. `L1Key` is `(L2DomainId, MacAddr)`, so the key is all this needs.
+/// **A function that cannot reach a [`Fact`] cannot base a verdict on one, and the compiler checks
+/// THAT** — measured, a mutation reaching a fact through this function's own argument gives
+/// `error[E0599]: no method named `facts` found for reference `&identity::blocking::L2CandidatePair` in
+/// the current scope`. `L1Key` is `(L2DomainId, MacAddr)`, so the key is all this needs.
+///
+/// 🔴 **AND THE PROMISE STOPS THERE, which is narrower than this story first wrote it.** It said *"a
+/// function that cannot reach a `Fact` cannot SCORE"* — and its own mutation table contains the
+/// counterexample two rows away: changing this function's verdict from `Disqualifying` to `Opposes`
+/// **compiles**, and reddens five tests rather than `rustc`. So **nothing prevents this returning
+/// `Decisive`**, and that residue is a TRIPWIRE carried by tests, never a compiler guarantee — story
+/// 6.6's precedent, which stated the analogous limit instead of crediting the compiler with it. Found by
+/// the blind review layer, against this story's own table.
 ///
 /// 🔴 **The obvious alternative was BUILT and MEASURED WRONG.** A reading over an [`L2Side`] must dig MACs
 /// out of the side's `facts`, and an observation bearing several MACs stands on several interfaces — so it
@@ -536,8 +553,11 @@ pub const L2_VIRTUAL_MAC_PREFIX: &str = "l2-virtual-mac-prefix";
 /// meeting `min()`**, measured by story 6.11's validation and registered.
 ///
 /// So this verdict reaches a `NoMatch` naming itself **only in an L2-only vector**, which is what story
-/// 6.12's plumbing owes. ✅ *Measured sufficient at unit level today: `Neutral` · `Neutral` · this
-/// `Disqualifying` gives `NoMatch { l2-virtual-mac-prefix }`, hence `Refused`, which `score` passes.*
+/// 6.12's plumbing owes. ✅ *Measured sufficient at unit level today: `Neutral` · **`Supports`** · this
+/// `Disqualifying` gives `NoMatch { l2-virtual-mac-prefix }` — ⚠️ *and the middle verdict is `Supports`
+/// rather than `Neutral`, because both sides of the fixture carry the same hostname, which is
+/// `l2-hostname-agrees`'s firing condition. Four documents named the all-Neutral row; the test now
+/// asserts the real one.*, hence `Refused`, which `score` passes.*
 pub fn verdict_for_virtual_mac(pair: &L2CandidatePair) -> RuleVerdict {
     let disqualifying =
         is_iana_virtual_router_mac(pair.low().1) || is_iana_virtual_router_mac(pair.high().1);
@@ -678,6 +698,21 @@ mod tests {
             verdict_for_virtual_mac(&pair(virtual_mac(), ordinary_mac(0x8c))),
         ];
 
+        // 🔴 THE VECTOR'S MIDDLE VERDICT IS `Supports`, NOT `Neutral`, and four documents said Neutral.
+        // Both sides carry the SAME hostname, which is `l2-hostname-agrees`'s firing condition — story
+        // 6.9 shipped it as the first producer of `Supports`. So the D13 row this test exercises is
+        // `(None, None, true, false)` composed with a `Disqualifying`, not the all-Neutral row the
+        // record named. The conclusion is unaffected — a `Disqualifying` dominates — but the sentence
+        // used to conclude "6.11 did not need 6.12's plumbing" named the wrong measurement. Asserted
+        // here so the composition is measured rather than described, found by the blind review layer
+        // from the diff alone.
+        assert_eq!(
+            vector[1].verdict,
+            Verdict::Supports,
+            "agreement is what l2-hostname-agrees fires on, so this vector is Neutral · Supports · \
+             Disqualifying"
+        );
+
         let decision = decide(vector, CURRENT_RULESET_VERSION);
 
         assert_eq!(
@@ -714,7 +749,25 @@ mod tests {
         }
         assert!(
             !is_iana_virtual_router_mac(MacAddr([0x00, 0x00, 0x5f, 0x00, 0x01, 0x0a])),
-            "the fourth-from-last octet is part of the prefix too"
+            "the THIRD octet is part of the prefix too"
+        );
+        assert!(
+            !is_iana_virtual_router_mac(MacAddr([0x02, 0x00, 0x5e, 0x00, 0x01, 0x0a])),
+            "🔴 the FIRST octet is part of the prefix, and nothing pinned it: measured, comparing \
+             `addr.0[1..5]` instead left 1 073 tests, clippy and ten gates GREEN — and under it \
+             02:00:5e:00:01:0a reads as a virtual-router address, which is PRECISELY the shape the \
+             corpus's own privacy rewrite produces"
+        );
+        assert!(
+            !is_iana_virtual_router_mac(MacAddr([0x00, 0x01, 0x5e, 0x00, 0x01, 0x0a])),
+            "and so is the SECOND — AC5's sentence named the end it had been bitten on and left the \
+             other open, which is the enumeration its own rule forbids"
+        );
+        assert!(
+            !is_iana_virtual_router_mac(MacAddr([0x00, 0x00, 0x5e, 0x0f, 0x01, 0x0a])),
+            "and so is the FOURTH — ⚠️ which this test did not vary until the blind review layer \
+             measured that the criterion promised the fourth and fifth while the body varied the third \
+             and fifth. A pin that names an octet it never changes is an enumeration claiming a property."
         );
     }
 
@@ -754,6 +807,41 @@ mod tests {
             verdict_for_virtual_mac(&pair(addr, ordinary_mac(0x8c))).verdict,
             Verdict::Disqualifying,
             "the reading is a property of the bytes; no reported flag can turn it off"
+        );
+    }
+
+    /// 🔴 **THE `high()` HALF, WHICH WAS CARRIED BY NOTHING — and it serves the MAJORITY of reachable
+    /// pairs.**
+    ///
+    /// `L2CandidatePair::new` orders by `L1Key = (L2DomainId, MacAddr)` on a derived `Ord`, so within one
+    /// domain the pair is ordered by raw bytes. `virtual_mac()` starts `0x00`, and every partner in every
+    /// other test **and in the committed fixture** starts `0x02` — so the VIP was always `low()`, at seven
+    /// call sites out of seven. Measured by the edge-case review layer: **dropping the `high()` disjunct
+    /// left 1 073 tests, clippy `--all-targets` and all ten gates GREEN**, while dropping `low()` reds
+    /// four. *Four against zero.*
+    ///
+    /// ⚠️ **And four of six real partner-OUI shapes put the VIP on `high`** — a Cisco OUI, HSRP's own
+    /// prefix, SysKonnect, IANA's lower block. 🔑 *So a DRY or simplification pass dropping the second
+    /// disjunct would have shipped a silent FALSE MERGE for exactly the low-OUI partners, with the whole
+    /// suite and ten gates green — and a false merge cannot be undone by looking harder.* AC1 warned in
+    /// writing that the master trap is asymmetric in argument order, and then every test was written with
+    /// the virtual side low.
+    #[test]
+    fn the_virtual_address_is_found_when_it_sorts_HIGH_in_the_pair() {
+        // A Cisco OUI: below 00:00:5e, so `L2CandidatePair` puts the VIP on `high()`.
+        let low_oui = MacAddr([0x00, 0x00, 0x0c, 0xaa, 0xbb, 0xcc]);
+        let built = pair(low_oui, virtual_mac());
+        assert_eq!(
+            built.low().1,
+            low_oui,
+            "the premise: this partner really does sort BELOW the virtual address, so the VIP is high()"
+        );
+
+        assert_eq!(
+            verdict_for_virtual_mac(&built).verdict,
+            Verdict::Disqualifying,
+            "a virtual-router address disqualifies the pair wherever it sorts — and this is the half most \
+             real partner OUIs land on"
         );
     }
 

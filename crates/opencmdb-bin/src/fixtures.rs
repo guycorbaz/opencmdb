@@ -5432,9 +5432,14 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// `Disqualifying` yields `Refused { rule }`, which DOES carry one** — so this is the first L2 trap in
     /// the epic whose expected rule the gate's comparison could actually check.
     ///
-    /// ⚠️ **The pin is still the only carrier today, for a completely different reason: there is no L2
-    /// runner to ask.** Saying which mechanism is at work is the point — *a paragraph inherited with its
-    /// old mechanism is this project's recurring defect.*
+    /// ⚠️ **It is NOT the only carrier, and this sentence claimed it was — the FOURTH recurrence of that
+    /// claim in this project and the first where one file carries all four versions of it.** Measured
+    /// (story 6.11's V6): corrupting the constant reds **two** tests, this pin **and** the corpus walk
+    /// below, whose filter on the constant then iterates zero times so its terminal naming assertion is
+    /// what reds. 🔑 *And this file's own correction of the identical claim sits 185 lines above*, from
+    /// story 6.9, as does `l2.rs`'s module header — *"it is not the SOLE carrier, measured"*. Saying which
+    /// mechanism is at work was the point of the paragraph; **the paragraph then inherited the wrong
+    /// arithmetic with it.**
     #[test]
     fn the_l2_virtual_mac_prefix_id_matches_the_corpus_spelling() {
         let mut found = 0usize;

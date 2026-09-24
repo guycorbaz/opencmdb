@@ -1457,10 +1457,22 @@ and forgetting the milestone entirely. The arithmetic was wrong before it was me
   names an epic.
 - **The float gate's limits are documented, not closed.** Two false-POSITIVE directions: a float
   inside a block comment `/* … */`, and a decimal inside a string literal in code (`"0.1.1"`). One
-  false negative: a `//` inside a string literal truncates the line early. Measured: none of the three
-  occurs under `crates/opencmdb-core/src/identity/` today. **Owner: whoever meets one of them on a
+  false negative: a `//` inside a string literal truncates the line early. ~~Measured: none of the three
+  occurs under `crates/opencmdb-core/src/identity/` today.~~ **Owner: whoever meets one of them on a
   real tree** — a condition, and deliberately so: inventing a Rust-aware scanner for a case that does
   not exist would be the over-engineering the reflex-gate idiom (D53) refuses.
+  ✅ 🔴 **THE CONDITION FIRED ON 2026-09-24, IN STORY 6.11, AND ON THE EXAMPLE THIS ROW ALREADY NAMES.**
+  `l2.rs:719` carried *"where story 6.11's contexting quoted only one"* in an `assert!` message, and the
+  gate answered **`bare float literal`** — `6.11` being a decimal inside a string literal in code,
+  structurally the `"0.1.1"` above. So the *"none of the three occurs today"* measurement is struck: one
+  of them occurs, it was met, and the story reworded the message at nil cost rather than widening the
+  gate. 🔑 ***The register predicted this finding, with its example and with a trigger condition, five
+  stories before it was met — and story 6.11 published it as a discovery and opened a SECOND row for the
+  same class.*** Its acceptance-audit layer found that; `cargo xtask record` could not, because it
+  compares the rows a branch ADDS and the obligation here was an EDIT to this row — story 14.6's
+  recorded structural blind spot, live again. **Owner unchanged**, and now with one instance measured:
+  the narrowing that would be correct is to strip string literals, a float literal inside a string never
+  being a computation.
 - **The gate scopes to `identity/` and no wider.** `opencmdb-bin` may legitimately want a float for a
   UI ranking one day — D13 permits *"floats may RANK, never DECIDE"* [architecture.md:988-990] — so
   widening this gate to the workspace is a different decision with a different blast radius.
@@ -5325,7 +5337,16 @@ Three rows. Three isolated layers on a different model; two of the three found r
 One row, and it is an ARBITRATION's other half rather than a defect.
 
 - 🔑 **A CLONED MAC PRESENTS AS ONE INTERFACE CONTRADICTING ITSELF, and that is a STRUCTURAL FACT
-  rather than a pair rule. Owner: story 6.11.** Measured over all **seventeen** hostname-bearing
+  rather than a pair rule.** ↺ **RE-OWNED 2026-09-24, from story 6.11 to Epic 6's RETROSPECTIVE**, and
+  the refusal is reasoned rather than deferred. Story 6.11 shipped the virtual-MAC reading and thereby
+  established the precedent this case needs — *a structural fact can be read, can be named, and can enter
+  the verdict vector without being a rule* — but the two are **not the same act**: the virtual-MAC case
+  reads a RESERVED PREFIX off a key the join already separates, while a cloned MAC is a case the
+  `(l2_domain, mac)` KEY has already fused, so reaching it means changing that key or bumping the corpus,
+  and **a story may do neither**. ⚠️ *It was handed to 6.11 twice — by this row and again by
+  `sprint-status.yaml`'s own note — and 6.11's story file never mentions it; its acceptance-audit layer
+  found the row still naming a story about to be `done`, which is exactly the shape story 6.7's review
+  paid for.* **A refusal needs a re-ownership**, and this is it. Measured over all **seventeen** hostname-bearing
   interfaces in every committed replay stream: **exactly one carries two different hostnames**
   (`doc-host-echo` and `doc-host-foxtrot`, over three observations) — and it is precisely the
   interface `cloned-mac`'s two observations collapse onto under `join`'s `(l2_domain, mac)` key.
@@ -6388,18 +6409,23 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   one database per measuring process, named after the layer.** Isolation by worktree was already the
   rule; isolation by STORE was not, and it is the same requirement one layer down. **Owner: the next
   story that runs a three-layer review** — which is every story.
-- 🔴 **The `float-free` gate reds on a STORY NUMBER written inside an assertion message, and story 6.11
-  tripped it.** Measured: `l2.rs:719` carried *"where story 6.11's contexting quoted only one"* in an
-  `assert!` message, and the gate reported **`bare float literal`** — because `6.11` is
-  digit-dot-digit-digit with one dot and no suffix, which is exactly what its tokeniser is built to catch.
-  🔑 **The gate strips COMMENTS so the architecture may be quoted, and it reads STRING LITERALS**, so every
-  earlier L2 story was safe only because it wrote *"story 6.7"* in doc comments rather than in assertion
-  messages. ⚠️ **The red is CORRECT for the gate's stated promise** — it cannot know `6.11` is prose — and
-  the bisection that found it is worth recording: replacing `0x9f` with `0x9e` left it RED, which is what
-  ruled out the hex-literal hypothesis and sent me to read the matcher instead of guessing. *A guard that
-  greps a file greps its prose* (story 5.12's sentence, and story 14.4 paid for it twice in a stylesheet).
-  **Story 6.11 reworded the message — cost nil — and did NOT touch the gate**, because narrowing it is a
-  judgement about where the tripwire sits and a MAC-prefix story is not where that is decided. 🔑 *The
-  narrowing that would be correct is to strip string literals too: a float literal inside a string is
-  never a computation, so the class is a pure false positive rather than a trade.* **Owner: the next story
-  that edits `xtask/src/main.rs`'s matcher**, or a project review.
+- ⚠️ **Story 6.11's `float-free` red is NOT a new row — it DISCHARGES the condition on story 5.4b's
+  existing one**, above, which named the example and the trigger five stories earlier. *This row was
+  first written as a second registration of the same class, which is a duplicate rather than a
+  registration;* the measurement, the bisection (`0x9f` → `0x9e` left it RED, ruling out the
+  hex-literal hypothesis) and the correct narrowing all live on 5.4b's row now. 🔑 *A class the register
+  already predicted is discharged where it was predicted, not re-opened beside it.*
+- 🔴 **No L2 rule can ever be NAMED in the presence of any L1 `Disqualifying` — for any trap, ever — and
+  it is a property of the naming convention meeting `min()` rather than a per-family accident.**
+  `cascade.rs`'s `decide` selects the **lexicographically smallest** `Disqualifying` via
+  `smallest_rule_with(…).min()`, and **every `l1-*` id sorts before every `l2-*` id** (`'1'` 0x31 < `'2'`
+  0x32). So a verdict vector mixing L1's verdict for the same pair with an L2 rule's answers
+  `NoMatch { rule: "l1-distinct-mac" }` and the L2 rule is invisible — measured by story 6.11's
+  validation, and `run_trap` then scores `WrongRule` rather than a verdict failure. ⚠️ **`l2.rs`'s module
+  doc states this as an argument measured on ONE family** (*"two observations on different interfaces
+  carry different MACs, so …"*), which reads as a case rather than a law. 🔑 **Story 6.12 is the caller
+  that must honour it**, by guaranteeing an L2-only vector — and `l2.rs:45-46` already prefers *"closing
+  it in a TYPE rather than in prose"*. ⚠️ **This row exists because story 6.11 asserted it was "registered"
+  in FOUR places while adding no such row** — its blind review layer counted the claim against the diff.
+  *A section that says "registered" is not a registration* (story 6b.9's class), and `cargo xtask record`
+  cannot catch it, because the story never claimed the second row it was missing. **Owner: story 6.12.**

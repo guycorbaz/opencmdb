@@ -1,9 +1,21 @@
 # Story 6.11: The virtual-MAC anchor — a structural fact that is NOT a rule
 
-Status: **validated** 2026-09-24 by two fresh-context layers, the gap-hunt having BUILT both shapes of
-§0.1, driven the trap end to end and run a nine-row mutation pass in which **five came back GREEN**.
-**Guy's arbitration taken 2026-09-24** — the reading takes an `L2CandidatePair`, so *what the function
-reads* carries the claim rather than its arity. Ready for dev.
+Status: **developed, verified, and code-reviewed by three isolated layers** 2026-09-24 — `review`, not
+`done`, because that is the merge's business. Validated first by two fresh-context layers, the gap-hunt
+having BUILT both shapes of §0.1, driven the trap end to end and run **eight mutations plus two driver
+refusals**, of which **five came back GREEN**. **Guy's arbitration taken 2026-09-24** — the reading takes
+an `L2CandidatePair`, so *what the function reads* carries the claim rather than its arity.
+
+⚠️ *This line read "**validated** … Ready for dev" for the whole of development, in a commit whose own
+message claimed story 6.9's three-files-three-statuses lesson was "applied here rather than re-learned".
+It was applied to the two files that finding named and to nothing else — **four files, three statuses**,
+and the blind review layer counted them. `Status:` is the FIRST of the three regions
+`cargo xtask record` declines to read, and Epic 14's retrospective predicted in writing that record
+defects would migrate there.*
+
+⚠️ *And the validation pass was called "nine-row" in four places while its table enumerates **M1–M8**
+plus two driver refusals. Eight mutations, five green; the ninth row existed in a number and nowhere
+else — the enumeration-from-memory class, in a story whose §2b is a table built to stop it.*
 
 **Epic 6**, on Guy's reorder of 2026-09-23: 6.9 (done) → **6.11** → 6.12, with 6.8 and 6.10 waiting for
 a connector that emits an uplink or a switch port. **Base:** `8b36828`, clean tree.
@@ -270,7 +282,7 @@ argument order**: had the TOML listed `…0002` first, such a reading would have
 nothing.
 
 ✅ **The L2-only vector is measured sufficient — 6.11 does NOT need story 6.12's plumbing first**, which
-contexting had feared. The gap-hunt built it: `Neutral` · `Neutral` · the reading's `Disqualifying` →
+contexting had feared. The gap-hunt built it: `Neutral` · **`Supports`** · the reading's `Disqualifying` → ⚠️ *(the middle verdict is `Supports`, not the `Neutral` this read: both fixture sides carry one hostname, which is `l2-hostname-agrees`'s firing condition — the conclusion is unaffected and the row named was the wrong one)* →
 `NoMatch { l2-virtual-mac-prefix }` → `Refused` → `(MustNotMerge, Refused) => Pass`.
 
 🔴 **And the forbidden gesture is fatal TOTALLY, not per case.** `decide` names the lexicographically
@@ -334,8 +346,10 @@ a function of §0.1b's decision, to be **measured and not predicted**. `file-siz
 nothing, and saying so is the criterion.
 
 **AC11 — the trap gate does NOT move, and the story prices that.** 🔴 The trap is hard-coded as unanswerable
-in **four** committed lists (`l1_runner.rs`'s `expected_unanswered()` and its declined-level map,
-`trap_gate.rs:855` and `:1176`), plus `the_report_line_says_fifteen_scored`. Implementing the reading moves
+in **FIVE** committed sites — `l1_runner.rs`'s `expected_unanswered()` and its declined-level map,
+`trap_gate.rs:855` and `:1176`, **and** `the_report_line_says_fifteen_scored`. ⚠️ *This read "four … plus"
+over an enumeration of five, and the twins carried the bare "four" with the `plus` dropped, so a reader
+looking for four sites would find five.* Implementing the reading moves
 **nothing**: the gate stays **26/15/11**. *A story whose criterion reads "driven end to end" owes that
 sentence.*
 
@@ -347,16 +361,17 @@ Carriers named per row; no *"every red assertion-carried"* headline claimed.
 
 | id | mutation | predicted | measured | carriers |
 |---|---|---|---|---|
-| **V1** | five octets → four (admits IANA's IPv6 block) | red 1 | ✅ **red 1** | `the_prefix_is_five_octets…` — 🔴 **validation measured this GREEN against a pin that varied the LAST octet** |
-| **V2** | add HSRP `00:00:0c:07:ac` | red 1 | ✅ **red 1** | `hsrp_and_hsrpv2_are_out…` — 🔴 **validation measured this GREEN across the whole suite** |
+| **V1** | five octets → four (admits IANA's IPv6 block) | red 1 | ✅ **red 1** | `the_prefix_is_five_octets…` — 🔴 **validation's M1 measured this GREEN against a pin that varied the LAST octet** |
+| **V1b** | the same, re-measured after the review widened the population | red 2 | ✅ **red 2** | 🔑 **and the second carrier is the guard the review created**: `the_products_own_example_inventory_is_not_a_virtual_router`. The blind layer predicted this 1 → 2 **from the diff alone**, without opening `example_data.rs` |
+| **V2** | add HSRP `00:00:0c:07:ac` | red 1 | ✅ **red 1** | `hsrp_and_hsrpv2_are_out…` — 🔴 **validation's M2 measured this GREEN across the whole suite** |
 | **V3** | `Disqualifying` → `Opposes` | red 3+walk = 4 | 🔴 **red 5 — CONTRADICTS** | the four predicted **plus `the_bytes_decide_even_when_a_connector_would_report_otherwise`** |
-| **V4** | reach a `Fact` through the function's OWN argument | compile-fail | ✅ **`error[E0599]: no method named `facts` found for `&L2CandidatePair``** | 🔑 **the compiler, and nothing else** |
+| **V4** | reach a `Fact` through the function's OWN argument | compile-fail | ✅ **`error[E0599]: no method named `facts` found for reference `&identity::blocking::L2CandidatePair` in the current scope`** ⚠️ *(first quoted shortened while presented as verbatim)* | 🔑 **the compiler, and nothing else** |
 | **V5** | *either* key virtual → *both* | red 3 | 🔴 **red 4 — CONTRADICTS** | the same missed carrier as V3 |
 | **V6** | corrupt `L2_VIRTUAL_MAC_PREFIX` | red 2 | ✅ **red 2** | the double-literal pin **and** the walk's terminal naming assertion (its filter then iterates zero times) |
 | **V7** | a non-empty evidence vector | red 1 | ✅ **red 1** | `the_reading_cites_no_observation…` alone — 6.7's and 6.9's evidence tests read their own rules |
 | **V8** | the reading emits `L2_DIFFERENT_HOSTNAME` | red 4 | ✅ **red 4** | both `rule.0` comparisons **and** the two tests asserting the CONCLUSION names it |
 
-**Eight rows: six conforming, two contradicting.** ✅ *And the three rows derived mechanically — V6, V7,
+**Nine rows: seven conforming, two contradicting.** ⚠️ *The twins first attributed VALIDATION's green M-results to this story's red V-rows, three times, by renaming M to V — asserting that the shipped guards are blind to the width and to HSRP, which is the opposite of what V1 and V2 measure. And the same paragraph then contradicted its own arithmetic: four greens against `red` predictions would be four divergences, not two. The blind review layer caught the pair.* ✅ *And the three rows derived mechanically — V6, V7,
 V8 — all three conformed, against two divergences from the four enumerated by hand. That contrast is the
 row worth keeping.*
 
@@ -365,12 +380,15 @@ reading takes an `L2CandidatePair`, so reaching a `Fact` through its own argumen
 *What makes it a reading rather than a rule is checkable, not promised* — and the mutation had to go
 through the ARGUMENT to measure that, which is the second lesson below.
 
-🔴 **V3 AND V5 DIVERGED FOR ONE DEFECT OF MINE, AND IT IS THE THIRD TIME IN TWO STORIES.** I wrote the
+🔴 **V3 AND V5 DIVERGED FOR ONE DEFECT OF MINE, AND IT IS THE FOURTH NAMED INSTANCE IN TWO STORIES** — ⚠️ *this said "the THIRD time" eight lines above a sentence counting four (6.9's M5 and M9, 6.11's V3 and V5), and the wrong figure is the one that propagated to the commit message and both twins; the blind review layer caught the pair.* I wrote the
 correct rule — *every test reading the verdict variant or the conclusion* — and then **enumerated by hand
 under it** instead of applying it, missing a test that asserts `Disqualifying` while being *about* the
 connector's flag. ⚠️ **And V5's prediction was derived from V3's WRONG LIST rather than re-derived**, so one
-error propagated to the next row. 🔑 *The remedy is mechanical and not vigilance*: `grep -c
-'Verdict::Disqualifying'` returns six sites in one second, one of them production. **V6, V7 and V8 were
+error propagated to the next row. 🔑 *The remedy is mechanical and not vigilance*: `grep -rn 'Verdict::Disqualifying' crates/` returns **19 sites on the shipped tree, THREE of them
+outside a test module** (`l1.rs`'s producer, this story's, and `cascade.rs`'s reader). ⚠️ *The figure first
+written here was "six sites, one of them production", taken on a tree that did not yet contain this
+story's own code or its tests — **the demonstration of a mechanical remedy, dated wrong**. The remedy
+holds; its example did not.* **V6, V7 and V8 were
 derived that way, with the reasoning written into the prediction file before the run — and V6 and V7 both
 conformed.** Stories 6.9 (M5, M9) and 6.11 (V3, V5) have now paid four times for *a carrier list derived
 from what the tests are about instead of from what they read.*
@@ -443,9 +461,10 @@ cause. **It held: no layer reported a dirty baseline it could not explain.**
 
 ## Record
 
-- live-count: bin=751 core=212 xtask=110
+- live-count: bin=751 core=213 xtask=110
 - base: 8b3682844ca5f90caea894289ff66be3d3bfa595
 - registered: The `float-free` gate reds on a STORY NUMBER written inside an assertion message
+- registered: No L2 rule can ever be NAMED in the presence of any L1 `Disqualifying`
 - file: _bmad-output/implementation-artifacts/6-11-virtual-mac-anchor-is-not-a-rule.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: _bmad-output/implementation-artifacts/sprint-status.yaml
