@@ -280,15 +280,27 @@ fn evidence_of(a: &L2Side<'_>, b: &L2Side<'_>) -> Vec<ObsId> {
 /// gives two distinct interfaces and a pair exists to judge. ⚠️ Unlike
 /// [`L2_DIFFERENT_HOSTNAME`]'s three, none is lost to a collapse.
 ///
-/// # ⚠️ The constant is one literal among five, and only two of them are tied to it
+/// # ⚠️ What reds when this constant is corrupted, and what does not
 ///
-/// The string `"l2-hostname-agrees"` also appears at four hand-authored test sites (`cascade.rs`,
-/// `l1_runner.rs`, `trap_gate.rs`, `fixtures.rs`), every one keyed on the corpus TOML rather than on
-/// this constant — **measured: none of the four reds when this constant is corrupted.** What does red
-/// is the double-literal pin in `fixtures.rs` and that file's corpus walk, and the walk only because
-/// it carries a terminal naming assertion: without it the walk iterates **zero** times under the
-/// same mutation and the pin is the sole carrier. *A claim of sole carriership is worth exactly the
-/// mutation that checked it* — this one was checked, in both directions.
+/// The string `"l2-hostname-agrees"` appears at **four hand-authored test sites** keyed on the corpus
+/// TOML rather than on this constant (`cascade.rs`, `l1_runner.rs`, `trap_gate.rs`, and `fixtures.rs`'s
+/// `expected()` second oracle) — **measured: not one of the four reds when this constant is
+/// corrupted**, because none of them reads it.
+///
+/// What DOES red is two sites, and they red by two different mechanisms: the **double-literal pin** in
+/// `fixtures.rs`, which compares this constant against the corpus's own spelling, and that file's
+/// **corpus walk**, which filters on the CONSTANT and therefore iterates **zero** times — so its red
+/// comes from its terminal naming assertion and from nothing else. Without that assertion the pin is
+/// the sole carrier. *A claim of sole carriership is worth exactly the mutation that checked it* — this
+/// one was checked, in both directions.
+///
+/// 🔴 _This section read "the constant is one literal among five, and only two of them are tied to it".
+/// Three things were wrong and the blind review layer found all three from the diff: the count was a
+/// BASELINE figure (this story adds a sixth occurrence, the pin's own literal); "only two of them"
+/// named nothing inside its own enumeration, since the two that red are neither of the five listed;
+/// and the walk is **not a literal** but a reader of the constant, which is why it iterates zero times
+/// instead of failing a comparison — *wrong in kind, not merely in count*. `fixtures.rs` also appeared
+/// on BOTH sides of one enumeration._
 pub const L2_HOSTNAME_AGREES: &str = "l2-hostname-agrees";
 
 /// `l2-hostname-agrees` — two interfaces reporting the same name argue for being one device.
@@ -308,9 +320,8 @@ pub const L2_HOSTNAME_AGREES: &str = "l2-hostname-agrees";
 /// two epics before this rule existed: *"an empty string is not a matchable value (`"" == ""` is not
 /// hostname agreement)"*.
 ///
-/// ⚠️ **And no trap can red it.** Measured over all 26 trap-named pairs, the unlocked form flips
-/// **8** of them to `Supports` on total absence — six being `must-not-merge` traps — and **not one is
-/// caught**, because a lone false `Supports` still yields `Abstained { Ambiguous }` and
+/// ⚠️ **And no trap can red it.** Measured over the trap-named pairs, the unlocked form flips **8 of
+/// 25** to `Supports` on total absence — six being `must-not-merge` traps — and **not one is caught**, because a lone false `Supports` still yields `Abstained { Ambiguous }` and
 /// `(must-not-merge, Abstained)` is `score`'s load-bearing PASS cell. *The lock is carried by
 /// synthetic guards alone, and the tests below are all that stand between the product and it.*
 ///
@@ -766,9 +777,14 @@ mod tests {
     /// ⚠️ **Kept, and deliberately NOT claimed as a carrier of the lock above.**
     ///
     /// Under set equality this case is already `Neutral` by inequality — `{doc-nas-01}` is not `{}` —
-    /// so dropping the emptiness check leaves this test GREEN. Measured: that mutation reds its two
-    /// neighbours and not this one. It is here because it catches other mutations, and the story says
-    /// which two carry D20's lock rather than counting three.
+    /// so dropping the emptiness check leaves this test GREEN. Measured: that mutation reds its **three**
+    /// neighbours and not this one. It is here because it catches other mutations, and the story names
+    /// **which three** carry D20's lock rather than counting four.
+    ///
+    /// ⚠️ _This said "its two neighbours" and "which two", figures inherited from the validation layer's
+    /// tree, where the pure-punctuation guard did not yet exist. The mutation table beside it recorded
+    /// `red 3` all along — **one count published three incompatible ways in one story**, and the blind
+    /// review layer reconciled them by reproducing the mutation on paper._
     #[test]
     fn one_named_side_and_one_silent_side_do_not_agree() {
         let left = [observation(1, 0x01, Some("doc-nas-01"))];
@@ -1006,9 +1022,16 @@ mod tests {
             "a lone Supports is weak evidence: it abstains, so no composition of this rule alone \
              can answer a must-merge trap, and no misspelled id can be caught through the trap path"
         );
-        assert!(
-            !matches!(decision.conclusion, Conclusion::Match { .. }),
-            "only a Decisive produces a Match, and no L2 rule the epic specifies is one"
-        );
+        // ⚠️ NO `!matches!(…, Match { .. })` ASSERTION HERE, and its absence is deliberate. One stood
+        // here and it was **strictly implied** by the `assert_eq!` above — if the conclusion IS
+        // `Abstained{Ambiguous}` it cannot also be a `Match` — so it could not fail unless its
+        // predecessor already had, and its message asserted two things this test does not measure.
+        // Story 6.9's blind review layer found it. *A second assertion that the first one entails is
+        // not a second carrier.*
+        //
+        // 🔑 And the RULE-ABSENCE half of this test's own name is carried by the TYPE, not by a line
+        // here: `Conclusion::Abstained { cause }` has no rule field, so the struct literal above would
+        // not compile if it gained one. That is a better carrier than an assertion, and saying which
+        // carries what is the point.
     }
 }

@@ -251,11 +251,24 @@ times**, so without that assertion AC4 becomes the sole carrier (M4 red 2 → co
 registered with Guy's arbitration attached.
 
 **AC2 — absence yields `Neutral`, never `Supports`**, with the lock **seen red before it passes**.
-⚠️ **Three guards, and the story says which two carry D20's lock**: both sides silent, and invisible
-characters only, **plus pure punctuation** (the property's job, and contexting named invisibles
-alone). 🔴 **The asymmetric guard — one side names, the other is silent — CANNOT red on this
-mutation** and is not claimed as a carrier: under (a) `{doc-a} ≠ {}` already, measured (M1 reds 2 of
-the 3). It is kept because it catches others.
+⚠️ **Four guards, and the story says which THREE carry D20's lock**: both sides silent, invisible
+characters only, and **pure punctuation** (the property's job, and contexting named invisibles alone).
+🔴 **The asymmetric guard — one side names, the other is silent — CANNOT red on this mutation** and is
+not claimed as a carrier: under (a) `{doc-a} ≠ {}` already. **Measured: M1 reds 3 of the 4.**
+
+⚠️ *This read "three guards … which two … M1 reds 2 of the 3", and the `l2.rs` doc beside it said "its
+two neighbours" — figures inherited from the validation layer's tree, where the punctuation guard did
+not yet exist, while §4's table recorded `red 3` all along. **One count published three incompatible
+ways in one story**, reconciled by the blind review layer reproducing the mutation on paper.*
+
+🔴 **AND THE INVISIBLE GUARD COULD NOT FAIL ON THE PROPERTY IT NAMES.** It carried U+200B against
+U+2062 — story 6.7's population, mirrored mechanically — and for EQUALITY that is the wrong shape: two
+DIFFERENT invisible strings give unequal sets. Measured with both neighbours as controls, the
+ASCII-alphanumeric property deleted from `hostnames_of`: **invisible GREEN, punctuation RED, absent
+GREEN**. 🔑 *Disjointness wants two different non-names; equality wants the same non-name twice — the
+mirror of a rule needs the mirror of its population, and mirroring the code while copying the data is
+how a guard ends up unable to fail.* Both sides carry the same code point now, and **M9 is the
+mutation the story owed**, since no row had touched `hostnames_of` at all.
 
 **AC3 — the corpus's own temptation, and it is this story's best test.** On
 `hostname-collision-must-not-merge` the rule fires `Supports`, loses, and the family still passes.
@@ -265,10 +278,20 @@ level"*) and `deferred-work.md` registers it with **owner 6.12**. ⚠️ Context
 that forbidden gesture. ~~And a mutual-exclusivity property.~~ **Struck: 0 violations of 64 under
 both readings** (§0.3), and under every mutation built it is never the sole carrier.
 
-**AC4 — the VERDICT names the rule, not merely the constant being spelled right.** 🔴 *Measured*:
-with the `Supports` arm emitting the other rule's id, the only red came from an assertion contexting
-did not prescribe; remove it (control C1+M8) and **a rule emitting the wrong id ships 750/198/110
-green**. The double-literal pin stays, on 6.7's precedent, **and its reason is re-measured rather than
+**AC4 — the VERDICT names the rule, not merely the constant being spelled right.** 🔴 *Measured on the
+VALIDATION layer's tree (750/198/110, which is NOT this one)*: with the `Supports` arm emitting the
+other rule's id, the only red came from an assertion contexting did not prescribe, and removing it
+shipped the wrong id green. ✅ **On the SHIPPED tree (747/203/110) M8 reds TWO** — the synthetic rule
+assertion and the corpus walk's — so the criterion has two carriers here where the validation's tree
+had one.
+
+⚠️ *Both figures were first written side by side, in one tense, under one mutation id. That is this
+project's recorded class* — a mutation named for one thing and applied to another, here **one id
+reporting two trees**; the blind review layer noticed the counts could not both describe one tree.
+Each figure now names the tree that produced it, on story 6.7's rule that *a mutation count is dated
+by the tree that produced it*.
+
+The double-literal pin stays, on 6.7's precedent, **and its reason is re-measured rather than
 inherited**: 6.7's mechanism was `Opposes` → `AbsenceOfProof`, this one is `Supports` → `Ambiguous`,
 two **different rows** of the table, and both carry no rule, so `run_trap`'s `(Some, Some)` never
 fires.
@@ -336,6 +359,7 @@ finding.** No *"every red assertion-carried"* headline is claimed — the carrie
 | **M6** | drop `evidence.sort()` in the shared `evidence_of` | red 2 | ✅ **red 2** | 🔑 6.9's order test **AND 6.7's** `the_evidence_does_not_depend_on_the_argument_order`, from ONE site |
 | **M7** | `==` → `names_a.is_subset(&names_b)` | red 1 | ✅ **red 1** | `a_superset_of_names_does_not_agree_with_its_subset`, **on its second assertion** — the one added before the pass |
 | **M8** | the `Supports` arm names `L2_DIFFERENT_HOSTNAME` | red 2 | ✅ **red 2** | both rule-naming assertions; AC4's real carrier proven |
+| **M9** | drop the ASCII-alphanumeric property from `hostnames_of` | red 3 | 🔴 **red 4 — CONTRADICTS** | `two_invisible…` (**which is the repair working**), `two_identical_punctuation…`, **and 6.7's `an_empty_hostname_is_an_absence_not_a_value` and `a_name_carrying_no_alphanumeric_is_not_a_name`** |
 
 🔴 **M5's divergence is about MY PREDICTION METHOD, not about the code, and I am not rewriting the
 prediction after the fact.** I enumerated the carriers by listing the tests written **for the
@@ -351,12 +375,56 @@ so replacing both would have repaired the very guard the mutation was meant to r
 establishes the two as independent representations of one convention*. `evidence_of` is extracted and
 shared, and M6 now reds **every rule that argues** from a single site.
 
+🔴 **M9 IS THE ROW THE STORY OWED, and it diverged for the SAME METHOD DEFECT AS M5 — twice in one
+story.** No original row touched `hostnames_of` at all: M1–M8 mutate the emptiness lock, the set
+operator twice, the constant, the verdict variant, the sort and the rule id. **The property AC2 calls
+*"the property's job"* had never been mutated, which is exactly why the invisible guard's hole survived
+a pass the story called eight-for-eight.** I predicted 3 and measured 4, and the fourth and third
+carriers are **story 6.7's** guards — `hostnames_of` is SHARED, so removing the property reds both
+rules' tests. 🔑 *The carrier list must be derived from everything that reads the mutated code, across
+the whole file, not from the tests this story wrote* — M5 said that about a verdict variant and M9 says
+it about a shared helper.
+
 🔑 **M7 confirms a finding this pass produced BEFORE it ran.** Predicting the mutation showed that
 AC7's population was **asymmetric**: `is_subset` is directional, and with the superset on the LEFT it
 answers `false`, so the guard would have stayed GREEN under the mutation it names. Both orientations
 are asserted now and M7 reds on the second. *A guard written for a directional operator and exercised
 in one direction is a guard placed where half the defect cannot occur* — this epic's dominant class,
 caught by prediction rather than by reading.
+
+## 4b. What the blind review layer found, and what it refuted
+
+🔴 **The blind layer scored for the TENTH CONSECUTIVE STORY, with the diff and nothing else.** Ten
+findings, **every one in a SENTENCE except the first, which made a test unable to fail** — and it
+reproduced seven of the eight mutation rows by reasoning and found them correct, which is what makes
+the rest prose defects rather than measurement defects. Its own note is worth keeping: it wanted to open
+`hostnames_of` and `resolver.rs` to confirm two premises and **did not**, reporting both as findings
+because each premise was quoted from the diff.
+
+Repaired: the invisible guard's population (AC2, and **M9**); the twins' premature `done` (§0 below);
+`cascade.rs`'s *"none of them has a PRODUCTION caller"*, **false for the three L1 verdicts** and
+refuted by the unchanged sentence five lines above it; AC2's three incompatible counts; the 26 → **25**
+denominator in five places; the *"one constant among five literals"* arithmetic, wrong in count **and
+in kind**; AC4's one id reporting two trees; `scan_pass.rs`'s strike that stopped one clause early,
+leaving *"Epic 6 owns giving them one"* live in the commit that discharges it; and an assertion
+**strictly implied** by the one above it.
+
+✅ **REFUTED, with the check, so nobody re-chases them**: `evidence_of`'s *"unreachable through the
+corpus today"* is TRUE — **zero** multi-MAC observations across every replay stream, swept; both cited
+test names exist (`hostnames_differing_only_in_case_are_the_same_name`,
+`the_evidence_does_not_depend_on_the_argument_order`); and the twin paragraph landed at
+`docs/project-context.md:188`, directly after story 6.7's at `:186`, not inside Epic 5's.
+
+⚠️ **And two defects of MY OWN surfaced while repairing**: I ran `cargo test -p opencmdb-core A B`,
+which passes two filters and **executes nothing** — this project's most-recorded driver defect, caught
+only because the output was a usage message rather than a test result. And 🔴 **I created a
+three-process collision on one database**: both review layers were told to use container
+`opencmdb-14-4b-db` and to DROP the `opencmdb` database, while I was measuring against it — so M9's
+first baseline came back **RED at 132 tests**, every store-backed one. 🔑 *The driver REFUSED rather
+than reporting it*, exit 2, *"the baseline is not clean"* — which is precisely what story 6.4b built
+`--baseline` for, and what story 6.6's register row warns about: **without it, a store's red is
+published as a mutation's.** I measure against `opencmdb_69` now, a database of my own, which removes
+the collision instead of coordinating around it.
 
 ## 5. Instrument defects of my own, each caught by disbelieving a result
 

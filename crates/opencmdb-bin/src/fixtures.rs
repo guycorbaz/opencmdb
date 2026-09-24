@@ -5199,10 +5199,16 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// inherited. `l2.rs`'s `a_supports_only_verdict_abstains_as_ambiguous_and_names_no_rule` is the
     /// executable half.
     ///
-    /// ⚠️ **And the pin is one constant against five literals.** The string `"l2-hostname-agrees"`
-    /// also sits at four hand-authored test sites in this workspace, every one keyed on the corpus
-    /// TOML rather than on the constant — measured: none reds when the constant is corrupted. What
-    /// reds is this test and the walk below, and the walk only because it names its trap.
+    /// ⚠️ **Two sites red when the constant is corrupted, by two different mechanisms.** The string
+    /// `"l2-hostname-agrees"` also sits at four hand-authored test sites keyed on the corpus TOML
+    /// rather than on the constant (`cascade.rs`, `l1_runner.rs`, `trap_gate.rs`, and this file's
+    /// `expected()`) — measured: **not one of the four reds**, because none of them reads it. What reds
+    /// is THIS test, which compares the two literals, and the walk below, which filters on the CONSTANT
+    /// and therefore iterates **zero** times, so its red comes from its terminal naming assertion.
+    ///
+    /// 🔴 _This read "the pin is one constant against five literals" and named `fixtures.rs` among the
+    /// four that do not red — putting this file on BOTH sides of one enumeration — while the story's own
+    /// addition made the occurrence count six. Found by the blind review layer from the diff alone._
     #[test]
     fn the_l2_hostname_agrees_id_matches_the_corpus_spelling() {
         let mut found = 0usize;

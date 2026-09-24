@@ -16,11 +16,20 @@
 //! 🔴 _Struck rather than deleted, because the sentence was FALSE for one half of itself for four
 //! weeks. [`crate::identity::l2::verdict_for_hostname`] has produced [`Verdict::Opposes`] since story
 //! 6.7 (2026-08-30) and [`crate::identity::l2::verdict_for_hostname_agreement`] produces
-//! [`Verdict::Supports`] since story 6.9 (2026-09-24) — so **all five verdicts now have a producer**,
-//! and none of them has a PRODUCTION caller: story 6.12 is the first. The stale half was found by a
-//! validation layer reading this file, not by either story that falsified it, which is story 6.6's
-//! recorded class — a true sentence about what does not exist yet, left standing past the day it
-//! started existing._
+//! [`Verdict::Supports`] since story 6.9 (2026-09-24) — so **all five verdicts now have a producer**.
+//! The stale half was found by a validation layer reading this file, not by either story that
+//! falsified it, which is story 6.6's recorded class — a true sentence about what does not exist yet,
+//! left standing past the day it started existing._
+//!
+//! ⚠️ **Neither of the two L2 producers has a PRODUCTION caller**, and story 6.12 is the first. 🔴 _This
+//! read "**none of them** has a production caller", which is FALSE for the three verdicts L1 emits:
+//! `resolver.rs` calls [`crate::identity::l1::decide_pair`] and
+//! [`crate::identity::l1::decide_singleton`] in production, and the pass has run in the shipped binary
+//! since story 5.14. Caught by story 6.9's blind review layer, **from the diff alone and against the
+//! unchanged sentence five lines above it** — which says in so many words that `decide` HAS a caller.
+//! A struck-and-replaced sentence whose replacement over-claims on a second axis is the class story
+//! 14.6's headline recorded; `scan_pass.rs`'s twin paragraph had the narrow version right and the
+//! domain crate's got the loose one._
 //!
 //! ⚠️ **What a `Supports` still cannot do is MERGE.** `Conclusion::Match` is reached through one arm
 //! only and that arm needs a `Decisive`; a lone `Supports` lands on the weak-evidence row below and

@@ -758,14 +758,21 @@ mod tests {
     /// The slice below: two observations sharing one MAC, plus one carrying no MAC. That is what the
     /// shipped connector's shape can reach, plus the one case that mints an interface. **It is not a
     /// claim about every possible input** — ~~`Verdict::Supports` and `Verdict::Opposes` have no
-    /// producer at all today (`cascade.rs`)~~, which is the structural reason no `Ambiguous` can
-    /// arise, and Epic 6 owns giving them one.
+    /// producer at all today (`cascade.rs`), which is the structural reason no `Ambiguous` can
+    /// arise, and Epic 6 owns giving them one.~~
     ///
     /// 🔴 **Struck: both now have a producer** — `l2::verdict_for_hostname` since story 6.7,
     /// `l2::verdict_for_hostname_agreement` since story 6.9 — **and the conclusion survives for a
-    /// narrower reason**: neither has a PRODUCTION caller, so the pass this test drives still cannot
+    /// narrower reason**: neither has a PRODUCTION CALLER, so the pass this test drives still cannot
     /// see an L2 verdict. **Story 6.12 is the first caller, and it is what turns this tripwire red**,
     /// exactly as story 5.14b's comment said it would.
+    ///
+    /// ⚠️ _The strike first stopped one clause EARLY, leaving two live sentences the same commit
+    /// falsified: *"which is the structural reason no `Ambiguous` can arise"* — the reason is now the
+    /// absent CALLER rather than the absent producer — and *"Epic 6 owns giving them one"*, where Epic
+    /// 6 has given them one, stories 6.7 and 6.9 being Epic 6. Found by the blind review layer. **A
+    /// correction that adds the true text without removing the false one leaves the record carrying
+    /// both**, and a half-struck sentence loses its antecedent while still reading as a claim._
     #[tokio::test]
     async fn the_production_pass_produces_no_ambiguous_abstention() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
