@@ -5038,10 +5038,24 @@ development_status:
                           # UNEXERCISED by the corpus. AC4 makes it a decision, not a default.
   # the FIRST producer of `Verdict::Supports`; 2 traps
   6-8-l2-uplink-agrees: backlog
+  #   ⏸️ WAITS, by Guy's reorder of 2026-09-23, for a connector that emits an UPLINK — Epic 11
+  #   (UniFi) or Epic 12. Measured: `Fact::Uplink` has ZERO occurrences in `arp_ping.rs` and exists
+  #   only in the fixture connector, so building this now means an engine story validated against
+  #   fixtures alone — the exact shape the 2026-08-30 freeze was called for.
   # and the measured floor: hostname is unusable on nearly half of known clients
-  6-9-l2-hostname-agrees: backlog
+  6-9-l2-hostname-agrees: ready-for-dev
+  #   🔑 NEXT, by Guy's reorder of 2026-09-23 (`epics.md` edited — a planning act, not a story's).
+  #   The epic was FROZEN at 6.7 on 2026-08-30; **half of the freeze's stated reason has dissolved
+  #   and half has not**. The freeze named three facts *"no connector produces"* — hostname, MAC,
+  #   uplink/switch port. `Fact::Hostname` has had a producer since PR #143 and `Fact::Mac` since
+  #   PR #163; the uplink and the switch port still have none, which is why 6.8 and 6.10 WAIT.
+  #   ORDER: **6.9 → 6.11 → 6.12**, then 6.13 onward. 6.12 is the pivot — the first story of this
+  #   epic with a production caller, and where `obelix` (two interfaces, one machine, live on the
+  #   reference network since 2026-09-10) stops being two rows. ⚠️ It also loses two shields
+  #   registered at Epic 5 and must carry the race.
   # geography as evidence; `Neutral` where a switch is unknown (D20)
   6-10-l2-different-switch: backlog
+  #   ⏸️ WAITS with 6.8 and for the same measured reason: no connector emits a switch port.
   # 🔴 a STRUCTURAL FACT read at ingestion. Guy: *there is no rule* -- and the decision still NAMES `l2-virtual-mac-prefix`, so the corpus is not bumped
   6-11-virtual-mac-anchor-is-not-a-rule: backlog
   # 5.9b's precedent; ⚠️ two races registered at Epic 5 lose their shield here
