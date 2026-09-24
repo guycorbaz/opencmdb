@@ -723,10 +723,20 @@ mod tests {
     /// `"\u{200B}".trim().is_empty()` is `false` in Rust, so a zero-width space survives trimming.
     /// [`hostnames_of`]'s ASCII-alphanumeric property is what makes both sides read as ABSENT here;
     /// without it two invisible "names" would agree.
+    ///
+    /// 🔴 **BOTH SIDES CARRY THE SAME CODE POINT, and that one character is the whole test.** It first
+    /// carried U+200B against U+2062 — story 6.7's population, mirrored mechanically — and **for
+    /// EQUALITY that is the wrong shape**: two DIFFERENT invisible strings give unequal sets, so with
+    /// the alphanumeric property deleted this test stayed **GREEN** while its punctuation neighbour
+    /// reddened. Measured, with the neighbours as controls: invisible **GREEN**, punctuation **RED**,
+    /// absent **GREEN**. 🔑 *Disjointness wants two different non-names; equality wants the same
+    /// non-name twice — the mirror of a rule needs the mirror of its population, and mirroring the
+    /// code while copying the data is how a guard ends up unable to fail.* Found by the review layer
+    /// that had the diff and nothing else.
     #[test]
     fn two_invisible_hostnames_do_not_agree() {
         let left = [observation(1, 0x01, Some("\u{200B}"))];
-        let right = [observation(2, 0x02, Some("\u{2062}"))];
+        let right = [observation(2, 0x02, Some("\u{200B}"))];
 
         assert_eq!(
             verdict_for_hostname_agreement(&side(&left), &side(&right)).verdict,
