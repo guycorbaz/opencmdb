@@ -5043,7 +5043,7 @@ development_status:
   #   only in the fixture connector, so building this now means an engine story validated against
   #   fixtures alone — the exact shape the 2026-08-30 freeze was called for.
   # and the measured floor: hostname is unusable on nearly half of known clients
-  6-9-l2-hostname-agrees: in-progress
+  6-9-l2-hostname-agrees: done
   #   🔴 Validated 2026-09-24 by two fresh-context layers, and the validation found what the
   #   contexting had explained away: a `Supports` rule CANNOT pass a `must-merge` trap, because
   #   `decide` reaches `Match` only through the arm that needs a `Decisive`. Three L2 traps carry
@@ -5065,7 +5065,20 @@ development_status:
   6-10-l2-different-switch: backlog
   #   ⏸️ WAITS with 6.8 and for the same measured reason: no connector emits a switch port.
   # 🔴 a STRUCTURAL FACT read at ingestion. Guy: *there is no rule* -- and the decision still NAMES `l2-virtual-mac-prefix`, so the corpus is not bumped
-  6-11-virtual-mac-anchor-is-not-a-rule: backlog
+  6-11-virtual-mac-anchor-is-not-a-rule: ready-for-dev
+  #   🔑 NEXT, by Guy's reorder of 2026-09-23 and story 6.9's close on 2026-09-24.
+  #   ⚠️ It inherits two things by NAME rather than by implication:
+  #   (a) story 6.7's measurement that a cloned MAC does not present as two interfaces disagreeing
+  #       but as ONE INTERFACE CONTRADICTING ITSELF — "the signal is not lost; the SHAPE is" — which
+  #       is this story's structural-fact shape arriving early;
+  #   (b) Guy's arbitration of 2026-08-12: there is NO RULE. D13 calls the U/L bit and the IANA
+  #       prefixes `Disqualifying` "as GROUPING anchors, known at ingestion", and story 5.5
+  #       deliberately refused to implement it at L1 for that reason, with two committed tests
+  #       pinning the refusal. The corpus nevertheless expects the identifier
+  #       `l2-virtual-mac-prefix`, which is the tension the story must pose rather than resolve
+  #       silently.
+  #   ⚠️ And story 6.9 leaves it a measured warning: three L2 `must-merge` traps cannot pass under
+  #       the present algebra, so no L2 story should promise the trap gate will close.
   # 5.9b's precedent; ⚠️ two races registered at Epic 5 lose their shield here
   6-12-resolver-writes-device-groupings: backlog
   # `link_candidate`'s first production writer; ⚠️ story 5.14b's tripwire REDS here by design
