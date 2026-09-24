@@ -6263,7 +6263,7 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
 
 - 🔴 **A `Supports` rule cannot pass a `must-merge` trap**, and it is three traps rather than one.
   `decide` reaches `Conclusion::Match` through one arm only and that arm needs a `Decisive`; a lone
-  `Supports` lands on the row `architecture.md:972` calls *weak evidence* and abstains as
+  `Supports` lands on the row `architecture.md:1002` calls *weak evidence* and abstains as
   `Ambiguous`, which `score.rs:276` scores a **fail** against a `must-merge` expectation — the cell
   D18 calls cowardice. The corpus has **eleven** `must-merge` traps: eight name `l1-exact-mac`
   (`Decisive`, which is how they pass today) and **three name an `l2-*` rule** —
@@ -6282,8 +6282,8 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   printers carrying the factory default `doc-printer` would merge at L2, which
   `hostname-collision.toml` forbids in its own words) and bumping the corpus now (a planning act taken
   with no production caller and no screen).
-- ⚠️ **The first producer of `Verdict::Supports` moves from story 6.8 to 6.9.** `epics.md:1866`'s
-  heading and `:1877` both call 6.8 *"the first producer of `Supports`"*; Guy's reorder of 2026-09-23
+- ⚠️ **The first producer of `Verdict::Supports` moves from story 6.8 to 6.9.** `epics.md:1894`'s
+  heading and `:1904` both call 6.8 *"the first producer of `Supports`"*; Guy's reorder of 2026-09-23
   put 6.9 first, so 6.9 shipped it. `epics.md` is NOT edited — a story may not — and the two live doc
   sentences that had gone stale WERE corrected in place with their first version struck
   (`cascade.rs`'s module doc, which had been **false for `Opposes` since story 6.7**, and
@@ -6312,10 +6312,45 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   `--json` flag** in `gh 2.46.0`, so every poll captured a usage error instead of data and the monitor
   expired after fifteen minutes with **zero events over a run that had already finished green at
   3m33s**. 🔑 *A watcher whose data source never produces data cannot report success OR failure*, so
-  its silence carries no information at all — which is a level below the two rows this register
-  already holds (a watcher exiting 0 over zero checks, and one killed while emitting nothing). The
+  its silence carries no information at all — which is a level below what this project already
+  records. ⚠️ *This said "the two rows this register already holds"; the register holds **ONE**
+  (a watcher exiting 0 over zero checks), and the other two cases — a timeout in silence, and a
+  watcher killed while emitting nothing — are recorded in the TWINS and in no register row. **A
+  claim about what the register holds, made without reading the register**, which is story 6b.9's
+  class one turn further; the acceptance-audit layer measured it.* ⚠️ And the older row prescribes
+  reading `gh pr checks` where this one prescribes `gh pr view --json statusCheckRollup`: **two
+  commands, nothing tying them**, and the next reader has to pick. Prefer this one — the other
+  cannot be parsed. The
   remedy is mechanical rather than a resolution: **run the watcher's own command once and look at its
   output before trusting the watch.** The machine-readable route for checks is
   `gh pr view --json statusCheckRollup`, and a run's own head sha comes from `gh run view --json
   headSha`, which is what establishes CI green on the head commit rather than inherited. **Owner: the
   next story that arms a watcher**, which is every story.
+- 🔴 **`architecture.md`'s line citations have drifted by a UNIFORM +30 across the identity engine, and
+  the drift is INHERITED rather than created by any one story.** D13's decision table sits at
+  `architecture.md:998-1004` and every citation in the engine names `:967-974`; the weak-evidence row is
+  at **`:1002`** where thirty-four sites in `cascade.rs` alone say `:972`. Measured: **34 drifted
+  citations in `cascade.rs`** and drifted citations in **five files** (`cascade.rs`, `l1.rs`, `l2.rs`,
+  `blocking.rs`, `resolver.rs`). ⚠️ **Story 6.9 propagated the stale `:972` into five NEW sites before
+  its acceptance-audit layer measured the real line**, and corrected its own five; it did **not** sweep
+  the inherited thirty-four, because a citation sweep across the engine belongs to a story that owns
+  those files and not to a hostname rule (story 14.4's precedent: four pre-existing stylesheet sites
+  REGISTERED rather than swept up). 🔑 *The cheap defence is the one story 6.7 paid for: a grep on an
+  opening phrase gives you where a quotation STARTS and says nothing about where it ends — and it says
+  nothing at all about a citation whose target moved.* **Owner: the next story that edits
+  `cascade.rs`'s or `l1.rs`'s doc comments substantively**, or a project review, whichever comes first.
+- 🔴 **Story 6.15's own criterion promises what story 6.9 measured to be impossible, and it reaches a
+  MILESTONE.** `epics.md:2034` says *"**`passed() == true`**: truth-table failures = 0 at the device
+  level, unanswerable = 0 … it closes NFR4 and milestone J4"*. Story 6.9 measured that three committed
+  `must-merge` traps — `shared-hardware-vm-must-merge` and story 6.8's `multi-nic-must-merge` and
+  `docker-veth-must-merge` — expect a MERGE from a rule the epic specifies as `Supports`, and `decide`
+  reaches `Match` only through the arm that needs a `Decisive`. So those three become **failures** once
+  an L2 runner exists, and `passed()` cannot be true through Epic 6's L2 rules **as specified**. ⚠️
+  **This row exists because the first version of story 6.9's must-merge row named constraint (2) and
+  story 6.8's criteria and NOT this one** — the criterion the finding refutes most directly, and the
+  one tied to J4; its acceptance-audit layer found that a retrospective working from that row would
+  have repaired constraint (2) and 6.8 and left 6.15's promise and the milestone standing. ⚠️ **And both
+  twins carry, from story 5.8, the endorsement *"which is what `epics.md:417` always said — NFR4 stays
+  RED and is closed by Epic 6"***, which this measurement bears on directly; claim and bearing sit ~90
+  lines apart in one file with nothing tying them. **Owner: Epic 6's RETROSPECTIVE**, together with the
+  must-merge row, and it must look at `epics.md:2034`, story 6.15 and J4 in the same act.
