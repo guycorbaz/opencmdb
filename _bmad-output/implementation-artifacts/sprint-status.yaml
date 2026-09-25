@@ -5122,7 +5122,9 @@ development_status:
   #   design at L2, its tripwire goes to 6.14. Left `backlog` because no status says "absorbed" — CLOSING
   #   IT IS GUY'S CALL, owed before Epic 6's retrospective.
   # FR16 -- `epics.md`'s story-5.14 clause, re-owned here at 5.14b's contexting
-  6-14-ambiguity-explains-itself: review
+  6-14-ambiguity-explains-itself: done
+  #   ✅ DONE 2026-09-25: PR #214 squash-merged as `2c26691`, CI green on head `8eed76d` ITSELF (run
+  #       `36146705075`; its log shows the axe gate opening `sel=ambigu:` and kbd 66/0).
   #   🔧 DEVELOPED 2026-09-25 on its branch: obelix is ONE Ambigu row with its candidates; Résoudre labelled;
   #   ✅ CODE-REVIEWED + REPAIRED 2026-09-25 (27 findings, 23 patches, 0 decisions): 802+219+110, kbd 66/0.
   #   Next: the PR, then the RELEASE (IPAM notes BLOCKING), then 6.14b.
