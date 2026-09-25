@@ -5138,6 +5138,8 @@ development_status:
   #   with two candidates the operator lifts, not as a device. It inherits 6.13's replacement tripwire.
   # INSERTED 2026-09-25 by Guy's act at 6.14's arbitration: the gesture that lifts the doubt
   6-14b-the-operator-lifts-the-doubt: backlog
+  #   ✅ The release it waited for is out: v0.6.0 published 2026-09-25 (tag on dde0257, image verified).
+  #   Next: Guy uses it on the NAS; then this story's planning act.
   #   ⚠️ SEQUENCED AFTER THE NEXT RELEASE (its "IPAM notes are BLOCKING" was stale — B2 was discharged by v0.5.0): 6.14 → release → 6.14b, so obelix
   #   is seen and used on the NAS before its gesture is written. First obligation: a planning act on what
   #   each answer WRITES (no_match by OPERATOR; "same machine" needs a device nobody mints).
