@@ -54,12 +54,15 @@ instance two cards answering to the same name --- the triage inbox shows \emph{o
 \textbf{Ambiguous} line for them. Its pane lists each candidate's hardware address, its
 addresses and names \emph{as the network shows them now}, and why the engine asks rather than
 decides. A shared name is weak evidence on its own, which is why it is a question and never a
-merge. The addresses concerned keep their own \emph{Add} control, and say that they belong to
-an open question.
+merge. The question follows the network: it leaves the inbox if the names stop matching, and
+returns when they match again. The addresses concerned keep their own \emph{Add} control ---
+where documenting is enabled on the instance --- and say that they belong to an open question;
+adding one creates a record for that address alone and does not answer the question.
 
 \begin{planned}
-The identity engine and reconciliation loop are the first implementation milestone. Until
-they land, the behaviour described here reflects the designed model.
+The identity engine groups nothing yet: it recognises a network interface by its hardware
+address, and when several interfaces may be one machine it \emph{asks} (below) rather than
+grouping them. Composite identity across a changing address is the designed model.
 \end{planned}
 
 \section{Sources and liveness}
@@ -88,7 +91,7 @@ When you review a discovery, you choose one canonical gesture:
   \item \textbf{Attach}, \textbf{create}, \textbf{snooze} — link to an existing record,
         create a new declaration, or defer.
   \item \textbf{Resolve} — answer an \emph{ambiguity}: say whether the interfaces it names
-        are one machine or several.
+        are one machine or several. \emph{Not yet built} --- see below.
 \end{itemize}
 
 \begin{note}

@@ -358,6 +358,18 @@ triage.ambiguous.seen_now:
   # candidates are shown as the network shows them NOW, and the screen says so.
   en: "Shown as the network shows them now; the engine may have reached its decision on older answers."
   fr: "Affichés tels que le réseau les montre maintenant ; le moteur a pu décider sur des réponses plus anciennes."
+triage.ambiguous.follows_network:
+  # Guy's decision F, completed at story 6.14's review: the row follows the CURRENT state, so the question
+  # itself can leave and come back — which the screen must say, not only the record.
+  en: "This question follows the network: it leaves the queue if the names stop matching, and returns when they match again."
+  fr: "Cette question suit le réseau : elle quitte la file si les noms cessent de correspondre, et revient quand ils correspondent de nouveau."
+triage.ambiguous.add_alone:
+  # Guy's decision C's cost, said where the gesture is (story 6.14's review).
+  en: "Add creates a record for this address alone — it does not answer the question."
+  fr: "Ajouter crée une fiche pour cette seule adresse — cela ne répond pas à la question."
+triage.ambiguous.evidence.virtual_router:
+  en: "One of them uses a virtual-router address, which never anchors a machine."
+  fr: "L'une d'elles utilise une adresse de routeur virtuel, qui n'identifie jamais une machine."
 triage.ambiguous.why:
   en: "Why the engine asks rather than decides:"
   fr: "Pourquoi le moteur demande au lieu de décider :"
@@ -369,8 +381,8 @@ triage.ambiguous.evidence.different_names:
   fr: "Elles répondent à des noms différents."
 triage.ambiguous.evidence.unfamiliar:
   # Total over a token this build does not know (story 5.14b's arbitration 11: the reader never fails).
-  en: "A rule this version does not describe weighed in."
-  fr: "Une règle que cette version ne décrit pas a pesé."
+  en: "Another rule weighed in; this screen does not describe it yet."
+  fr: "Une autre règle a pesé ; cet écran ne la décrit pas encore."
 triage.ambiguous.open_question:
   en: "This address belongs to an open question: are these interfaces one machine?"
   fr: "Cette adresse fait partie d'une question ouverte : ces interfaces sont-elles une seule machine ?"

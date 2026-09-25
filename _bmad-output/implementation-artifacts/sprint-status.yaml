@@ -5124,7 +5124,8 @@ development_status:
   # FR16 -- `epics.md`'s story-5.14 clause, re-owned here at 5.14b's contexting
   6-14-ambiguity-explains-itself: review
   #   🔧 DEVELOPED 2026-09-25 on its branch: obelix is ONE Ambigu row with its candidates; Résoudre labelled;
-  #   795+219+110, ten gates, axe 10 routes + 6 states 0 nodes, kbd 65/0. Next: three-layer code review.
+  #   ✅ CODE-REVIEWED + REPAIRED 2026-09-25 (27 findings, 23 patches, 0 decisions): 802+219+110, kbd 66/0.
+  #   Next: the PR, then the RELEASE (IPAM notes BLOCKING), then 6.14b.
   #   📝 CONTEXTED 2026-09-25 (`6-14-ambiguity-explains-itself.md`) — NOT developable until validated and
   #   arbitrated: nothing specifies what « lift the doubt » WRITES (the positive answer needs a device nobody
   #   mints); « Résoudre » already labels CONFLICT rows; « never a blind document » would take the one live

@@ -874,17 +874,53 @@ mod tests {
             "premise: the pass persisted one ambiguity"
         );
 
+        let questions = |view: &crate::triage_view::TriageView| -> Vec<String> {
+            view.rows
+                .iter()
+                .map(|row| row.id.clone())
+                .filter(|id| id.starts_with("ambigu:"))
+                .collect()
+        };
         let (view, identity) = crate::page::triage_view(&pool, None, false, false)
             .await
-            .unwrap_or_else(|_| panic!("the triage view builds"));
-        let questions: Vec<&str> = view
-            .rows
-            .iter()
-            .map(|row| row.id.as_str())
-            .filter(|id| id.starts_with("ambigu:"))
-            .collect();
-        assert_eq!(questions.len(), 1, "ONE question for obelix: {questions:?}");
+            .unwrap_or_else(|response| panic!("the triage view builds: {}", response.status()));
+        let first = questions(&view);
+        assert_eq!(first.len(), 1, "ONE question for obelix: {first:?}");
         assert_eq!(identity.ambiguous_groups, 1);
+        // AC5 through the HANDLER — the one place a sum could be written (story 5.14b's lesson: the pure
+        // reach test cannot see it). Both sightings are placed, so nothing is *not placed*; the review
+        // measured a handler adding the groups to `not_placed` GREEN before this line.
+        assert_eq!(
+            (identity.placed, identity.not_placed),
+            (2, 0),
+            "the question count is never summed with the sighting counts"
+        );
+
+        // AC1: STABLE across sweeps — a second sweep with FRESH observation ids, as the shipped connector
+        // mints them, gives the SAME row id (the review found no test on the id itself).
+        let mut again = FixtureConnector::from_observations(
+            connector_id(),
+            Capabilities {
+                as_of: at(1_700_000_000),
+                kinds: BTreeSet::from([FactKind::IpV4, FactKind::Mac, FactKind::Hostname]),
+            },
+            vec![scope()],
+            "story 6.14 obelix, again",
+            vec![nic(50, "203.0.113.8", 0x08), nic(51, "203.0.113.9", 0x09)],
+        )
+        .expect("the source accepts facts it declares");
+        poll_ingest_resolve(&mut again, at(1_700_000_900), &pool)
+            .await
+            .resolution
+            .expect("the second pass must have RUN");
+        let (view, _) = crate::page::triage_view(&pool, None, false, false)
+            .await
+            .unwrap_or_else(|response| panic!("the triage view builds: {}", response.status()));
+        assert_eq!(
+            questions(&view),
+            first,
+            "the same question, under the same id"
+        );
     }
 
     /// **AC6** — `current_subject IS NOT NULL` is carried by a superseded row.

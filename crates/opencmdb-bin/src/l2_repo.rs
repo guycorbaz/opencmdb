@@ -238,38 +238,54 @@ where
 }
 
 /// For every interface in a current ENGINE `Ambiguous` pair: its id, its hardware address, and the
-/// observation of its LATEST current placement — what the candidates pane shows *as seen now*.
+/// observation(s) of its LATEST current placement — what the candidates pane shows *as seen now*.
 ///
-/// 🔑 **Per-interface latest, in SQL**, and the reason is a projection: every observation's placement
-/// link stays current for ever, so reading the whole `identity_link` table per render would grow by
-/// about one row per host per sweep (reasoned by story 6.14's validation, ≈13k a day at the reference
-/// cadence). Several observations tied at the same instant all come back; the caller keeps one.
+/// 🔑 **Per-interface latest, in SQL** — bounded to the ambiguous interfaces rather than the whole
+/// `identity_link` table (measured by story 6.14's review at 0.18 s over 40 000 extra current links;
+/// the correlated `MAX` is per interface, so the cost grows with each interface's sweeps and not with the
+/// network's).
+///
+/// 🔴 **EVERY observation tied at that instant comes back, and the caller keeps them all.** Every
+/// observation of one sweep is dated at the sweep's start, so an interface answering at two addresses in
+/// one sweep has two latest sightings. The first version kept one by id, and the review measured the
+/// other address's `Nouveau` row losing its link to the question — which address won depending on the
+/// order of freshly minted ids.
+///
+/// 🔴 **The MAC comes from `interface` itself, through a LEFT JOIN**: an interface with no current
+/// placement still comes back, with no observation (`None`), so its candidate keeps its hardware address.
+/// The first version read the MAC through the link and rendered an EMPTY heading for such a candidate
+/// (measured on a booted server by the review; axe exited 0 over it).
+///
+/// ⚠️ It reads the SAME pairs as [`load_current_ambiguous_pairs`] — current, ENGINE, `abstained`,
+/// `ambiguous` — in one condition written twice rather than two conditions that could drift (they did:
+/// the first version filtered `outcome` in one reader and not in the other).
 ///
 /// # Errors
 ///
 /// Any database error.
 pub(crate) async fn load_ambiguous_interface_sightings<'e, E>(
     executor: E,
-) -> Result<Vec<(String, String, String)>, sqlx::Error>
+) -> Result<Vec<(String, String, Option<String>)>, sqlx::Error>
 where
     E: Executor<'e, Database = MySql>,
 {
     sqlx::query_as(
         "SELECT i.id, i.mac_canon, l.observation_id \
          FROM interface i \
-         JOIN identity_link l ON l.interface_id = i.id AND l.outcome = 'match' \
+         LEFT JOIN identity_link l ON l.interface_id = i.id AND l.outcome = 'match' \
               AND l.valid_to = ? \
-         JOIN observation_record o ON o.id = l.observation_id \
+              AND (SELECT o.observed_at FROM observation_record o WHERE o.id = l.observation_id) = ( \
+                  SELECT MAX(o2.observed_at) FROM identity_link l2 \
+                  JOIN observation_record o2 ON o2.id = l2.observation_id \
+                  WHERE l2.interface_id = i.id AND l2.outcome = 'match' AND l2.valid_to = ?) \
          WHERE i.id IN ( \
              SELECT interface_low FROM l2_pair_decision WHERE is_current = 1 \
-                 AND decided_by = 'ENGINE' AND abstention_cause = 'ambiguous' \
+                 AND decided_by = 'ENGINE' AND outcome = 'abstained' \
+                 AND abstention_cause = 'ambiguous' \
              UNION \
              SELECT interface_high FROM l2_pair_decision WHERE is_current = 1 \
-                 AND decided_by = 'ENGINE' AND abstention_cause = 'ambiguous') \
-         AND o.observed_at = ( \
-             SELECT MAX(o2.observed_at) FROM identity_link l2 \
-             JOIN observation_record o2 ON o2.id = l2.observation_id \
-             WHERE l2.interface_id = i.id AND l2.outcome = 'match' AND l2.valid_to = ?) \
+                 AND decided_by = 'ENGINE' AND outcome = 'abstained' \
+                 AND abstention_cause = 'ambiguous') \
          ORDER BY i.id, l.observation_id",
     )
     .bind(OPEN_END)

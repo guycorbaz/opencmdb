@@ -1,6 +1,7 @@
 # Story 6.14: The ambiguity explains itself on the page
 
-Status: **developed and verified 2026-09-25 — `review`, not `done`, because that is the merge's business.**
+Status: **developed 2026-09-25, code-reviewed by three isolated layers and REPAIRED the same day — `review`,
+not `done`, because that is the merge's business.**
 Contexted, validated and arbitrated the same day (all six decisions on the recommendation, §0.8); the planning
 act (glossary `resolve` + story 6.14b) merged first as PR #213. Code review by three isolated layers is next. Both validation layers tried to refute §0.1–§0.3 and all
 three survive; the gap-hunt BUILT the recommended shape and it changed two recommendations (D, and the action
@@ -364,6 +365,39 @@ only at end of file), and no `#[cfg(test)]` item placed mid-file (it truncates `
 - [x] T10 — Mutation pass (predictions first, carriers by grep, own database), register, record, twins, manuals
       if a screen sentence changes
 
+### Review Findings (code review 2026-09-25 — three isolated layers, one database each)
+
+Blind (diff only): 15. Edge (built, mutated, both gates run): 8 + 7 refuted, and **`4967a43` verified NEUTRAL**
+(every removed line re-found unchanged but for visibility). Acceptance: 11, **no product defect, no must-NOT
+breached**, every record figure re-measured true. **27 distinct after merging; 0 decisions; 23 patches; 1
+deferred; 3 dismissed with their check.**
+
+- [x] [Review][Patch] HIGH — the build-commands section of `CLAUDE.md`/`project-context.md` still says kbd "sixty-two" checks, axe "FIVE" states, and lists no `AXE_REQUIRE_AMBIGUOUS` — the FIFTH recurrence of this number [CLAUDE.md:165-172]
+- [x] [Review][Patch] AC5 "never summed" carried by NO test — a mutation adding groups to `not_placed` left the suite green; the reach test's two halves are weak (unused `identity`, `>3</span>` anywhere) [page.rs reach test]
+- [x] [Review][Patch] An interface answering at two addresses in one sweep shows one (ties at `MAX(observed_at)` — every observation of a sweep carries its start), and the other address's `Nouveau` row loses its link; the tie-break it leans on is carried by nothing (mutation green) [l2_repo.rs:273, ambiguity_view.rs] — keep ALL tied sightings
+- [x] [Review][Patch] The per-group evidence filter is carried by nothing (mutation green) — latent while every vector is identical [ambiguity_view.rs:95]
+- [x] [Review][Patch] "A rule this version does not describe" is FALSE for rules it does describe (`l2-virtual-mac-prefix=disqualifying`, `l2-hostname-agrees=opposes`) [ambiguity_view.rs evidence_sentences]
+- [x] [Review][Patch] A candidate with no current placement renders an EMPTY MAC heading and an entity of `" · "` (measured on a server; axe exits 0) — read the MAC from `interface` itself [ambiguity_view.rs, l2_repo.rs]
+- [x] [Review][Patch] The keyboard gate focuses *Résoudre* by SCRIPT: `.focus()` succeeds on `tabindex=-1`, so story 6b.4b's unreachable-by-Tab defect would pass — walk it with Tab [kbd-probe.mjs]
+- [x] [Review][Patch] Decision F is half on the screen: nothing says the QUESTION itself leaves and returns when names flap [ambiguity pane copy]
+- [x] [Review][Patch] Decision C's cost is not on the screen: *Ajouter* on a question's address creates a record for that address alone [Nouveau pane copy]
+- [x] [Review][Patch] The *as seen now* pure test's doc claims to close the validation's M1, which lives in SQL it never reaches; the store test changes no address — make the store test change an address and narrow the doc [page.rs, l2_pass.rs]
+- [x] [Review][Patch] AC1's "stable across sweeps" has no test on the row id [scan_pass.rs e2e]
+- [x] [Review][Patch] The open-question link under `?sort=age` drops the sort (mutation green) [triage_view.rs:743]
+- [x] [Review][Patch] An address shown by two groups silently keeps the LAST group's link — make it deterministic and say so [ambiguity_view.rs]
+- [x] [Review][Patch] The two readers filter differently (`outcome` in one, not the other); the sightings reader's ENGINE filter is tested by nothing [l2_repo.rs]
+- [x] [Review][Patch] The manual contradicts itself: a present-tense paragraph above an unchanged "until they land … the designed model" block; *Resolve* listed as a present gesture; *Add* stated without the switch [user-manual.tex]
+- [x] [Review][Patch] `ambiguity_view.rs`'s module doc names `page.rs` for a test that lives in `l2_pass.rs`
+- [x] [Review][Patch] `NOT_A_GLOSSARY_GESTURE`'s doc: "Two of these" but still "`baseline` is a fourth" [state_vocabulary.rs]
+- [x] [Review][Patch] The Ambigu block was inserted BETWEEN the AC3 sort comment and the `if sort_by_age` it describes — the scripted-insertion class [triage_view.rs]
+- [x] [Review][Patch] The e2e test's `unwrap_or_else(|_| panic!(…))` throws away the failure's cause [scan_pass.rs]
+- [x] [Review][Patch] The seed comment says "all six CI flags" where CI now sets seven — date it [a11y/seed.sql]
+- [x] [Review][Patch] The two gates treat a missing Ambigu row differently (kbd refuses always, axe behind a flag) and kbd matches a Rust id prefix its neighbour comment warns against — state both [kbd-probe.mjs]
+- [x] [Review][Patch] The record's line counts are DATED at the split (1150/820) where HEAD is 1176/853; say so in the twins [CLAUDE.md, project-context.md]
+- [x] [Review][Patch] A new register row names two owners — pick one [deferred-work.md]
+- [x] [Review][Defer] One machine counts three times in *Pending* (two Nouveau rows + one Ambigu) — follows from decision C; the count's meaning with grouping is the retrospective's — deferred
+- Dismissed: *a sighting id absent from `observations`* (the loader reads every observation; the path is the no-placement case, patched above); *the sightings query grows with sweeps* (edge measured **0.18 s** at 40 000 extra links); *`.200`/`.201` might sit inside a subnet* (audit: outside the `/25`); *kbd's `cannotRun` with no `return`* (it throws).
+
 ## 2. What this story must NOT do
 
 - **Not write any row** under (A1) — no route, no OPERATOR row, no device.
@@ -408,6 +442,8 @@ it** until 6.14b — say so on the screen, not only here.
 | 2026-09-25 | planning act merged (PR #213, `766e995`); branch rebased |
 | 2026-09-25 | implemented: the split (own commit), the readers, `ambiguity_view.rs`, the pane, decision B in code, the reach line, the replaced tripwire, the seed and both browser gates; Chrome looks in both languages found two defects no guard could see |
 | 2026-09-25 | mutation pass: 10 rows, 9 conforming; **N2 GREEN** → a missing test, added (N2b red); the driver's first four runs REFUSED on a red baseline my store-less check had missed |
+| 2026-09-25 | **code review, three isolated layers, one database each**: 27 distinct, 0 decisions, 23 patches, 1 deferred, 3 dismissed; `4967a43` verified NEUTRAL; no product defect, no must-NOT breached |
+| 2026-09-25 | repair: 23 patches — all tied sightings kept, the MAC read from `interface`, the evidence sentences true, the F and C costs on the screen, a Tab-walked check, the twins' gate figures (the FIFTH recurrence), the manual; R1–R4 and K1 conforming, the driver refusing once more on a clippy-red baseline; 802 + 219 + 110 |
 
 ## 6. Dev Agent Record
 
@@ -451,11 +487,24 @@ it** until 6.14b — say so on the screen, not only here.
 | N7 | the template never takes the candidates branch | red:1 | ✅ red 1 | `an_ambiguity_pane_shows_its_candidates_and_no_declared_side` (rendered) |
 | N8 | the reach line's count never set | red:1 | ✅ red 1 | `the_production_pass_shows_an_l2_ambiguity_as_one_question` (end to end) |
 | N9 | a Conflit's primary back to *Résoudre* (two-line anchor, one site) | red:1 | ✅ red 1 | the action-bar guard |
+| — | *(review repair)* first run of R1–R4 | — | ⛔ **all four refused** | 🔴 the baseline's CLIPPY was red — a `collapsible_match` in the repair itself; the driver refused a second time in one story, rightly |
+| R1 | *(review)* the handler adds the groups to `not_placed` — the auditor's mutation, GREEN before | red:1 | ✅ red 1 | the e2e test, now asserting `(placed, not_placed)` THROUGH the handler |
+| R2 | *(review)* the per-group verdict filter made `true` — edge `ma`, GREEN before | red:1 | ✅ red 1 | `each_group_carries_only_its_own_verdicts` |
+| R3 | *(review)* the open-question link built without the sort — edge `mb`, GREEN before | red:1 | ✅ red 1 | `the_open_question_link_keeps_the_age_sort` |
+| R4 | *(review)* only the FIRST tied sighting kept — the defect the edge layer measured | red:1 | ✅ red 1 | `an_interface_answering_at_two_addresses_shows_both` |
+| K1 | *(review, browser)* the planned control's `tabindex="0"` → `"-1"`, binary grep-checked, kbd-probe run | the Tab check alone | ✅ **exactly 1 of 66 red** — *"the Tab key REACHES it"* | 🔑 the script `.focus()` check stayed GREEN under it, which is the auditor's finding measured |
+
+⚠️ Not re-run as a mutation, and said: the sightings reader's ENGINE filter sits in two identical subqueries,
+so a single-site anchor cannot reach it; it is carried by the assertion added to
+`the_screen_reads_engine_ambiguities_and_nothing_else` (reasoned, not mutated).
 
 ### Verification (story branch)
 
-- `cargo test --workspace --locked` against a VIRGIN store: **795 + 219 + 110**; clippy `--all-targets`
-  clean; fmt; `cargo xtask ci` ten gates green.
+- `cargo test --workspace --locked` against a VIRGIN store: **795 + 219 + 110** at development, **802 + 219 +
+  110** after the review's repair (`RUSTFLAGS="-D warnings"`); clippy `--all-targets` clean; fmt; `cargo xtask
+  ci` ten gates green.
+- **After the review's repair, on port 8080**: axe empty plan 1 route 0 nodes; axe seeded under all seven flags
+  10 routes + 6 states 0 nodes; **kbd 66 checks, 0 failed** (the Tab check added).
 - **Both browser gates, on a booted binary with the seed**: axe under all SEVEN flags (`AXE_REQUIRE_AMBIGUOUS`
   included) — **10 routes + 6 states, 0 violation nodes**, the Ambigu pane among them; kbd-probe — **65
   checks, 0 failed**. ⚠️ First run on port **18614**, because port 8080 was held by a long-running
@@ -482,7 +531,7 @@ it** until 6.14b — say so on the screen, not only here.
 
 ## Record
 
-- live-count: bin=795 core=219 xtask=110
+- live-count: bin=802 core=219 xtask=110
 - base: 766e995f642babb7215bd224bba46fbcc3df30d9
 - registered: Only `/triage` reads `l2_pair_decision`
 - registered: One Ambigu row per GROUP is exact only while an L2 `Ambiguous` comes from an EQUIVALENCE

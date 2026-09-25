@@ -731,7 +731,6 @@ pub(crate) fn build_triage_offering(
         }
     }
 
-    // AC3: age sorting is available and OFF by default — oldest first when on.
     // The L2 questions (story 6.14): one row per group, and the link from each `Nouveau` row whose
     // address a candidate carries.
     let (ambiguous_rows, ambiguous_panes, address_to_group) =
@@ -746,6 +745,7 @@ pub(crate) fn build_triage_offering(
     rows.extend(ambiguous_rows);
     panes.extend(ambiguous_panes);
 
+    // AC3: age sorting is available and OFF by default — oldest first when on.
     if sort_by_age {
         rows.sort_by_key(|r| std::cmp::Reverse(r.age_seconds));
     }

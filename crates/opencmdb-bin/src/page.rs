@@ -241,6 +241,12 @@ pub(crate) struct Strings {
     /// On a `Nouveau` pane whose address a candidate carries: the link to the open question
     /// (Guy's decision C, story 6.14).
     pub(crate) ambiguous_open_question: String,
+    /// Under an Ambigu pane: the QUESTION follows the network — it leaves the queue when the names stop
+    /// matching and returns when they match again (Guy's decision F, story 6.14's review).
+    pub(crate) ambiguous_follows_network: String,
+    /// Under a `Nouveau` pane's link to its question: *Ajouter* creates a record for this address ALONE
+    /// and does not answer the question (Guy's decision C, its cost said on the screen).
+    pub(crate) ambiguous_add_alone: String,
 }
 
 /// A count and its noun, INFLECTED — `1 field`, `2 fields`, `1 champ`, `2 champs`.
@@ -319,6 +325,8 @@ pub(crate) fn strings() -> Strings {
         ambiguous_seen_now: t!("triage.ambiguous.seen_now").to_string(),
         ambiguous_why: t!("triage.ambiguous.why").to_string(),
         ambiguous_open_question: t!("triage.ambiguous.open_question").to_string(),
+        ambiguous_follows_network: t!("triage.ambiguous.follows_network").to_string(),
+        ambiguous_add_alone: t!("triage.ambiguous.add_alone").to_string(),
         identity_settled: t!("identity.settled").to_string(),
     }
 }
@@ -2419,7 +2427,7 @@ mod tests {
         // beside it claimed the opposite. Moving either number is a deliberate act.
         assert_eq!(
             (literals, checked),
-            (19, 173),
+            (19, 175),
             "the walk found {literals} `…Strings` literal(s) and {checked} field(s); if that is \
              deliberate, move these numbers after READING what the walk printed"
         );
@@ -3542,12 +3550,12 @@ mod tests {
                 (
                     "iface-a".into(),
                     "00:11:22:33:44:08".into(),
-                    a.id.to_string(),
+                    Some(a.id.to_string()),
                 ),
                 (
                     "iface-b".into(),
                     "00:11:22:33:44:09".into(),
-                    b.id.to_string(),
+                    Some(b.id.to_string()),
                 ),
             ],
         };
@@ -5911,9 +5919,10 @@ mod tests {
         }
     }
 
-    /// AC2 / decision F — the candidates are shown AS THE NETWORK SHOWS THEM NOW. Two sightings of one
-    /// interface with DIFFERENT addresses and the same stored verdicts: the pane shows the later one.
-    /// 🔴 The validation's M1 (show the OLDEST sighting) was green without a test of this shape.
+    /// AC2 / decision F — the pane shows WHATEVER sighting it is handed as the interface's latest. ⚠️ It
+    /// does not CHOOSE the latest — the reader does, in SQL — so this is not the carrier of the
+    /// validation's M1: `l2_pass`'s store test is (mutation N3). _(This doc claimed otherwise until the
+    /// blind review layer read it against the mutation table.)_
     #[test]
     fn the_candidates_are_shown_as_the_network_shows_them_now() {
         let (mut question, mut batches) = obelix_question(60);
@@ -5923,7 +5932,7 @@ mod tests {
             vec![ipv4("192.0.2.18"), hostname("obelix.home.arpa")],
             0xB8,
         );
-        question.sightings[0].2 = later.id.to_string();
+        question.sightings[0].2 = Some(later.id.to_string());
         batches.push(later);
         let pane = build_triage_offering(
             Vec::new(),
@@ -5988,29 +5997,66 @@ mod tests {
         assert_eq!(pane_for("nouveau:192.0.2.77").open_question, None);
     }
 
-    /// AC5 — the reach section counts L2 questions in their OWN unit, on a line of their own, and says
-    /// nothing about them when there are none.
+    /// AC5 — the reach section counts L2 questions in their OWN unit, on a line of their own, NEVER
+    /// summed with the sighting counts, and says nothing about them when there are none. 🔴 The review
+    /// measured a mutation adding the groups to `not_placed` GREEN under this test's first form, which
+    /// never compared the sighting counts.
     #[test]
     fn the_reach_line_counts_questions_in_their_own_unit() {
         let s = strings();
-        let mut identity = build_identity_view(vec![reach("match", None, 2)]);
-        let without = identity_section_of(&triage_body(
-            build_triage(Vec::new(), Vec::new(), Vec::new(), at(1_000), None, false),
-            build_identity_view(vec![reach("match", None, 2)]),
-        ));
+        let render = |groups: usize| {
+            let mut identity = build_identity_view(vec![
+                reach("match", None, 2),
+                reach("abstained", Some("absence_of_proof"), 1),
+            ]);
+            identity.ambiguous_groups = groups;
+            identity_section_of(&triage_body(
+                build_triage(Vec::new(), Vec::new(), Vec::new(), at(1_000), None, false),
+                identity,
+            ))
+        };
+        let without = render(0);
         assert!(
             !without.contains(&s.identity_ambiguous),
             "no line when there is no question"
         );
-        identity.ambiguous_groups = 3;
-        let with = identity_section_of(&triage_body(
-            build_triage(Vec::new(), Vec::new(), Vec::new(), at(1_000), None, false),
-            identity,
-        ));
-        assert!(with.contains(&s.identity_ambiguous));
+        let with = render(7);
+        let line_start = with
+            .find(r#"<p class="pair ambiguous">"#)
+            .expect("the question line stands on its own");
+        let line = &with[line_start..with[line_start..].find("</p>").expect("closes") + line_start];
         assert!(
-            with.contains(r#"<p class="pair ambiguous">"#) && with.contains(">3</span>"),
-            "the count stands on its own line: {with}"
+            line.contains(">7</span>"),
+            "the count is on ITS line: {line}"
+        );
+        // The sighting counts are byte-identical with and without questions — never summed.
+        let pair_of = |html: &str| {
+            let start = html.find(r#"<p class="pair">"#).expect("the sighting pair");
+            html[start..html[start..].find("</p>").expect("closes") + start].to_string()
+        };
+        assert_eq!(pair_of(&with), pair_of(&without));
+    }
+
+    /// The open-question link KEEPS the age sort — following it from a sorted queue does not silently
+    /// turn sorting off (mutation `mb` was green before this test).
+    #[test]
+    fn the_open_question_link_keeps_the_age_sort() {
+        let (question, obelix) = obelix_question(60);
+        let pane = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            obelix,
+            at(1_000),
+            Some("nouveau:192.0.2.8"),
+            true,
+            true,
+            &question,
+        )
+        .selected
+        .expect("the Nouveau pane");
+        assert_eq!(
+            pane.open_question.as_deref(),
+            Some("/triage?sel=ambigu:iface-a&sort=age")
         );
     }
 

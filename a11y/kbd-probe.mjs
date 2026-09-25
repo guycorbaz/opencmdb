@@ -50,8 +50,9 @@ const SETTLE_WAIT_MS = 900;
 // 🔑 61 → 62 on 2026-09-23: the confirmation's own words, added where the gate already presses the
 // gesture. The number below is READ OFF the run, never counted by hand — see the sentence above.
 // 🔑 62 → 65 with story 6.14: the Ambigu pane's candidates, its one planned control, and that
-// control's focus and describing sentence. Read off the run, as above.
-const MIN_CHECKS = 65;
+// control's focus and describing sentence; → 66 at its code review, the same control reached with TAB.
+// Read off the run, as above.
+const MIN_CHECKS = 66;
 const MIN_ROWS = 2;
 // 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
 // the field at one site and spelled out inside the expected triage href at another — so a seed that
@@ -464,6 +465,12 @@ async function main() {
     // 🔴 Found by the selector prefix of the product's OWN href, never by a translated word. The
     // validation measured this gate at 62 checks and exit 0 over a prototype whose Ambigu pane it had
     // never opened, so the pane is asked for rather than hoped for.
+    // ⚠️ Two choices, stated rather than implied (story 6.14's review): matching `sel=ambigu:` couples
+    // this gate to a Rust row-id prefix — the block above refuses to match `nouveau:` for that reason —
+    // and it is accepted here because the prefix is what the product RENDERS in the href, so a rename
+    // reds this gate loudly rather than passing it; and this gate REFUSES (2) on a store with no
+    // question, where the axe gate refuses only under `AXE_REQUIRE_AMBIGUOUS` — this one has no flags at
+    // all, and CI always seeds before it runs.
     {
       const ambiguous = hrefs.find((href) => href !== null && href.includes("sel=ambigu:"));
       if (ambiguous === undefined) {
@@ -504,6 +511,23 @@ async function main() {
         "that control takes the focus and is described by a sentence saying what it will do",
         `focused=${pane.focused} note=${JSON.stringify(pane.note.slice(0, 60))}`,
       );
+      // 🔴 **Reached with TAB, not only by script.** `.focus()` succeeds on a `tabindex="-1"` control,
+      // so the check above would pass over story 6b.4b's defect — a planned control no Tab press ever
+      // reaches. Found by story 6.14's acceptance review; this walks the page the way an operator does.
+      await p.evaluate(() => {
+        document.activeElement?.blur();
+        window.scrollTo(0, 0);
+      });
+      let tabbed = false;
+      for (let press = 0; press < 120 && !tabbed; press += 1) {
+        await p.keyboard.press("Tab");
+        tabbed = await p.evaluate(() => {
+          const active = document.activeElement;
+          return active !== null && active.closest("aside.photos") !== null &&
+            active.classList.contains("btn-gesture");
+        });
+      }
+      check(tabbed, "and the Tab key REACHES it from the top of the page", `reached=${tabbed}`);
       await p.close();
     }
 

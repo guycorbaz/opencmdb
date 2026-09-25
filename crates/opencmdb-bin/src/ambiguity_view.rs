@@ -23,8 +23,9 @@
 //! # What this module does NOT show
 //!
 //! An OPERATOR row (an answer, not a question) and a `NoMatch` (the software decided — case one of
-//! Guy's taxonomy): [`crate::l2_repo::load_current_ambiguous_pairs`] reads neither, and a test in
-//! `page.rs` pins both.
+//! Guy's taxonomy): [`crate::l2_repo::load_current_ambiguous_pairs`] reads neither, and
+//! `l2_pass`'s `the_screen_reads_engine_ambiguities_and_nothing_else` pins both. _(This read "a test in
+//! `page.rs`" — the wrong file, found by story 6.14's blind review layer.)_
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -42,8 +43,9 @@ use crate::triage_view::{
 pub(crate) struct AmbiguityInput {
     /// `(interface_low, interface_high, verdicts)` per current ENGINE `Ambiguous` pair.
     pub(crate) pairs: Vec<(String, String, String)>,
-    /// `(interface_id, mac_canon, observation_id)` — the latest placed observation of each interface.
-    pub(crate) sightings: Vec<(String, String, String)>,
+    /// `(interface_id, mac_canon, observation_id)` — EVERY latest placed observation of each interface
+    /// (several when tied at one instant), and `None` for an interface with no current placement.
+    pub(crate) sightings: Vec<(String, String, Option<String>)>,
 }
 
 /// One group of interfaces the engine will not say are one machine or several.
@@ -117,7 +119,11 @@ pub(crate) fn evidence_sentences(verdicts: &[String]) -> Vec<String> {
             let key = match entry {
                 "l2-hostname-agrees=supports" => "triage.ambiguous.evidence.same_name",
                 "l2-different-hostname=opposes" => "triage.ambiguous.evidence.different_names",
+                "l2-virtual-mac-prefix=disqualifying" => "triage.ambiguous.evidence.virtual_router",
                 entry if entry.ends_with("=neutral") => continue,
+                // ⚠️ Every rule THIS version ships is named above; this arm is for a token it does
+                // not know — and its sentence says only that, where the first version claimed "a rule
+                // this version does not describe" for rules it describes (story 6.14's blind review).
                 _ => "triage.ambiguous.evidence.unfamiliar",
             };
             sentences.insert(t!(key).to_string());
@@ -159,12 +165,15 @@ pub(crate) fn ambiguity_rows(
         .iter()
         .map(|batch| (batch.id.to_string(), batch))
         .collect();
-    // One sighting per interface: the first by observation id among ties (the reader orders them).
-    let mut sighting: BTreeMap<&str, (&str, Option<&ObservedBatch>)> = BTreeMap::new();
+    // Per interface: its hardware address, and EVERY latest sighting (ties kept — see the reader).
+    let mut sighting: BTreeMap<&str, (&str, Vec<&ObservedBatch>)> = BTreeMap::new();
     for (interface, mac, observation) in &input.sightings {
-        sighting
+        let entry = sighting
             .entry(interface.as_str())
-            .or_insert((mac.as_str(), by_id.get(observation).copied()));
+            .or_insert((mac.as_str(), Vec::new()));
+        if let Some(batch) = observation.as_ref().and_then(|id| by_id.get(id)) {
+            entry.1.push(batch);
+        }
     }
 
     let mut rows = Vec::new();
@@ -176,47 +185,45 @@ pub(crate) fn ambiguity_rows(
         let mut short_name = String::new();
         let mut newest: Option<chrono::DateTime<chrono::Utc>> = None;
         for interface in &group.interfaces {
-            let (mac, batch) = sighting
+            let (mac, batches) = sighting
                 .get(interface.as_str())
-                .copied()
-                .unwrap_or(("", None));
-            let addresses: Vec<String> = batch
-                .map(|b| {
-                    b.facts
-                        .iter()
-                        .filter_map(|fact| match fact {
-                            opencmdb_core::observation::Fact::IpV4 { addr } => {
-                                Some(addr.to_string())
+                .cloned()
+                .unwrap_or(("", Vec::new()));
+            let mut addresses: Vec<String> = Vec::new();
+            let mut names: Vec<String> = Vec::new();
+            for batch in &batches {
+                for fact in &batch.facts {
+                    match fact {
+                        opencmdb_core::observation::Fact::IpV4 { addr } => {
+                            let addr = addr.to_string();
+                            if !addresses.contains(&addr) {
+                                addresses.push(addr);
                             }
-                            _ => None,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let names: Vec<String> = batch
-                .map(|b| {
-                    b.facts
-                        .iter()
-                        .filter_map(|fact| match fact {
-                            opencmdb_core::observation::Fact::Hostname { name, .. } => {
-                                Some(name.clone())
-                            }
-                            _ => None,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            if short_name.is_empty() {
-                short_name = batch
-                    .and_then(|b| hostname_of(&b.facts))
-                    .unwrap_or_default();
+                        }
+                        opencmdb_core::observation::Fact::Hostname { name, .. }
+                            if !names.contains(name) =>
+                        {
+                            names.push(name.clone());
+                        }
+                        _ => {}
+                    }
+                }
+                if short_name.is_empty() {
+                    short_name = hostname_of(&batch.facts).unwrap_or_default();
+                }
             }
+            // 🔑 An address a candidate of TWO groups shows links to the FIRST group — groups come in
+            // the order of their smallest member, so the choice is deterministic rather than whichever
+            // was written last (story 6.14's review measured the last-write version as silent).
             for address in &addresses {
-                address_to_group.insert(address.clone(), group.id.clone());
+                address_to_group
+                    .entry(address.clone())
+                    .or_insert_with(|| group.id.clone());
             }
             all_addresses.extend(addresses.iter().cloned());
-            if let Some(b) = batch {
-                newest = Some(newest.map_or(b.observed_at, |n| n.max(b.observed_at)));
+            let latest = batches.iter().map(|b| b.observed_at).max();
+            if let Some(at) = latest {
+                newest = Some(newest.map_or(at, |n| n.max(at)));
             }
             candidates.push(Candidate {
                 mac: mac.to_string(),
@@ -226,9 +233,9 @@ pub(crate) fn ambiguity_rows(
                     addresses.join(" · ")
                 },
                 names: names.join(" · "),
-                freshness: batch.map_or_else(
+                freshness: latest.map_or_else(
                     || t!("meta.never_seen").to_string(),
-                    |b| relative_time(now, b.observed_at),
+                    |at| relative_time(now, at),
                 ),
             });
         }
@@ -237,10 +244,13 @@ pub(crate) fn ambiguity_rows(
             |at| relative_time(now, at),
         );
         let kind = t!("state.ambiguous").to_string();
+        // Never an empty token joined in: a candidate with no sighting has no address, and one whose
+        // interface vanished has no MAC either — the review measured the first version rendering `" · "`.
         let entity = if all_addresses.is_empty() {
             candidates
                 .iter()
                 .map(|c| c.mac.clone())
+                .filter(|mac| !mac.is_empty())
                 .collect::<Vec<_>>()
                 .join(" · ")
         } else {
@@ -389,5 +399,132 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(panes[0].1.candidates.len(), 3);
         assert!(rows[0].count.contains('3'), "{}", rows[0].count);
+    }
+
+    fn batch(id: u128, facts: Vec<opencmdb_core::observation::Fact>) -> ObservedBatch {
+        ObservedBatch {
+            id: opencmdb_core::observation::ObsId::from_uuid(uuid::Uuid::from_u128(id)),
+            connector_id: "c".to_string(),
+            observed_at: chrono::DateTime::from_timestamp(500, 0).expect("in range"),
+            facts,
+        }
+    }
+
+    fn ip(addr: &str) -> opencmdb_core::observation::Fact {
+        opencmdb_core::observation::Fact::IpV4 {
+            addr: addr.parse().expect("an address"),
+        }
+    }
+
+    fn now() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::from_timestamp(1_000, 0).expect("in range")
+    }
+
+    /// 🔴 An interface answering at TWO addresses in one sweep has two sightings tied at the sweep's
+    /// instant, and the candidate shows BOTH — each linked to the question. The first version kept one
+    /// by id; the review measured the other address's `Nouveau` row losing its link.
+    #[test]
+    fn an_interface_answering_at_two_addresses_shows_both() {
+        let batches = vec![
+            batch(1, vec![ip("192.0.2.8")]),
+            batch(2, vec![ip("192.0.2.18")]),
+            batch(3, vec![ip("192.0.2.9")]),
+        ];
+        let id = |n: u128| Some(batches[(n - 1) as usize].id.to_string());
+        let input = AmbiguityInput {
+            pairs: vec![pair("i1", "i2")],
+            sightings: vec![
+                ("i1".into(), "aa".into(), id(1)),
+                ("i1".into(), "aa".into(), id(2)),
+                ("i2".into(), "bb".into(), id(3)),
+            ],
+        };
+        let (_, panes, links) = ambiguity_rows(&input, &batches, now(), false);
+        assert_eq!(panes[0].1.candidates[0].addresses, "192.0.2.8 · 192.0.2.18");
+        for address in ["192.0.2.8", "192.0.2.18", "192.0.2.9"] {
+            assert_eq!(
+                links.get(address).map(String::as_str),
+                Some("ambigu:i1"),
+                "{address}"
+            );
+        }
+    }
+
+    /// Each group shows ITS OWN pairs' verdicts. 🔴 Mutation `ma` (the filter made `true`) was green —
+    /// latent while every vector is identical, wrong the day two differ.
+    #[test]
+    fn each_group_carries_only_its_own_verdicts() {
+        let other = "l2-different-hostname=opposes;l2-hostname-agrees=supports";
+        let groups = groups(&[pair("i1", "i2"), ("i7".into(), "i8".into(), other.into())]);
+        assert_eq!(groups[0].verdicts, vec![AGREES.to_string()]);
+        assert_eq!(groups[1].verdicts, vec![other.to_string()]);
+    }
+
+    /// A candidate whose interface has no current placement keeps its hardware address, and the row's
+    /// label joins no empty token. 🔴 Measured on a server by the review: an EMPTY heading and `" · "`.
+    #[test]
+    fn a_candidate_with_no_placement_keeps_its_hardware_address() {
+        let input = AmbiguityInput {
+            pairs: vec![pair("i1", "i2")],
+            sightings: vec![
+                ("i1".into(), "aa".into(), None),
+                ("i2".into(), "bb".into(), None),
+            ],
+        };
+        let (rows, panes, _) = ambiguity_rows(&input, &[], now(), false);
+        let macs: Vec<&str> = panes[0]
+            .1
+            .candidates
+            .iter()
+            .map(|c| c.mac.as_str())
+            .collect();
+        assert_eq!(macs, vec!["aa", "bb"]);
+        assert_eq!(rows[0].entity, "aa · bb");
+        let bare = AmbiguityInput {
+            pairs: vec![pair("i1", "i2")],
+            sightings: Vec::new(),
+        };
+        let (rows, _, _) = ambiguity_rows(&bare, &[], now(), false);
+        assert!(
+            !rows[0].entity.contains(" · "),
+            "no empty token joined: {:?}",
+            rows[0].entity
+        );
+    }
+
+    /// An address two groups show links to the FIRST group, deterministically — never whichever was
+    /// written last (the review found the silent overwrite).
+    #[test]
+    fn an_address_two_groups_show_links_to_the_first() {
+        let batches = vec![
+            batch(1, vec![ip("192.0.2.5")]),
+            batch(2, vec![ip("192.0.2.5")]),
+        ];
+        let input = AmbiguityInput {
+            pairs: vec![pair("i1", "i2"), pair("i7", "i8")],
+            sightings: vec![
+                ("i1".into(), "aa".into(), Some(batches[0].id.to_string())),
+                ("i8".into(), "bb".into(), Some(batches[1].id.to_string())),
+            ],
+        };
+        let (_, _, links) = ambiguity_rows(&input, &batches, now(), false);
+        assert_eq!(
+            links.get("192.0.2.5").map(String::as_str),
+            Some("ambigu:i1")
+        );
+    }
+
+    /// Every rule this version ships is described in words; the generic sentence is for a token it does
+    /// not know. 🔴 It read "a rule this version does not describe" for rules it does (blind review).
+    #[test]
+    fn every_shipped_rule_is_described_by_name() {
+        assert_eq!(
+            evidence_sentences(&["l2-virtual-mac-prefix=disqualifying".to_string()]),
+            vec![t!("triage.ambiguous.evidence.virtual_router").to_string()]
+        );
+        assert_eq!(
+            evidence_sentences(&["l2-different-hostname=opposes".to_string()]),
+            vec![t!("triage.ambiguous.evidence.different_names").to_string()]
+        );
     }
 }

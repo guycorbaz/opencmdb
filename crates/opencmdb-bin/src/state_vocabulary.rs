@@ -374,7 +374,7 @@ mod gesture_axis_tests {
     /// ⚠️ **Two of these are gestures with no binding row, and that is registered, not fixed** (three
     /// until story 6.14, whose planning act gave `resolve` its row):
     /// extending a binding table is a planning act and Guy's (story 6b.7's precedent, where it was
-    /// refused as *premature, not wrong*). `baseline` is a fourth of the same class, already owned
+    /// refused as *premature, not wrong*). `baseline` is a third of the same class (a fourth until story 6.14 gave `resolve` its row), already owned
     /// by Epic 9.
     const NOT_A_GLOSSARY_GESTURE: [(&str, &str); 7] = [
         (

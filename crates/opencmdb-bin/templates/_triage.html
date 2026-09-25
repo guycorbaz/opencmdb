@@ -105,6 +105,7 @@
         {% endfor %}
       </div>
       <p class="muted">{{ s.ambiguous_seen_now }}</p>
+      <p class="muted">{{ s.ambiguous_follows_network }}</p>
       {% if !pane.evidence.is_empty() %}
       <p class="muted">{{ s.ambiguous_why }}</p>
       <ul class="evidence">
@@ -129,6 +130,7 @@
            question — linking to it rather than taking the gesture away. -#}
       {% if let Some(question) = pane.open_question %}
       <p class="open-question"><a href="{{ question }}">{{ s.ambiguous_open_question }}</a></p>
+      <p class="muted">{{ s.ambiguous_add_alone }}</p>
       {% endif %}
       {#- The action bar goes UNDER the two photos, where the mock puts it. -#}
       {% let gestures = pane.gestures %}

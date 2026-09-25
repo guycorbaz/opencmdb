@@ -6531,8 +6531,8 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
 - ⚠️ **Only `/triage` reads `l2_pair_decision`, so the reach section on `/dashboard` and in the
   reconciliation card shows no L2 line.** `IdentityView::ambiguous_groups` is filled by `/triage`'s
   handler alone and is `0` wherever else the section renders — a partial picture, stated in the field's
-  doc rather than implied. **Owner: Epic 6's RETROSPECTIVE**, or the first story that next touches the
-  dashboard's reach.
+  doc rather than implied. **Owner: Epic 6's RETROSPECTIVE.** _(It named a second, conditional owner until
+  6.14's code review — a row with an either/or owner is weaker than the house rule of one.)_
 - ⚠️ **One Ambigu row per GROUP is exact only while an L2 `Ambiguous` comes from an EQUIVALENCE.** Today it
   arises from `l2-hostname-agrees` alone, whose agreement is set equality, so a group is a clique. A rule
   whose agreement is not transitive — an uplink or a switch port — can make a group join two interfaces
@@ -6542,3 +6542,10 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   addresses; the link from each of those rows to the question is what ties them. Ordering the question
   beside them is a display decision nobody has taken. **Owner: story 6.14b**, which puts the answer on
   that row.
+
+## Deferred from: code review of 6-14-ambiguity-explains-itself.md (2026-09-25)
+
+- ⚠️ **One machine counts THREE times in the triage queue's *Pending* count** — its two `Nouveau` rows and
+  its one Ambigu row (the seed's question reads *Pending 16*). It follows from Guy's decision C (the addresses
+  keep *Ajouter*); what the count should mean once grouping exists is not a display story's to decide.
+  **Owner: Epic 6's RETROSPECTIVE.**

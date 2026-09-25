@@ -333,7 +333,7 @@ INSERT INTO ip_address (id, subnet_id, addr, label) VALUES
 -- ── Story 6.14: ONE L2 question — two NICs answering to one name ────────────────────────────
 --
 -- 🔴 WITHOUT THESE ROWS NEITHER BROWSER GATE EVER VISITS AN AMBIGU PANE. Measured by the story's
--- validation: with a prototype of the screen booted, the axe gate under all six CI flags reported
+-- validation: with a prototype of the screen booted, the axe gate under the six CI flags of the day (CI sets SEVEN since, `AXE_REQUIRE_AMBIGUOUS` included) reported
 -- 0 nodes and exit 0, and the keyboard gate 62 checks and exit 0 — and neither had opened the one
 -- pane the story adds. `AXE_REQUIRE_AMBIGUOUS=1` turns a store with no such row into *the gate could
 -- not run*; these rows are what let it run.

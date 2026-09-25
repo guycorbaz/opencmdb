@@ -935,6 +935,47 @@ mod tests {
                 .is_empty(),
             "an operator's row is an answer, not a question"
         );
+        assert!(
+            crate::l2_repo::load_ambiguous_interface_sightings(&pool)
+                .await
+                .expect("read")
+                .is_empty(),
+            "and the sightings reader reads the SAME pairs — its ENGINE filter was tested by nothing"
+        );
+    }
+
+    /// One observation at a given address — `sighting` plus an `IpV4`.
+    fn at_address(mut observation: Observation, address: &str) -> Observation {
+        observation.facts.push(Fact::IpV4 {
+            addr: address.parse().expect("an address"),
+        });
+        observation
+    }
+
+    /// 🔴 An interface answering at TWO addresses in ONE sweep: both observations carry the sweep's
+    /// instant, so both are its latest, and the reader returns BOTH (the first version kept one).
+    #[tokio::test]
+    async fn two_sightings_tied_at_one_instant_are_both_read() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        sweep(
+            &pool,
+            vec![
+                at_address(sighting(1, nic(8), Some("obelix"), 100), "192.0.2.8"),
+                at_address(sighting(2, nic(8), Some("obelix"), 100), "192.0.2.18"),
+                at_address(sighting(3, nic(9), Some("obelix"), 100), "192.0.2.9"),
+            ],
+        )
+        .await
+        .expect("the sweep");
+        let sightings = crate::l2_repo::load_ambiguous_interface_sightings(&pool)
+            .await
+            .expect("read");
+        assert_eq!(
+            sightings.len(),
+            3,
+            "two for nic 8, one for nic 9: {sightings:?}"
+        );
     }
 
     /// Story 6.14, decision F: each interface's LATEST placed sighting is what the pane shows — read in
@@ -946,7 +987,7 @@ mod tests {
         sweep(
             &pool,
             vec![
-                sighting(1, nic(8), Some("obelix"), 100),
+                at_address(sighting(1, nic(8), Some("obelix"), 100), "192.0.2.8"),
                 sighting(2, nic(9), Some("obelix"), 100),
             ],
         )
@@ -955,7 +996,9 @@ mod tests {
         sweep(
             &pool,
             vec![
-                sighting(11, nic(8), Some("obelix"), 400),
+                // The LATER sweep sees nic 8 at a DIFFERENT address — the only shape that separates
+                // *as seen now* from *as first seen* on a real store (story 6.14's review).
+                at_address(sighting(11, nic(8), Some("obelix"), 400), "192.0.2.88"),
                 sighting(12, nic(9), Some("obelix"), 400),
             ],
         )
@@ -964,8 +1007,21 @@ mod tests {
         let sightings = crate::l2_repo::load_ambiguous_interface_sightings(&pool)
             .await
             .expect("read");
+        let (view, _) = crate::page::triage_view(&pool, Some("__none__"), false, false)
+            .await
+            .unwrap_or_else(|response| panic!("the triage view builds: {}", response.status()));
+        let question = view
+            .rows
+            .iter()
+            .find(|row| row.id.starts_with("ambigu:"))
+            .expect("one question");
+        assert!(
+            question.entity.contains("192.0.2.88") && !question.entity.contains("192.0.2.8 "),
+            "the screen shows the address the LATER sweep saw: {}",
+            question.entity
+        );
         let observations: std::collections::BTreeSet<String> =
-            sightings.iter().map(|(_, _, o)| o.clone()).collect();
+            sightings.iter().filter_map(|(_, _, o)| o.clone()).collect();
         let expected: std::collections::BTreeSet<String> = [11_u128, 12]
             .into_iter()
             .map(|n| ObsId::from_uuid(uuid::Uuid::from_u128(n)).to_string())
