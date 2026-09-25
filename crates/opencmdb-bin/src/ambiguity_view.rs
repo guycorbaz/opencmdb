@@ -343,6 +343,18 @@ mod tests {
         assert_eq!(groups[0].interfaces, vec!["i1", "i2", "i3", "i4"]);
     }
 
+    /// 🔴 A member reached by a SECOND pair must not be torn from its first group. Folding the ids it
+    /// was handed rather than their roots rewrites `i3`'s parent from `i1` to `i2`, and `i1` is left
+    /// alone — two rows for one question. **Mutation N2 measured the out-of-order chain above GREEN
+    /// under exactly that defect**: that chain never reaches one member twice. This is the input that
+    /// separates the two.
+    #[test]
+    fn a_member_reached_twice_is_not_torn_from_its_first_group() {
+        let groups = groups(&[pair("i1", "i3"), pair("i2", "i3")]);
+        assert_eq!(groups.len(), 1, "{groups:?}");
+        assert_eq!(groups[0].interfaces, vec!["i1", "i2", "i3"]);
+    }
+
     /// The sentences are TOTAL: an unfamiliar `rule=verdict` renders a generic sentence, never itself,
     /// and a `Neutral` — a rule that did not speak — renders nothing.
     #[test]

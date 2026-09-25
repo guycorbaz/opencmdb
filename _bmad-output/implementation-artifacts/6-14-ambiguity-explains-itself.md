@@ -1,8 +1,8 @@
 # Story 6.14: The ambiguity explains itself on the page
 
-Status: **contexted, VALIDATED and ARBITRATED 2026-09-25 — `ready-for-dev`.** Guy took all six decisions on
-the recommendation (§0.8); ⚠️ **development waits for the planning act (glossary row + 6.14b) to be MERGED**,
-because AC8 renders the term that act binds. Both validation layers tried to refute §0.1–§0.3 and all
+Status: **developed and verified 2026-09-25 — `review`, not `done`, because that is the merge's business.**
+Contexted, validated and arbitrated the same day (all six decisions on the recommendation, §0.8); the planning
+act (glossary `resolve` + story 6.14b) merged first as PR #213. Code review by three isolated layers is next. Both validation layers tried to refute §0.1–§0.3 and all
 three survive; the gap-hunt BUILT the recommended shape and it changed two recommendations (D, and the action
 bar) and added two decisions.
 
@@ -361,7 +361,7 @@ only at end of file), and no `#[cfg(test)]` item placed mid-file (it truncates `
 - [x] T9 — Browser gates: seed (delete `interface` and `l2_pair_decision`, unused addresses, two interfaces +
       links + one pair), `AXE_REQUIRE_AMBIGUOUS` in the gate and CI, the keyboard gate reaches the row; run both
       (AC7)
-- [ ] T10 — Mutation pass (predictions first, carriers by grep, own database), register, record, twins, manuals
+- [x] T10 — Mutation pass (predictions first, carriers by grep, own database), register, record, twins, manuals
       if a screen sentence changes
 
 ## 2. What this story must NOT do
@@ -386,6 +386,12 @@ only at end of file), and no `#[cfg(test)]` item placed mid-file (it truncates `
 
 ## 4. What the operator gains
 
+✅ **Verified on a booted binary in Chrome, in English and in French**: the Ambigu row, its candidates pane
+(each MAC, address, name and freshness; the *as seen now* sentence; the reason in words; *Résoudre* alone,
+marked *not yet*, with its own sentence), and a `Nouveau` row of the question keeping *Ajouter* and linking to
+it. What follows is contexting's text, kept.
+
+
 **Under (A1) with (D) revised: `obelix` becomes VISIBLE as one question** — one Ambigu row per group, beside its
 two Nouveau rows (the validation measured the per-pair shape at 10 rows for 4 NICs) — two interfaces, their names and addresses, why the
 engine will not decide, and a control that says what answering will do. **The run of engine-spine stories
@@ -399,6 +405,109 @@ it** until 6.14b — say so on the screen, not only here.
 | 2026-09-25 | contexted on `dabe1f5` (two Explore passes: planning documents, and the triage/route/gate code); four findings; four decisions posed (§0.5) |
 | 2026-09-25 | validated by two fresh-context layers with their own databases — §0.1–§0.3 survive; the fact-check corrected the Epic 7 claim (UX-DR43 is Epic 7's by coverage), found the collision already rendering and two missing register rows; the gap-hunt BUILT the shape: every existing guard blind to `Ambigu`, a false *Declared* heading, per-pair rows exploding (10 rows for 4 NICs), the gates exiting 0 without visiting the pane. (D) revised to one row per group; (E) and (F) added (§0.7) |
 | 2026-09-25 | **Guy's arbitration**: all six on the recommendation (§0.8); sequence 6.14 → release → 6.14b; the planning act (glossary row, 6.14b) is a separate PR |
+| 2026-09-25 | planning act merged (PR #213, `766e995`); branch rebased |
+| 2026-09-25 | implemented: the split (own commit), the readers, `ambiguity_view.rs`, the pane, decision B in code, the reach line, the replaced tripwire, the seed and both browser gates; Chrome looks in both languages found two defects no guard could see |
+| 2026-09-25 | mutation pass: 10 rows, 9 conforming; **N2 GREEN** → a missing test, added (N2b red); the driver's first four runs REFUSED on a red baseline my store-less check had missed |
+
+## 6. Dev Agent Record
+
+### What was built, and the decisions the dev took (each reversible, each mine)
+
+- **T1 — the split, first and alone** (`4967a43`): `page.rs` lines 550–1356 → `triage_view.rs` unchanged but
+  for visibility, re-exported; **1954 → 1150** and **820**. Both measured hazards checked by name: no stray
+  doc comment, no mid-file `#[cfg(test)]`.
+- **The readers** (`l2_repo.rs`): current ENGINE `Ambiguous` pairs; each of their interfaces' LATEST placed
+  sighting, **per interface in SQL** (`MAX(observed_at)` subquery), never the whole `identity_link` table.
+- **`ambiguity_view.rs`** (new): groups by union-find over the pairs, ⚠️ **the root rule mine**: the smaller
+  id becomes the root so a group's id is its smallest member (`ambigu:{id}`); candidates from each interface's
+  sighting; evidence sentences for the verdicts that ARGUED (a `Neutral` renders nothing — mine, stated in the
+  doc), total over unknown tokens; `resolve_bar()` = *Résoudre* alone, `Planned { owner: "6.14b" }`.
+- **The pane** gains `candidates`, `evidence`, `open_question`, and ⚠️ **`not_built`, mine**: the generic
+  *still to come* sentence rendered under EVERY planned bar and promised *"resolve an ambiguity"* under a
+  conflict (§0.2's collision, measured rendering); it now lists what IS on those bars, and an Ambigu pane
+  carries its own sentence saying what *Résoudre* will do.
+- **Decision B in code**: a Conflit's primary is `gesture.document`, planned, owner **7**; the `"6"` arm is
+  gone; `resolve` moves to `GLOSSARY_BACKED` and is transcribed into `BINDING_GESTURE_AXIS`.
+- **The reach line**: `IdentityView::ambiguous_groups`, filled by `/triage` only (registered); *"every
+  sighting was placed"* → *"… on an interface"*; *"grouping them is still to come"* replaced.
+- **The seed** at `.200/.201`, outside every subnet — ⚠️ **mine**: `.46–.79` must stay uncovered; and the
+  keyboard gate's exact `RELEASABLE` fixture lists the two new OUTSIDE findings rather than the seed dropping
+  their sighting summary.
+- **Seen in Chrome and fixed**: MAC headings uppercased by `.photos h3`; the question link in the browser's
+  blue. Neither reachable by any guard.
+
+### Mutation pass — predictions first (`scratchpad/mut-6-14/predictions.txt`), carriers by grep, `--baseline`
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| — | (first attempt at N1–N4) | — | ⛔ **all four refused** | 🔴 **the baseline was RED**: `the_accessibility_seed_writes_the_summary_its_observations_imply`'s exact count (15) did not move with the seed — I had re-run the suite WITHOUT a store after changing the seed. *The driver caught what my own check could not*; the count is 17 now |
+| N1 | an unfamiliar token renders itself | red:1 | ✅ red 1 | `the_evidence_is_said_in_words_and_never_as_a_token` |
+| N2 | `groups()` folds the ids it was handed, not their roots | red:1 | 🔴 **GREEN** | the out-of-order chain never reaches one member twice — **the test could not separate the two unions** |
+| N2b | the same, after adding `a_member_reached_twice_is_not_torn_from_its_first_group` | red:1 | ✅ red 1 | the new test |
+| N3 | the latest-sighting subquery `MAX` → `MIN` (the validation's M1) | red:1 | ✅ red 1 | `the_candidates_are_read_from_each_interfaces_latest_sighting` |
+| N4 | the ENGINE filter dropped (the validation's M2) | red:1 | ✅ red 1 | `the_screen_reads_engine_ambiguities_and_nothing_else` |
+| N5 | *Résoudre* made Live on the documenting route | red:3 | ✅ red 3 | the no-live guard, the action-bar guard, the resolve guard — each now FED an ambiguity |
+| N6 | the open-question link never set | red:1 | ✅ red 1 | `a_new_row_of_an_ambiguous_address_keeps_add_and_links_to_the_question` |
+| N7 | the template never takes the candidates branch | red:1 | ✅ red 1 | `an_ambiguity_pane_shows_its_candidates_and_no_declared_side` (rendered) |
+| N8 | the reach line's count never set | red:1 | ✅ red 1 | `the_production_pass_shows_an_l2_ambiguity_as_one_question` (end to end) |
+| N9 | a Conflit's primary back to *Résoudre* (two-line anchor, one site) | red:1 | ✅ red 1 | the action-bar guard |
+
+### Verification (story branch)
+
+- `cargo test --workspace --locked` against a VIRGIN store: **795 + 219 + 110**; clippy `--all-targets`
+  clean; fmt; `cargo xtask ci` ten gates green.
+- **Both browser gates, on a booted binary with the seed**: axe under all SEVEN flags (`AXE_REQUIRE_AMBIGUOUS`
+  included) — **10 routes + 6 states, 0 violation nodes**, the Ambigu pane among them; kbd-probe — **65
+  checks, 0 failed**. ⚠️ Run on port **18614**: port 8080 is held by a long-running `opencmdb` process
+  that is not this session's and was left alone.
+- Both manuals build; the user manual gains the Ambiguous line and *Resolve*.
+
+### File List
+
+- `crates/opencmdb-bin/src/ambiguity_view.rs` — new
+- `crates/opencmdb-bin/src/triage_view.rs` — new (the split), then the pane fields and decision B
+- `crates/opencmdb-bin/src/page.rs` — the split, the handler, `Strings`, tests
+- `crates/opencmdb-bin/src/identity_view.rs`, `l2_repo.rs`, `l2_pass.rs`, `scan_pass.rs`,
+  `sighting_repo.rs`, `state_vocabulary.rs`, `main.rs`
+- `crates/opencmdb-bin/templates/_triage.html`, `_action_bar.html`, `_identity_section.html`
+- `crates/opencmdb-bin/assets/app.css`, `crates/opencmdb-bin/locales/app.yml`
+- `a11y/seed.sql`, `a11y/axe-gate.mjs`, `a11y/kbd-probe.mjs`, `.github/workflows/ci.yml`
+- `docs/manuals/user-manual/user-manual.tex`
+- `_bmad-output/implementation-artifacts/6-14-ambiguity-explains-itself.md`, `deferred-work.md`,
+  `sprint-status.yaml`; `CLAUDE.md`, `docs/project-context.md`
+
+## Record
+
+- live-count: bin=795 core=219 xtask=110
+- base: 766e995f642babb7215bd224bba46fbcc3df30d9
+- registered: Only `/triage` reads `l2_pair_decision`
+- registered: One Ambigu row per GROUP is exact only while an L2 `Ambiguous` comes from an EQUIVALENCE
+- registered: The Ambigu row is appended at the END of the queue
+- file: .github/workflows/ci.yml
+- file: CLAUDE.md
+- file: _bmad-output/implementation-artifacts/6-14-ambiguity-explains-itself.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: a11y/axe-gate.mjs
+- file: a11y/kbd-probe.mjs
+- file: a11y/seed.sql
+- file: crates/opencmdb-bin/assets/app.css
+- file: crates/opencmdb-bin/locales/app.yml
+- file: crates/opencmdb-bin/src/ambiguity_view.rs
+- file: crates/opencmdb-bin/src/identity_view.rs
+- file: crates/opencmdb-bin/src/l2_pass.rs
+- file: crates/opencmdb-bin/src/l2_repo.rs
+- file: crates/opencmdb-bin/src/main.rs
+- file: crates/opencmdb-bin/src/page.rs
+- file: crates/opencmdb-bin/src/scan_pass.rs
+- file: crates/opencmdb-bin/src/sighting_repo.rs
+- file: crates/opencmdb-bin/src/state_vocabulary.rs
+- file: crates/opencmdb-bin/src/triage_view.rs
+- file: crates/opencmdb-bin/templates/_action_bar.html
+- file: crates/opencmdb-bin/templates/_identity_section.html
+- file: crates/opencmdb-bin/templates/_triage.html
+- file: docs/manuals/user-manual/user-manual.tex
+- file: docs/project-context.md
 
 ## References
 
