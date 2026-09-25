@@ -1,7 +1,7 @@
 # Story 6.14: The ambiguity explains itself on the page
 
-Status: **developed 2026-09-25, code-reviewed by three isolated layers and REPAIRED the same day — `review`,
-not `done`, because that is the merge's business.**
+Status: **`done` — PR #214 squash-merged 2026-09-25 as `2c26691`, CI green on the head commit `8eed76d` itself
+(run `36146705075`).** Developed, code-reviewed by three isolated layers and REPAIRED the same day.
 Contexted, validated and arbitrated the same day (all six decisions on the recommendation, §0.8); the planning
 act (glossary `resolve` + story 6.14b) merged first as PR #213. Code review by three isolated layers is next. Both validation layers tried to refute §0.1–§0.3 and all
 three survive; the gap-hunt BUILT the recommended shape and it changed two recommendations (D, and the action
