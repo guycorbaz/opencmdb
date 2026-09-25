@@ -5087,8 +5087,10 @@ development_status:
   6-12-resolver-writes-device-groupings: review
   #   🔧 DEVELOPED 2026-09-24 on its branch: l2::decide_pair, migration 0012 (l2_pair_decision, pair-keyed),
   #   l2_repo.rs, l2_pass.rs; 777+219+110, ten gates; mutation pass 8 of 9 conforming (M6 is the finding).
-  #   NEXT: three-layer code review, each layer with its own database.
-  #   📝 CONTEXTED 2026-09-24 (`6-12-resolver-writes-device-groupings.md`) — and NOT developable yet:
+  #   ✅ CODE-REVIEWED 2026-09-25 by three isolated layers (25 findings, 2 decisions by Guy, 22 patches applied,
+  #   3 deferred); see the story's Review Findings.
+  #   📝 CONTEXTED 2026-09-24 (`6-12-resolver-writes-device-groupings.md`) — NOT developable until arbitrated
+  #   (true at contexting, discharged the same day):
   #   (§0.1) no L2 rule emits `Decisive`, so no L2 pair can conclude `Match` and criterion 1 writes no
   #   grouping of two interfaces on any input; (§0.2) `obelix` concludes `Ambiguous`, which
   #   `guard_decision(&[])` refuses — inside the sweep's one transaction that rolls back L1 too;
@@ -5098,8 +5100,8 @@ development_status:
   #   6.13's tripwire promise unmeetable). ✅ ARBITRATED by Guy 2026-09-24: all seven on the
   #   recommendation (A2 · sibling table · no interface adoption, re-owned to 6.18 · pair-keyed · evidence
   #   on interfaces · persist Ambiguous+NoMatch only). obelix = two NICs (Guy). 6.14 follows 6.12 directly.
-  #   🔑 NEXT, by Guy's reorder of 2026-09-23 and story 6.11's close on 2026-09-24 — the PIVOT:
-  #   the first story of this epic with a production caller, where `obelix` stops being two rows.
+  #   🔑 Queued NEXT by Guy's reorder of 2026-09-23 as the PIVOT: the first story of this epic with a
+  #   production caller. ~~where `obelix` stops being two rows~~ — FALSE twice (§0.2); withdrawn by PR #210.
   #   ⚠️ It inherits by NAME rather than by implication:
   #   (a) story 6.11's registered row: no L2 rule can ever be NAMED in the presence of any L1
   #       `Disqualifying` (`min()` over ids, and every `l1-*` sorts before every `l2-*`), so 6.12

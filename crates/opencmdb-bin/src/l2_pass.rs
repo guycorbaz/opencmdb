@@ -13,9 +13,18 @@
 //!   record silence at the cost of the transaction cap.
 //! - **`Match` cannot arrive** — no L2 rule is `Decisive` — and if one ever does, the writer refuses it
 //!   by name ([`crate::l2_repo::is_persisted`]) and the pass fails loudly: a match is a DEVICE, and no
-//!   story has decided how one is minted without a read-then-insert window.
+//!   story has decided how one is minted without a read-then-insert window. ⚠️ *Loudly means the WHOLE
+//!   sweep rolls back, L1 included* — the shape the section below rejects for `guard_decision`. The
+//!   difference is WHERE it lands: a `Match` needs a new `Decisive` rule, whose own story's tests drive
+//!   `obelix`-shaped sweeps through this pass and so red in CI before any deployment runs it, while
+//!   `guard_decision` refused a decision the SHIPPED rules produce on a real network every five minutes.
 //! - **An unchanged network writes nothing**: a row stores the verdict vector, not the observation ids
-//!   minted afresh at every sweep, so the comparison sees the same decision.
+//!   minted afresh at every sweep, so the comparison sees the same decision. ⚠️ *For a network whose
+//!   ANSWERS are stable*: a reverse-DNS answer that flaps closes the pair when the name is missing and
+//!   re-opens it when it returns — two history rows per flap, registered.
+//! - **A pair holding a current OPERATOR row is left alone** (Guy, 2026-09-25): a human's decision is an
+//!   input the engine neither adopts nor supersedes (D14). Filtering operator rows out of the read — the
+//!   first version — made the engine insert beside one and roll the sweep back at every sweep.
 //! - **A pair is only ever judged when BOTH its interfaces are in this sweep** — the universe is built
 //!   from this slice's keys — so an interface that missed one sweep keeps every decision it had (story
 //!   5.14 measured the alternative erasing a host that missed a single scan). A pair judged again and
@@ -43,7 +52,7 @@ use opencmdb_core::repo::RepositoryError;
 use sqlx::MySqlConnection;
 
 use crate::l2_repo::{
-    close_l2_decision, insert_l2_decision, is_persisted, load_current_l2_decision,
+    close_l2_decision, insert_l2_decision, is_persisted, load_current_l2_decisions,
 };
 use crate::repo::{DecidedBy, classify, datetime_literal};
 
@@ -62,6 +71,9 @@ pub struct L2Resolution {
     pub unchanged: usize,
     /// Current versions closed with NO successor, because the pair now concludes `AbsenceOfProof`.
     pub vacated: usize,
+    /// Pairs left alone because an OPERATOR's row is current on them (Guy, 2026-09-25). D14: a
+    /// human's decision is an INPUT, which the engine neither adopts nor supersedes.
+    pub operator_held: usize,
 }
 
 /// Judge every pair of this sweep's interfaces.
@@ -71,8 +83,10 @@ pub struct L2Resolution {
 ///
 /// # Errors
 ///
-/// Any [`RepositoryError`] a write produces, and [`RepositoryError::InstantRegressed`] when a pair is
-/// re-judged at an instant EARLIER than its current version's.
+/// Any [`RepositoryError`] a write produces, and [`RepositoryError::InstantRegressed`] when a pair whose
+/// decision CHANGED is re-judged at an instant earlier than its current version's. ⚠️ *Only then*: an
+/// unchanged decision reached at an earlier instant writes nothing and so has no history to run
+/// backwards — this doc promised the refusal for any earlier re-judgement until the code review.
 pub async fn judge(
     conn: &mut MySqlConnection,
     groups: &BTreeMap<L1Key, BTreeSet<ObsId>>,
@@ -104,6 +118,9 @@ pub async fn judge_within(
         candidate_pairs: universe.len(),
         ..L2Resolution::default()
     };
+    let mut current_rows = load_current_l2_decisions(&mut *conn)
+        .await
+        .map_err(classify)?;
     for pair in universe {
         let (Some(low_group), Some(high_group)) =
             (groups.get(&pair.low()), groups.get(&pair.high()))
@@ -111,6 +128,9 @@ pub async fn judge_within(
             // A pair the caller proposed over a key this sweep did not carry: nothing to judge it on.
             continue;
         };
+        // ⚠️ A side is the whole `join` group — every observation carrying the key — including any L1
+        // declined to PLACE under a narrowed universe. Unreachable in production (`resolve` hands L1 a
+        // total universe) and reachable through `resolve_within`'s seam; stated at the code review.
         let side =
             |group: &BTreeSet<ObsId>| L2Side::new(group.iter().map(|id| by_id[id]).collect());
         let decision = l2::decide_pair(pair, &side(low_group), &side(high_group));
@@ -128,9 +148,11 @@ pub async fn judge_within(
         };
         let reached_at = latest_instant(low_group.iter().chain(high_group), by_id);
         let persisted = is_persisted(&decision)?;
-        let current = load_current_l2_decision(&mut *conn, low, high)
-            .await
-            .map_err(classify)?;
+        let current = current_rows.remove(&(low.to_string(), high.to_string()));
+        if current.as_ref().is_some_and(|row| row.is_operators()) {
+            summary.operator_held += 1;
+            continue;
+        }
 
         match current {
             None if persisted => {
@@ -633,45 +655,240 @@ mod tests {
         assert_eq!((reach[0].outcome.as_str(), reach[0].count), ("match", 2));
     }
 
-    /// AC2 — the seam. A universe WITHHOLDING the obelix pair — a pair that would otherwise be
-    /// persisted, which is what the validation's M1 showed the naive version lacked — writes no row;
-    /// the control, the full universe, writes one.
-    #[tokio::test]
-    async fn only_the_pairs_the_blocker_proposed_are_judged() {
-        let _guard = crate::DB_TEST_LOCK.lock().await;
-        let Some(pool) = store().await else { return };
-        let observations = vec![
-            sighting(1, nic(8), Some("obelix"), 100),
-            sighting(2, nic(9), Some("obelix"), 100),
-        ];
-        let groups = join(&observations);
-        let by_id: BTreeMap<ObsId, &Observation> =
-            observations.iter().map(|o| (o.obs_id, o)).collect();
+    /// Mint an interface per key of `observations`, in key order, and return what `judge_within` takes.
+    async fn seam(
+        pool: &MySqlPool,
+        observations: &[Observation],
+    ) -> (
+        BTreeMap<L1Key, BTreeSet<ObsId>>,
+        BTreeMap<L1Key, InterfaceId>,
+        Vec<L1Key>,
+    ) {
+        let groups = join(observations);
         let mut interfaces = BTreeMap::new();
         for (n, key) in groups.keys().enumerate() {
             let id = InterfaceId::from_uuid(uuid::Uuid::from_u128(0xA0 + n as u128));
-            insert_interface(&pool, id, key.0, &key.1, at(100), at(100))
+            insert_interface(pool, id, key.0, &key.1, at(100), at(100))
                 .await
                 .expect("interface");
             interfaces.insert(*key, id);
         }
         let keys: Vec<L1Key> = groups.keys().copied().collect();
+        (groups, interfaces, keys)
+    }
+
+    /// AC2 — the seam. Three NICs sharing a name are three persisted pairs; a universe WITHHOLDING ONE of
+    /// them writes the other two. 🔴 *The first version withheld the only pair of a one-pair fixture, so
+    /// "withheld" was the EMPTY universe and could not tell per-pair containment from an emptiness
+    /// shortcut* (blind review layer). The control is the full universe.
+    #[tokio::test]
+    async fn only_the_pairs_the_blocker_proposed_are_judged() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        let observations: Vec<Observation> = (1..=3)
+            .map(|n| sighting(n, nic(n as u8), Some("obelix"), 100))
+            .collect();
+        let (groups, interfaces, keys) = seam(&pool, &observations).await;
+        let by_id: BTreeMap<ObsId, &Observation> =
+            observations.iter().map(|o| (o.obs_id, o)).collect();
         let full = l2_candidates(&keys);
+        let withheld = L2CandidatePair::new(keys[0], keys[1]).expect("two keys");
+        let narrowed: BTreeSet<L2CandidatePair> = full
+            .iter()
+            .copied()
+            .filter(|pair| *pair != withheld)
+            .collect();
 
         let mut conn = pool.acquire().await.expect("connection");
-        let withheld = judge_within(&mut conn, &groups, &by_id, &interfaces, &BTreeSet::new())
+        let partial = judge_within(&mut conn, &groups, &by_id, &interfaces, &narrowed)
             .await
             .expect("judge");
-        assert_eq!(withheld.written, 0);
-        assert_eq!(count_l2_decisions(&pool).await.expect("count"), 0);
+        assert_eq!(partial.written, 2, "every proposed pair, and only those");
+        let (a, b) = (interfaces[&keys[0]], interfaces[&keys[1]]);
+        let (low, high) = if a.to_string() < b.to_string() {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        assert!(
+            crate::l2_repo::load_current_l2_decision(&pool, low, high)
+                .await
+                .expect("read")
+                .is_none(),
+            "the withheld pair has no row"
+        );
 
         let control = judge_within(&mut conn, &groups, &by_id, &interfaces, &full)
             .await
             .expect("judge");
         assert_eq!(
             control.written, 1,
-            "the same pair IS persisted under the full universe"
+            "the withheld pair IS persisted under the full universe"
         );
-        assert_eq!(count_l2_decisions(&pool).await.expect("count"), 1);
+        assert_eq!(count_l2_decisions(&pool).await.expect("count"), 3);
+    }
+
+    /// 🔴 The pair is ordered by INTERFACE id, and that order diverges from L1-key order as soon as the
+    /// higher-keyed NIC was minted in an EARLIER sweep — the normal case on a live network and on any
+    /// upgraded store. The edge review layer measured the swap `if true` leaving the whole suite green:
+    /// every test minted its interfaces in key order within one sweep. Without the swap this sweep is
+    /// refused (`l2_pair_decision_ordered`) and rolls back, L1 included.
+    #[tokio::test]
+    async fn a_pair_whose_higher_key_was_minted_first_is_persisted() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        sweep(&pool, vec![sighting(1, nic(9), Some("obelix"), 100)])
+            .await
+            .expect("the first NIC, alone");
+        let second = sweep(
+            &pool,
+            vec![
+                sighting(11, nic(8), Some("obelix"), 400),
+                sighting(12, nic(9), Some("obelix"), 400),
+            ],
+        )
+        .await
+        .expect("the sweep must commit");
+        assert_eq!(second.l2.written, 1);
+        assert_eq!(current(&pool).await.len(), 1);
+    }
+
+    /// The supersede branch — a persisted decision replaced by a DIFFERENT persisted one. Unreachable
+    /// through today's rules for one pair (a VRRP address stays VRRP), so it is driven from a stored row
+    /// carrying another vector, as a new ruleset would leave behind. Close + append, one current row.
+    #[tokio::test]
+    async fn a_changed_persisted_decision_supersedes_the_current_one() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        let observations = || {
+            vec![
+                sighting(1, nic(8), Some("obelix"), 100),
+                sighting(2, nic(9), Some("obelix"), 100),
+            ]
+        };
+        sweep(&pool, observations()).await.expect("first sweep");
+        sqlx::query("UPDATE l2_pair_decision SET verdicts = 'l2-older-rule=supports'")
+            .execute(&pool)
+            .await
+            .expect("age the row");
+        let second = MariaRepository::new(pool.clone())
+            .transact(move |unit| {
+                let observations = observations();
+                Box::pin(async move { resolve(unit.executor(), &observations).await })
+            })
+            .await
+            .expect("second sweep");
+        assert_eq!((second.l2.superseded, second.l2.written), (1, 1));
+        assert_eq!(count_l2_decisions(&pool).await.expect("count"), 2);
+        let rows = current(&pool).await;
+        assert_eq!(rows.len(), 1);
+        assert!(
+            rows[0].3.contains("l2-hostname-agrees=supports"),
+            "{rows:?}"
+        );
+    }
+
+    /// Guy's decision of 2026-09-25: a pair holding a current OPERATOR row is LEFT ALONE — the row
+    /// survives, the sweep commits, and the L1 links are written. 🔴 Before, the engine read ENGINE rows
+    /// only, inserted beside the human's, collided on the uniqueness key and rolled every sweep back.
+    #[tokio::test]
+    async fn a_pair_an_operator_decided_is_left_to_the_operator() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        sweep(
+            &pool,
+            vec![
+                sighting(1, nic(8), Some("obelix"), 100),
+                sighting(2, nic(9), Some("obelix"), 100),
+            ],
+        )
+        .await
+        .expect("first sweep");
+        sqlx::query("UPDATE l2_pair_decision SET decided_by = 'OPERATOR'")
+            .execute(&pool)
+            .await
+            .expect("a human takes the pair");
+        let links_before = links(&pool).await;
+        let second = sweep(
+            &pool,
+            vec![
+                sighting(11, nic(8), Some("obelix"), 400),
+                sighting(12, nic(9), None, 400),
+            ],
+        )
+        .await
+        .expect("the sweep must commit");
+        assert_eq!(second.l2.operator_held, 1);
+        assert_eq!((second.l2.written, second.l2.vacated), (0, 0));
+        assert_eq!(
+            links(&pool).await,
+            links_before + 2,
+            "the sweep's L1 links are written"
+        );
+        let who: Vec<String> =
+            sqlx::query_scalar("SELECT decided_by FROM l2_pair_decision WHERE is_current = 1")
+                .fetch_all(&pool)
+                .await
+                .expect("read");
+        assert_eq!(who, vec!["OPERATOR".to_string()]);
+    }
+
+    /// Story 6.6's registered hazard is an UPLINK narrowing at the call site. 🔴 The first guard counted
+    /// a population carrying no uplink, where *"keep pairs whose uplinks do not disagree"* keeps every
+    /// pair (blind review layer). Here every interface reports a DIFFERENT uplink, so that filter would
+    /// keep none, and the count still says `n(n-1)/2`.
+    #[tokio::test]
+    async fn interfaces_on_different_uplinks_are_still_all_paired() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        let observations: Vec<Observation> = (1..=4)
+            .map(|n| {
+                let mut o = sighting(n, nic(n as u8), None, 100);
+                o.facts.push(Fact::Uplink {
+                    peer_mac: MacAddr([0x02, 0, 0, 0, 0, n as u8]),
+                    peer_port: format!("port-{n}"),
+                });
+                o
+            })
+            .collect();
+        let resolution = sweep(&pool, observations).await.expect("the sweep");
+        assert_eq!(resolution.l2.candidate_pairs, 6);
+    }
+
+    /// The two guard branches of `judge_within`, reachable only through the seam: a proposed pair over a
+    /// key this sweep did not carry is skipped, and a key the L1 pass placed on no interface is refused.
+    #[tokio::test]
+    async fn a_pair_over_an_absent_key_is_skipped_and_an_unplaced_key_is_refused() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        let observations = vec![
+            sighting(1, nic(8), Some("obelix"), 100),
+            sighting(2, nic(9), Some("obelix"), 100),
+        ];
+        let (groups, mut interfaces, keys) = seam(&pool, &observations).await;
+        let by_id: BTreeMap<ObsId, &Observation> =
+            observations.iter().map(|o| (o.obs_id, o)).collect();
+        let absent: L1Key = (domain(), nic(77));
+        let stray: BTreeSet<L2CandidatePair> =
+            [L2CandidatePair::new(keys[0], absent).expect("pair")].into();
+        let mut conn = pool.acquire().await.expect("connection");
+        let skipped = judge_within(&mut conn, &groups, &by_id, &interfaces, &stray)
+            .await
+            .expect("an absent key is skipped, not an error");
+        assert_eq!(skipped.written, 0);
+
+        interfaces.remove(&keys[1]);
+        let refused = judge_within(
+            &mut conn,
+            &groups,
+            &by_id,
+            &interfaces,
+            &l2_candidates(&keys),
+        )
+        .await;
+        assert!(
+            matches!(refused, Err(RepositoryError::Backend(_))),
+            "{refused:?}"
+        );
     }
 }

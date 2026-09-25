@@ -157,8 +157,9 @@ impl<'a> L2Side<'a> {
 /// but [`verdict_for_hostname`] answers **`Opposes`**, which is D20's named bug in the direction story
 /// 6.7's review closed **for the whole-string case only**. ⚠️ Not live through the shipped connector
 /// (`reverse_dns::sanitise` refuses U+200B) and live for any other producer and for this function as a
-/// domain primitive. Found by story 6.9's edge-case review layer; registered with story 6.12, which is
-/// the first caller that can reach it.
+/// domain primitive. Found by story 6.9's edge-case review layer; registered with story 6.12, which
+/// re-owned it to the first story that gives the product a second hostname source — the shipped
+/// connector still cannot reach it.
 ///
 /// ⚠️ **A second limit, stated**: a name of only non-ASCII letters — a purely Cyrillic or CJK hostname —
 /// carries no ASCII alphanumeric and is therefore read as absent. That is a REFUSAL TO SPEAK, never
@@ -234,8 +235,9 @@ pub fn hostnames_of(side: &L2Side<'_>) -> BTreeSet<String> {
 ///
 /// ⚠️ **It is NOT de-duplicated**, and that is stated rather than discovered: a side holding one
 /// observation twice, or a multi-homed observation standing on both sides, puts an `ObsId` in twice.
-/// Unreachable through the corpus today and reachable by a caller building a malformed group —
-/// story 6.12's plumbing is where that becomes possible.
+/// Unreachable through the corpus today and reachable by a caller building a malformed group. Story
+/// 6.12's plumbing persists no observation ids (Guy's decision F), so it is moot for storage; the row
+/// is re-owned to story 6.14, the first to display a decision's evidence.
 /// A `Neutral` legitimately carries none: D19's *"a rule that fires without leaving its `rule_id`
 /// in the database is a rule we cannot debug"* is about a verdict that ARGUES.
 pub fn verdict_for_hostname(a: &L2Side<'_>, b: &L2Side<'_>) -> RuleVerdict {
@@ -282,8 +284,8 @@ pub fn verdict_for_hostname(a: &L2Side<'_>, b: &L2Side<'_>) -> RuleVerdict {
 ///
 /// ⚠️ **It is NOT de-duplicated**, and that is stated rather than discovered: a side holding one
 /// observation twice, or a multi-homed observation standing on both sides, puts an [`ObsId`] in
-/// twice. Unreachable through the corpus today; **story 6.12's plumbing is where it becomes
-/// possible**, and it is registered there rather than guarded here.
+/// twice. Unreachable through the corpus today; story 6.12's plumbing stores no observation ids, so it
+/// is moot for storage, and the register row is re-owned to story 6.14 rather than guarded here.
 fn evidence_of(a: &L2Side<'_>, b: &L2Side<'_>) -> Vec<ObsId> {
     let mut evidence: Vec<_> = a
         .observations
@@ -383,7 +385,8 @@ pub const L2_HOSTNAME_AGREES: &str = "l2-hostname-agrees";
 /// different thing and is not closed here: an FQDN against a short label is `Neutral` here while
 /// [`verdict_for_hostname`] confidently **`Opposes`**. Nothing is live today — the one connector that
 /// emits a name strips the trailing dot at `reverse_dns.rs:137` — but *that is a property of one
-/// connector and not of [`hostnames_of`]*, so the question is registered with story 6.12 rather than
+/// connector and not of [`hostnames_of`]*, so the question is registered — with story 6.12 first, which
+/// re-owned it to the first story that gives the product a second hostname source — rather than
 /// answered by a sentence.
 ///
 /// # 🔴 A `Supports` cannot make a merge, and the trap that names this rule therefore FAILS
@@ -557,8 +560,9 @@ pub const L2_VIRTUAL_MAC_PREFIX: &str = "l2-virtual-mac-prefix";
 /// read a key and no observation, so an empty vector is what is true; attaching ids it never looked at
 /// would be the invention D19 exists to prevent. ⚠️ **The cost is stated rather than hidden**: an operator
 /// meeting this refusal sees the rule and not the pair, and the pair is the caller's to record. ✅ Story
-/// 6.12 records it: `l2_pair_decision` stores the pair beside the rule, so the refusal is never shown
-/// without the two interfaces it refused.
+/// 6.12 records it: `l2_pair_decision` stores the pair beside the rule. ⚠️ *No view reads that table
+/// yet* — story 6.14 is the first — so what is guaranteed is that the pair is STORED with the rule, not
+/// that anything is shown.
 ///
 /// # 🔴 The verdict this produces can never be NAMED beside an L1 `Disqualifying`, for ANY trap, ever
 ///

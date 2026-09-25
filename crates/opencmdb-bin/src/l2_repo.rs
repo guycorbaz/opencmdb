@@ -72,7 +72,9 @@ pub(crate) fn is_persisted(decision: &Decision) -> Result<bool, RepositoryError>
     }
 }
 
-/// `id, outcome, rule_id, abstention_cause, verdicts, ruleset_version, valid_from`, as decoded.
+/// `id, outcome, rule_id, abstention_cause, verdicts, ruleset_version, valid_from, decided_by`, as
+/// decoded.
+#[cfg(test)]
 type CurrentRow = (
     String,
     String,
@@ -81,9 +83,24 @@ type CurrentRow = (
     String,
     u32,
     String,
+    String,
 );
 
-/// The current ENGINE version of one pair's decision, as stored.
+/// `interface_low, interface_high` followed by a [`CurrentRow`], as the batch read decodes it.
+type CurrentPairRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+    u32,
+    String,
+    String,
+);
+
+/// The current version of one pair's decision, as stored — the engine's or an operator's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CurrentL2Decision {
     /// The row id — a v7 UUID, a row identifier and not part of the decision.
@@ -100,9 +117,17 @@ pub(crate) struct CurrentL2Decision {
     pub(crate) ruleset_version: u32,
     /// Its `valid_from`, rendered — compared, never decoded (`sqlx` is built without `chrono`).
     pub(crate) valid_from: String,
+    /// `ENGINE` or `OPERATOR`. The pass leaves an operator's pair alone (Guy, 2026-09-25).
+    pub(crate) decided_by: String,
 }
 
 impl CurrentL2Decision {
+    /// Whether a human wrote this version. D14: an operator's row is an INPUT, which the engine
+    /// neither adopts nor supersedes.
+    pub(crate) fn is_operators(&self) -> bool {
+        self.decided_by == "OPERATOR"
+    }
+
     /// Whether this stored version carries the decision a pass is about to write.
     ///
     /// Every decision-bearing column, and nothing minted per sweep: that is what makes an unchanged
@@ -123,12 +148,76 @@ impl CurrentL2Decision {
     }
 }
 
-/// The current ENGINE decision about `(low, high)`, if any. An OPERATOR's row is not read: nothing
-/// writes one today, and the engine must never adopt or supersede a human's (story 5.11's rule).
+/// Every CURRENT decision — the engine's AND an operator's — keyed by `(interface_low,
+/// interface_high)`: ONE static query for a whole sweep.
+///
+/// 🔴 **One query, not one per pair, and the reason is measured.** The pass first read each pair's row
+/// separately: at 300 interfaces that is 44 850 round trips inside the sweep's transaction, which the
+/// code review measured adding ~2.8 s per sweep and taking the reference-scale test from 139–382 ms to
+/// 3.7–9.8 s. It reads the WHOLE current set rather than filtering on the sweep's interfaces because the
+/// table holds only `Ambiguous` and `NoMatch` pairs — a small set by Guy's decision G — and because a
+/// filter would need an `IN` list assembled at runtime, which is a query nobody can read in the source.
+///
+/// 🔴 **Operator rows are READ, not filtered out.** Filtering them made the engine blind to a human's
+/// row, insert beside it, collide on `l2_pair_decision_one_current` and roll the whole sweep back — L1
+/// included, at every sweep (measured by the review's edge layer). The caller decides what an operator's
+/// row means; see `l2_pass`.
 ///
 /// # Errors
 ///
 /// Any database error.
+pub(crate) async fn load_current_l2_decisions<'e, E>(
+    executor: E,
+) -> Result<std::collections::BTreeMap<(String, String), CurrentL2Decision>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<CurrentPairRow> = sqlx::query_as(
+        "SELECT interface_low, interface_high, id, outcome, rule_id, abstention_cause, verdicts, \
+         ruleset_version, DATE_FORMAT(valid_from, '%Y-%m-%d %H:%i:%s.%f'), decided_by \
+         FROM l2_pair_decision WHERE is_current = 1",
+    )
+    .fetch_all(executor)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(
+                low,
+                high,
+                id,
+                outcome,
+                rule_id,
+                abstention_cause,
+                verdicts,
+                ruleset_version,
+                valid_from,
+                decided_by,
+            )| {
+                (
+                    (low, high),
+                    CurrentL2Decision {
+                        id,
+                        outcome,
+                        rule_id,
+                        abstention_cause,
+                        verdicts,
+                        ruleset_version,
+                        valid_from,
+                        decided_by,
+                    },
+                )
+            },
+        )
+        .collect())
+}
+
+/// The current decision about `(low, high)`, if any — the engine's or an operator's.
+///
+/// # Errors
+///
+/// Any database error.
+#[cfg(test)]
 pub(crate) async fn load_current_l2_decision<'e, E>(
     executor: E,
     low: InterfaceId,
@@ -139,17 +228,25 @@ where
 {
     let row: Option<CurrentRow> = sqlx::query_as(
         "SELECT id, outcome, rule_id, abstention_cause, verdicts, ruleset_version, \
-         DATE_FORMAT(valid_from, '%Y-%m-%d %H:%i:%s.%f') \
+         DATE_FORMAT(valid_from, '%Y-%m-%d %H:%i:%s.%f'), decided_by \
          FROM l2_pair_decision \
-         WHERE interface_low = ? AND interface_high = ? AND is_current = 1 \
-         AND decided_by = 'ENGINE'",
+         WHERE interface_low = ? AND interface_high = ? AND is_current = 1",
     )
     .bind(low.to_string())
     .bind(high.to_string())
     .fetch_optional(executor)
     .await?;
     Ok(row.map(
-        |(id, outcome, rule_id, abstention_cause, verdicts, ruleset_version, valid_from)| {
+        |(
+            id,
+            outcome,
+            rule_id,
+            abstention_cause,
+            verdicts,
+            ruleset_version,
+            valid_from,
+            decided_by,
+        )| {
             CurrentL2Decision {
                 id,
                 outcome,
@@ -158,6 +255,7 @@ where
                 verdicts,
                 ruleset_version,
                 valid_from,
+                decided_by,
             }
         },
     ))
@@ -425,6 +523,7 @@ mod tests {
             verdicts: verdicts_of(decision),
             ruleset_version: decision.ruleset_version.0,
             valid_from: "1970-01-01 00:01:40.000000".to_string(),
+            decided_by: "ENGINE".to_string(),
         }
     }
 

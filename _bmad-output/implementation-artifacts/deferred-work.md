@@ -3082,7 +3082,7 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   ARP/ping connector emits no MAC, so nothing scanned reaches the `interface` mint at all. **The
   connector story that gives it a MAC REMOVES THAT SHIELD and must carry this race with it.**
   Owner: that story, jointly with whoever adds the UNIQUE index.
-  ↺ **Story 6.12 (Guy, 2026-09-24)**: re-owned to the FR6 scheduler story (#161), reconciled with the earlier row "Two concurrent passes can mint two interfaces for one L1 key". Reachability, stated: `spawn_scan_loop` runs one pass at a time, so two instances on one store are needed. ⚠️ A device mint written as read-then-insert would reproduce it one level up — owner: the first story that produces an L2 `Match`.
+  ↺ **Story 6.12 (Guy, 2026-09-24)**: re-owned to the FR6 scheduler story (#161), reconciled with the earlier row "Two concurrent passes can mint two interfaces for one L1 key". Reachability, established by READING the code rather than by a race measurement: `spawn_scan_loop` (`main.rs:888`) is one `loop` that awaits each `poll_ingest_resolve` before the next tick, on a single-thread runtime with `MissedTickBehavior::Delay` — so two concurrent passes need two instances on one store. ⚠️ A device mint written as read-then-insert would reproduce it one level up — owner: the first story that produces an L2 `Match`.
 - **⚠️ The two `arp_ping` pins are a TRIPWIRE, not a barrier, and the difference is measured.** A
   `Fact::Mac` added at the emit site inside `poll` — rather than inside `emitted_facts` — leaves all
   502 tests green while the real binary mints an interface and places a link. That bypass is the
@@ -3108,7 +3108,7 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   `a_superseded_link_is_not_counted`, whose doc calls its row *"superseded"* while its `valid_to` is
   still `OPEN_END`. The guard is genuine; its stated justification is not, and it now stands in the
   way of the DDL repair. **Owner: unassigned.**
-  ⚠️ **Not inherited by story 6.12's sibling table**: `l2_pair_decision_current` compares two never-NULL expressions, and `a_current_interval_without_its_marker_is_refused` proves the UNKNOWN row refused by name. `identity_link`'s own CHECK is unchanged; owner still unassigned.
+  ⚠️ **Not inherited by story 6.12's sibling table**: `l2_pair_decision_current` compares two never-NULL expressions, and `a_current_interval_without_its_marker_is_refused` proves the UNKNOWN row refused by name. `identity_link`'s own CHECK is unchanged. ↺ **Owner named at 6.12's code review, as the epic's criterion 3 requires: Epic 6's RETROSPECTIVE**, which may take the DDL repair and the one test whose doc stands in its way.
 - **⚠️ Two entries of story 5.14's §8 were never appended** — `:2700` (`observed_at` stability across
   passes) and the page-less deployment — while two bullets that are not §8 rows were. Recorded here
   so the omission is not read as a disposition. `:2700` stands: the accumulation IS its consequence,
@@ -5287,7 +5287,7 @@ Four rows. All four were produced by the two-layer validation, and each names an
   ten gates GREEN**. *Block on the uplink* is the most tempting L2 narrowing there is — it is the
   signal `l2-uplink-agrees` scores on — and the committed corpus is **blind to it (1000‰)**. **Owner:
   story 6.12**, the first caller: it must carry the guard, and it may not assume 6.6 carries one.
-  ✅ **CARRIED by story 6.12**: `l2_pass::judge` hands `l2_candidates` every key of the sweep and `the_production_universe_is_every_pair_of_the_sweeps_interfaces` counts `n(n-1)/2` — mutation M2 (the universe narrowed at the call site) reds five tests.
+  ✅ **GUARDED by story 6.12, and narrower than it first said**: `l2_pass::judge` hands `l2_candidates` every key of the sweep; `the_production_universe_is_every_pair_of_the_sweeps_interfaces` counts `n(n-1)/2` over a population with NO uplink (a truncated key list reds it — mutation M2, five reds), and `interfaces_on_different_uplinks_are_still_all_paired` counts it over interfaces reporting different uplinks, so an uplink filter in `judge` keeps none. ⚠️ *This row first said "CARRIED" on the uplink-free population alone*, where "keep pairs whose uplinks do not disagree" keeps every pair (6.12's blind review layer). ⚠️ Still unguarded: a narrowing placed INSIDE `judge_within`'s loop, after the count is taken.
 
 - ⚠️ **`blocking.rs` and `l1.rs` cite `architecture.md` ~25 lines off, and story 6.6 INHERITED the
   drift into a section promising it was measured.** `blocking.rs` names `:988-993`, `:1004-1007`,
@@ -6491,3 +6491,30 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   covered by `a_pair_that_decays_to_absence_of_proof_is_closed_with_no_successor`; **not measured on the
   NAS**, where the rate is unknown. **Owner: story 6.14**, the first to show the decision — and the first
   place its churn would be visible.
+
+## Deferred from: code review of 6-12-resolver-writes-device-groupings.md (2026-09-25)
+
+- ⚠️ **One L2 transaction can write thousands of rows for a cluster of devices sharing one name.**
+  Measured by the edge layer: 100 interfaces answering to one name insert **4950** `Ambiguous` rows in the
+  first sweep's single transaction, against `architecture.md:1498`'s ~100 decisions / 1000 rows — the cap
+  Guy's decision G was justified by. Plausible on a home LAN (IoT devices with a vendor-default name —
+  reasoned, not measured). Chunking needs the cap's *"an identity decision is never split"* read at PAIR
+  level first. **Owner: Epic 6's RETROSPECTIVE**, with the question of what makes a merge at L2.
+- ⚠️ **`l2_pair_decision.verdicts` is `VARCHAR(512)` with no length guard in the adapter.** Three rules
+  make ~100 characters; as 6.8 and 6.10 add rules, an overflow ERRORS under strict mode and rolls the
+  whole sweep back rather than truncating (reasoned). **Owner: the story that adds the next L2 rule.**
+- ⚠️ **One observation carrying two MACs is the strongest co-location evidence the input carries, and L2
+  treats it as weakly as two separate sightings** — unnamed it gives `AbsenceOfProof`, named `Ambiguous`
+  (edge layer, probe P4). Not a defect of 6.12. **Owner: Epic 6's RETROSPECTIVE** — *what makes a merge at
+  L2*.
+- ⚠️ **Story 6.14 must show *"candidates and their evidence"*, and `l2_pair_decision` stores no evidence —
+  by decision.** Guy, 2026-09-25, at story 6.12's code review: AC3's evidence half is **superseded by
+  decision F**. The table holds the pair and the verdict vector; the NAMES a hostname rule read are read
+  by 6.14 from the two interfaces' CURRENT observations at display time. ⚠️ **Cost, stated**: the screen
+  shows today's names, not those the decision was reached on. **Owner: story 6.14**, whose criterion
+  (`epics.md`, *"from the persisted `link_candidate` rows"*, already annotated) must be read with this.
+- ✅ **A pair holding a current OPERATOR row is left to the operator** — Guy, 2026-09-25, at 6.12's code
+  review, on the edge layer's measurement that the first version rolled EVERY sweep back once such a row
+  existed. Recorded as a decision rather than a deferral so that **story 6.14, the first operator writer,
+  inherits it**: the engine neither adopts nor supersedes a human's L2 row (D14), counts it as
+  `operator_held`, and `a_pair_an_operator_decided_is_left_to_the_operator` pins it.

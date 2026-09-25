@@ -1,7 +1,7 @@
 # Story 6.12: The resolver writes device groupings
 
-Status: **developed and verified 2026-09-24 — `review`, not `done`, because that is the merge's business.**
-Code review by three isolated layers is next. Contexted, validated and arbitrated the same day: §0 carries three findings
+Status: **developed 2026-09-24, code-reviewed by three isolated layers and REPAIRED 2026-09-25 — `review`,
+not `done`, because that is the merge's business.** Contexted, validated and arbitrated the same day: §0 carries three findings
 that falsify the premise this story was queued on; both validation layers tried to refute them and **all
 three survive**. The validation added four HIGH findings against contexting's recommendation (§0.5).
 **Guy took all seven decisions on 2026-09-24 (§0.6), and the criteria in §3 are written for them.**
@@ -394,7 +394,11 @@ PERSISTED** (the `obelix` pair, not an `AbsenceOfProof` one) and asserts it gets
 asserting the same pair IS persisted under the full universe. 🔴 *The validation's M1 measured the naive
 version green: the withheld pair concluded `AbsenceOfProof`, which is never persisted.*
 
-**AC3 — every persisted decision names its rule and its evidence.** `NoMatch` rows carry a non-empty
+**AC3 — every persisted decision names its rule and its evidence.** 🔴 *Its evidence half is SUPERSEDED by
+decision F* (Guy, 2026-09-25, at the code review, which found it unimplemented and unannounced — the blind and
+acceptance layers independently): the table stores the pair and the verdict vector, no evidence column, and
+story 6.14 reads the names from the two interfaces' current observations at display time. What follows is
+the criterion as contexting wrote it, kept so the divergence can be read against it. `NoMatch` rows carry a non-empty
 `rule_id`; the evidence is the de-duplicated **UNION** over the vector's verdicts, taken ONCE (in
 `l2::decide_pair` or in the writer, not both — register rows 2511 and 5420). **`l2-virtual-mac-prefix`
 reads no observation**, so its evidence is stated to be the pair's keys (or empty, by design) rather than
@@ -458,6 +462,40 @@ true; `write_link`'s evidence doc.
 - [x] T7 — register: answer / re-own / close every §2 row; add what the story raises; `cargo xtask record`.
 - [x] T8 — docs-current-before-push: `CLAUDE.md`, `docs/project-context.md`, the story's Change Log and
       §6. **No manual sentence is owed unless a screen changes.**
+
+### Review Findings (code review 2026-09-25 — three isolated layers, one database each)
+
+Blind layer (diff only): 16 findings. Edge layer (built and mutated): 7 findings + 6 refuted suspicions. Acceptance
+layer (re-ran suite, gates, record, every mutation log — all conform): 9 findings. **25 distinct after merging; 0
+dismissed.** Reached by two layers independently: AC3's evidence (blind+audit), the OPERATOR row (blind+edge), the
+quadratic cost (blind+audit+edge — all three), AC4's unmeasured red (blind+audit), AC7 (blind+audit), the
+stale sprint-status lines (blind+audit).
+
+- [x] [Review][Decision→Patch] ✅ **Guy, 2026-09-25: AC3 is declared SUPERSEDED by decision F** — no evidence column; 6.14 reads the names from the two interfaces' CURRENT observations at display time (cost stated: today's names, not those at decision time); the divergence is written in §3 and §8. AC3's evidence half is not implemented, and the record never says so — the table stores the verdict vector and no evidence; no test asserts `obelix`'s evidence non-empty; decision F ("evidence keyed on INTERFACES") was re-read as "the pair is the evidence's subject" without saying so; and 6.14 must show "candidates and their evidence" from this table, which holds none (blind 1, audit 2).
+- [x] [Review][Decision→Patch] ✅ **Guy, 2026-09-25: the pass SKIPS a pair holding a current OPERATOR row** (D14: a human's row is an input the engine neither adopts nor supersedes), counted in `L2Resolution`, pinned by a test that the row survives, the sweep commits and L1 links are written. A current OPERATOR row in a pair's slot rolls back EVERY sweep, L1 included — measured (edge P1: `Err(Constraint("unique"))`, links 2→2), and the `decided_by = 'ENGINE'` filter causing it is carried by no test (mutation green). Story 5.10's mutual-exclusion finding, reproduced in the sibling table, one story before 6.14 writes operator rows (blind 3, edge 2).
+- [x] [Review][Patch] The L2 pass is O(n²) round trips inside the sweep's transaction — at 300 interfaces +2.8 s per sweep (edge P3) and 10–50× the reference-scale test (audit: 139–382 ms → 3.7–9.8 s); load the sweep's current rows in ONE query, and record the measured pass time [l2_pass.rs:107]
+- [x] [Review][Patch] The pair-ordering swap is carried by no test — `if true` left 777+219+110 green; add the cross-sweep case (higher key minted first) [l2_pass.rs:124]
+- [x] [Review][Patch] The supersede branch (persisted → different persisted) is exercised by nothing — drive it with a stored row carrying other verdicts [l2_pass.rs:144]
+- [x] [Review][Patch] AC4's "must RED" half was never measured — run the guard-routed variant as a mutation [l2_pass.rs:157]
+- [x] [Review][Patch] AC2's seam fixture has one pair, so withholding it is an EMPTY universe — withhold one pair of two [l2_pass.rs tests]
+- [x] [Review][Patch] "The uplink narrowing is CARRIED" overstates — the fixtures carry no uplink, and the count is taken before the loop; add an uplink-bearing population and narrow the claim [deferred-work.md, blocking.rs:280]
+- [x] [Review][Patch] Two guard branches (key absent from `groups`, key placed on no interface) are driven by no test [l2_pass.rs:108-121]
+- [x] [Review][Patch] `InstantRegressed` fires on the changed branch only; `judge`'s doc promises it for any earlier re-judgement [l2_pass.rs:70]
+- [x] [Review][Patch] Refusing a `Match` rolls the whole sweep back, the shape the module rejects for `guard_decision` — say that the loudness is meant to land in CI, where the first `Decisive` rule's own tests reach it, and why that differs [l2_repo.rs:61, l2_pass.rs:15]
+- [x] [Review][Patch] `l2.rs` doc comments still name 6.12 as owner of rows it re-owned (`:160`, `:238`, `:285`, `:386`)
+- [x] [Review][Patch] Vacuous "the refusal is never shown without the two interfaces" — nothing shows it at all [l2.rs:557]
+- [x] [Review][Patch] sprint-status keeps "NOT developable yet" and "where `obelix` stops being two rows" under 6.12's key [sprint-status.yaml]
+- [x] [Review][Patch] "An unchanged network writes nothing" holds for a deterministic connector only — a flapping PTR closes and reopens; qualify it in the story and both twins
+- [x] [Review][Patch] M6's needle half overstated — in the rows the tests insert the value CHECK is TRUE, so the unbounded needle could not have missed; "a real defect" → "latent" [story §8, twins]
+- [x] [Review][Patch] M4's 21 pre-existing reds have TWO carriers (the adapter refusal and `0012`'s CHECK) and need a store [story §8]
+- [x] [Review][Patch] AC8 is carried by one reach-count assertion plus a structural argument, not by comparing renders — say so [story §8]
+- [x] [Review][Patch] AC6's letter says COALESCE; `0012` uses `IS NULL OR`, equivalent and unannounced [story §8]
+- [x] [Review][Patch] Mutation ids skip M8 with no word [story §8]
+- [x] [Review][Patch] AC7 reachability "stated" — cite the code that establishes one pass at a time, and name an owner for `identity_link`'s UNKNOWN row as criterion 3 requires [deferred-work.md]
+- [x] [Review][Patch] An L2 side is the whole `join` group, including observations L1 declined to place under a narrowed universe — say so [l2_pass.rs:114]
+- [x] [Review][Defer] One L2 transaction can write thousands of rows for a same-name cluster (100 × `espressif` → 4950 rows, against the ~1000-row cap) [l2_pass.rs] — deferred, the cap's "never split a decision" must first be read at pair level
+- [x] [Review][Defer] `verdicts VARCHAR(512)` has no length guard; a longer vector rolls the sweep back under strict mode [0012] — deferred, ~100 chars today
+- [x] [Review][Defer] One observation carrying two MACs is the strongest co-location signal and L2 treats it as weakly as two sightings [l2.rs] — deferred to "what makes a merge at L2"
 
 ## 5. What this story must NOT do
 
@@ -527,6 +565,8 @@ any input** — criterion 1's *"writes `device` rows"* is not met, by decision, 
 | 2026-09-24 | implemented: `l2::decide_pair`, migration `0012`, `l2_repo.rs`, `l2_pass.rs`, the pass wired after L1 in `resolve_within`; `resolver.rs`'s false *"Not wired"* doc and blanket `allow(dead_code)` removed |
 | 2026-09-24 | mutation pass: nine rows, eight conforming; **M6 contradicted** (2 red for 1) and exposed an unbounded constraint-name needle, bounded |
 | 2026-09-24 | register: nineteen owned rows answered, re-owned or closed in place; four new rows |
+| 2026-09-25 | **code review, three isolated layers, one database each**: 25 distinct findings, 0 dismissed; the quadratic cost reached by ALL THREE layers; two decisions by Guy (AC3 superseded by F; an operator's pair left alone) |
+| 2026-09-25 | repair: 22 patches — one batch read per sweep (3.7–9.8 s → 314–359 ms), operator pairs skipped, five new tests, docs narrowed; M11, M12b, M13 conforming, M12 refused by the driver on a two-site anchor; three rows deferred, two decisions registered. **782 + 219 + 110** with `RUSTFLAGS="-D warnings"` on a VIRGIN store (bin 25.55 s) and without one (bin 5.05 s); fmt, clippy `--all-targets`, ten gates |
 
 ## 8. Dev Agent Record
 
@@ -574,30 +614,54 @@ store with no baseline, since a migration edit cannot share a store with its unm
 | M7 | the writer's ordering refusal dropped | red:1 | ✅ red 1 | `the_writer_refuses_what_the_table_would_refuse` |
 | M9 | a decayed pair treated as unchanged (never vacated) | red:2 | ✅ red 2 | decays, past |
 | M10 | the instant-regression guard neutered | red:1 | ✅ red 1 | `a_pair_rejudged_in_the_past_is_refused` |
+| M11 | *(review)* AC4's variant — every `Ambiguous` write refused as `guard_decision(&[])` would, in the sweep's transaction | red | ✅ red **13** | exactly the thirteen `l2_pass` tests whose sweep writes an `Ambiguous` — **no pre-existing test produces one**; `obelix_persists_…` among them, ⚠️ `.expect("the sweep must commit")`-carried rather than assertion-carried |
+| M12 | *(review)* the pair-ordering swap neutered | red:1 | ⛔ **refused** | `ANCHOR MATCHED 2 TIMES` — the seam test repeats the line; replacing both would have changed the test's own oracle. A result, not a failure |
+| M12b | *(review)* the same, re-anchored on the `else` branch | red:1 | ✅ red 1 | `a_pair_whose_higher_key_was_minted_first_is_persisted` — the edge layer had measured this mutation GREEN before the test existed |
+| M13 | *(review)* operator rows filtered out of the batch read again | red:1 | ✅ red 1 | `a_pair_an_operator_decided_is_left_to_the_operator` |
+
+⚠️ **There is no M8.** The contexting pass numbered its candidates, and M8 (a side-swap in the pass) was dropped
+before predictions were written, when `swapping_the_sides_changes_no_conclusion` showed the swap cannot change
+a conclusion. The gap was left unexplained until the acceptance layer asked.
 
 🔴 **M6 is the finding, and it is two findings.** *(a)* My prediction listed the test ABOUT the coupling,
 not every test inserting a row the coupling judges: with `is_current = 2` on a current row the mutated
 coupling refuses FIRST, so the marker test met a different constraint name. **The fifth named instance of
 enumerating carriers by what a test is about rather than by what reads the mutated token** — derived by
 grep for Rust tokens and by hand for a CHECK, and the hand is where it failed. *(b)* Reading why exposed a
-real defect: `refused_by` matched the constraint name as an **unbounded substring**, and
-`l2_pair_decision_current` is a substring of `l2_pair_decision_current_value` — so the coupling tests could
-not tell the two refusals apart. Bounded by the backticks MariaDB prints. ⚠️ *That the bounded needle reds
-where the unbounded one would not was reasoned, not re-measured by a mutation.*
+LATENT defect: `refused_by` matched the constraint name as an **unbounded substring**, and
+`l2_pair_decision_current` is a substring of `l2_pair_decision_current_value`. ⚠️ *First written here as "a
+real defect … the coupling tests could not tell the two refusals apart", and the acceptance layer refuted
+the second half*: in the two rows the coupling test inserts, the value CHECK is TRUE, so no existing test
+could have been fooled. Bounded anyway, because the next row someone adds would be. The bounding's own red
+was not measured by a mutation.
 
-✅ **M4's 26 is itself a measurement worth keeping**: the suite carries 21 PRE-EXISTING tests (26 minus this story's five)
+⚠️ **M4's reds have TWO carriers** — the adapter's refusal and `0012`'s CHECK — and appear only against a
+store: without `DATABASE_URL` those tests return early. So M4 measures the pair, never either alone (blind
+review layer). ✅ **Its 26 is still a measurement worth keeping**: the suite carries 21 PRE-EXISTING tests (26 minus this story's five)
 whose sweeps the L2 pass now judges, and every one of them fails loudly if `AbsenceOfProof` is ever persisted — the
 decision G is carried far beyond this story's own tests.
 
 ### Verification (story branch, 2026-09-24)
 
-- `cargo test --workspace --locked`, `RUSTFLAGS="-D warnings"`, VIRGIN store: **777 + 219 + 110**, 34 s;
-  without a store: same counts, 5 s — the clock is the tell.
+- At development: **777 + 219 + 110**; after the review's repair: **782 + 219 + 110** (five new `l2_pass`
+  tests: the cross-sweep pair, the supersede branch, the operator's pair, the uplink population, the two
+  guard branches — the seam test rewritten in place). Re-measured on a VIRGIN store and without one, the
+  clock the tell; the figures are in the Change Log row of the repair.
 - `cargo clippy --workspace --all-targets --locked -- -D warnings` green; `cargo fmt --all` clean;
   `cargo xtask ci` **ten gates green** (`file-size` largest 1954; `float-free` still 5 files; `ddl-collation`
   accepts `0012`); `cargo doc`: no new warning (the same twenty-five as `master`).
-- **Browser gates not run**: no template, asset or route changed, and AC8's byte-identity is carried by
-  the reach-count test rather than by a browser.
+- **Browser gates not run**: no template, asset or route changed. ⚠️ **AC8's *"byte-identical renders of
+  four screens"* is carried by a PROXY** — one `count_engine_reach` assertion on one fixture plus the
+  structural fact that no view reads `l2_pair_decision` — and not by comparing renders. Stated at the code
+  review rather than claimed.
+- ⚠️ **AC6's letter says `COALESCE`; `0012` writes the value check as `is_current IS NULL OR is_current = 1`**,
+  which is equivalent (`TRUE OR NULL` is `TRUE`) and was unannounced until the acceptance layer asked.
+- 🔴 **The pass time, measured after the review's repair** (`one_full_pass_at_the_reference_scale`, 300
+  interfaces, 44 850 pairs, virgin store, two runs): **cold 314–359 ms, idempotent rerun 281–287 ms**. The
+  first version read each pair's row separately and the review measured it at **3.7–9.8 s** (edge: +2.8 s
+  per sweep at 300 interfaces); `master` measures 382 ms cold and 139 ms rerun, so L2 now costs ~150 ms of
+  CPU per rerun and no per-pair round trip. *The record carried no pass time at all until the review; story
+  5.9b's had one.*
 
 ### File List
 
@@ -605,7 +669,7 @@ decision G is carried far beyond this story's own tests.
 - `crates/opencmdb-core/src/identity/mod.rs`, `cascade.rs`, `blocking.rs` — sentences 6.12 falsified
 - `crates/opencmdb-bin/migrations/0012_l2_pair_decision.sql` — new
 - `crates/opencmdb-bin/src/l2_repo.rs` — new, with fourteen tests
-- `crates/opencmdb-bin/src/l2_pass.rs` — new, with twelve tests
+- `crates/opencmdb-bin/src/l2_pass.rs` — new, with seventeen tests (twelve at development, five added by the review)
 - `crates/opencmdb-bin/src/resolver.rs` — the L2 call, `Resolution::l2`, docs corrected, blanket `allow` removed
 - `crates/opencmdb-bin/src/repo.rs` — `DecidedBy::token` made `pub(crate)`
 - `crates/opencmdb-bin/src/main.rs` — two `mod` lines
@@ -616,12 +680,17 @@ decision G is carried far beyond this story's own tests.
 
 ## Record
 
-- live-count: bin=777 core=219 xtask=110
+- live-count: bin=782 core=219 xtask=110
 - base: ddbc5f0d75d2eea87b34b57aefc156c4e978f93d
 - registered: Story 6.12's first criterion
 - registered: Story 5.14b's tripwire `the_production_pass_produces_no_ambiguous_abstention` can never red
 - registered: Two interfaces seen only in DIFFERENT sweeps are never paired
 - registered: A flapping reverse-DNS answer churns L2 history
+- registered: One L2 transaction can write thousands of rows
+- registered: `l2_pair_decision.verdicts` is `VARCHAR(512)` with no length guard
+- registered: One observation carrying two MACs is the strongest co-location evidence
+- registered: Story 6.14 must show *"candidates and their evidence"*
+- registered: A pair holding a current OPERATOR row is left to the operator
 - file: CLAUDE.md
 - file: docs/project-context.md
 - file: _bmad-output/implementation-artifacts/6-12-resolver-writes-device-groupings.md
