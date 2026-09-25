@@ -1,7 +1,8 @@
 # Story 6.12: The resolver writes device groupings
 
-Status: **developed 2026-09-24, code-reviewed by three isolated layers and REPAIRED 2026-09-25 — `review`,
-not `done`, because that is the merge's business.** Contexted, validated and arbitrated the same day: §0 carries three findings
+Status: **`done` — PR #211 squash-merged 2026-09-25 as `338cf8a`, CI green on the head commit `c39d206`
+itself (run `36111538265`).** Developed 2026-09-24, code-reviewed by three isolated layers and REPAIRED
+2026-09-25. Contexted, validated and arbitrated the same day: §0 carries three findings
 that falsify the premise this story was queued on; both validation layers tried to refute them and **all
 three survive**. The validation added four HIGH findings against contexting's recommendation (§0.5).
 **Guy took all seven decisions on 2026-09-24 (§0.6), and the criteria in §3 are written for them.**
