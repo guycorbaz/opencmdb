@@ -56,6 +56,7 @@ mod source_scan;
 mod sources_view;
 mod state_vocabulary;
 mod trap_gate;
+mod triage_view;
 mod write_guard;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is

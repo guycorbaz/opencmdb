@@ -5122,7 +5122,7 @@ development_status:
   #   design at L2, its tripwire goes to 6.14. Left `backlog` because no status says "absorbed" — CLOSING
   #   IT IS GUY'S CALL, owed before Epic 6's retrospective.
   # FR16 -- `epics.md`'s story-5.14 clause, re-owned here at 5.14b's contexting
-  6-14-ambiguity-explains-itself: ready-for-dev
+  6-14-ambiguity-explains-itself: in-progress
   #   📝 CONTEXTED 2026-09-25 (`6-14-ambiguity-explains-itself.md`) — NOT developable until validated and
   #   arbitrated: nothing specifies what « lift the doubt » WRITES (the positive answer needs a device nobody
   #   mints); « Résoudre » already labels CONFLICT rows; « never a blind document » would take the one live

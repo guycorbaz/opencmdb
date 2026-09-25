@@ -340,6 +340,30 @@ only at end of file), and no `#[cfg(test)]` item placed mid-file (it truncates `
 **AC10 — the join from interface to observations reads per-interface LATEST sightings**, not the whole
 `identity_link` table per render (≈13k rows a day at the reference cadence, reasoned) — 14.3a's precedent.
 
+## 1b. Tasks
+
+- [x] T1 — Split `page.rs`: the triage offering and its view-model types into `triage_view.rs`, behaviour-neutral,
+      its own commit; check the two measured hazards (no stray doc comment; no mid-file `#[cfg(test)]`) (AC9)
+- [ ] T2 — The reader: current ENGINE `Ambiguous` pairs (`l2_pair_decision`) and, per interface, its LATEST
+      placed observation (`identity_link` ⋈ interface, one query) (AC10)
+- [ ] T3 — Groups: connected components of the interfaces linked by current `Ambiguous` pairs; an Ambigu queue
+      row per group, labelled from `state.ambiguous`, id from the smallest interface id (AC1, D)
+- [ ] T4 — The candidates pane: a candidates shape, per-candidate MAC / addresses / names / freshness, the
+      keyed evidence sentences (total), the *as seen now* sentence; the action bar = Résoudre alone, Planned
+      (AC2, AC3, E, F)
+- [ ] T5 — Conflit rows: primary becomes `gesture.document`, Planned, owner 7; `gesture.not_built`,
+      `NOT_A_GLOSSARY_GESTURE` updated (AC8, B)
+- [ ] T6 — Nouveau rows of an ambiguous group keep *Ajouter* and say they belong to an open question, linking
+      to the group's row (AC4, C)
+- [ ] T7 — The reach section: ONE line counting groups; the two contradicting sentences corrected (AC5)
+- [ ] T8 — Guards fed an ambiguity input (four kinds → five; the gesture guards meet an Ambigu row);
+      OPERATOR and NoMatch not shown; two-sweep *as seen now* test; 5.14b's tripwire replaced (AC1, AC2, AC6)
+- [ ] T9 — Browser gates: seed (delete `interface` and `l2_pair_decision`, unused addresses, two interfaces +
+      links + one pair), `AXE_REQUIRE_AMBIGUOUS` in the gate and CI, the keyboard gate reaches the row; run both
+      (AC7)
+- [ ] T10 — Mutation pass (predictions first, carriers by grep, own database), register, record, twins, manuals
+      if a screen sentence changes
+
 ## 2. What this story must NOT do
 
 - **Not write any row** under (A1) — no route, no OPERATOR row, no device.
