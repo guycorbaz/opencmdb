@@ -5127,7 +5127,7 @@ development_status:
   #       `36146705075`; its log shows the axe gate opening `sel=ambigu:` and kbd 66/0).
   #   🔧 DEVELOPED 2026-09-25 on its branch: obelix is ONE Ambigu row with its candidates; Résoudre labelled;
   #   ✅ CODE-REVIEWED + REPAIRED 2026-09-25 (27 findings, 23 patches, 0 decisions): 802+219+110, kbd 66/0.
-  #   Next: the PR, then the RELEASE (IPAM notes BLOCKING), then 6.14b.
+  #   Next: the PR, then the RELEASE (v0.6.0 — the "IPAM notes BLOCKING" premise was stale: B2 was discharged by v0.5.0), then 6.14b.
   #   📝 CONTEXTED 2026-09-25 (`6-14-ambiguity-explains-itself.md`) — NOT developable until validated and
   #   arbitrated: nothing specifies what « lift the doubt » WRITES (the positive answer needs a device nobody
   #   mints); « Résoudre » already labels CONFLICT rows; « never a blind document » would take the one live
@@ -5138,7 +5138,7 @@ development_status:
   #   with two candidates the operator lifts, not as a device. It inherits 6.13's replacement tripwire.
   # INSERTED 2026-09-25 by Guy's act at 6.14's arbitration: the gesture that lifts the doubt
   6-14b-the-operator-lifts-the-doubt: backlog
-  #   ⚠️ SEQUENCED AFTER THE NEXT RELEASE (whose IPAM notes are BLOCKING): 6.14 → release → 6.14b, so obelix
+  #   ⚠️ SEQUENCED AFTER THE NEXT RELEASE (its "IPAM notes are BLOCKING" was stale — B2 was discharged by v0.5.0): 6.14 → release → 6.14b, so obelix
   #   is seen and used on the NAS before its gesture is written. First obligation: a planning act on what
   #   each answer WRITES (no_match by OPERATOR; "same machine" needs a device nobody mints).
   # 🔴 the five rules take the bucket 11 -> 3, NOT 0. This closes NFR4 and milestone J4 -- the gate's first green since story 4.6b
@@ -5467,7 +5467,7 @@ development_status:
   #   The question was NOT opened as a new issue — it has been `gestion_projets` I33 since 2026-08-12;
   #   what it lacked was a treatment, not a registration, and this review gave it a second specimen.
   #   ⚠️ NEXT, and no amount of code produces it: open `/triage` on the NAS and document a machine.
-  #   That is J3 and the closure of R1. Then the release, whose IPAM notes are BLOCKING (action B2).
+  #   That is J3 and the closure of R1. Then the release, whose IPAM notes were BLOCKING (action B2) — discharged by v0.5.0 the same day.
   14-1-plan-schema-and-no-producer: done
   #   🔴 THIS ENTRY CARRIED THREE CONTRADICTIONS UNTIL 2026-09-11, ALL BY ACCRETION: the review
   #   annotation was PREPENDED and the validation annotation was never removed, so the file said
