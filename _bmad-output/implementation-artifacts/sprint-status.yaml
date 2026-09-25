@@ -5140,12 +5140,17 @@ development_status:
   #   🔑 NEXT — 6.12 merged 2026-09-25. Queued by Guy's act of 2026-09-24: this is where obelix becomes visible — as ONE question
   #   with two candidates the operator lifts, not as a device. It inherits 6.13's replacement tripwire.
   # INSERTED 2026-09-25 by Guy's act at 6.14's arbitration: the gesture that lifts the doubt
-  6-14b-the-operator-lifts-the-doubt: backlog
+  6-14b-the-operator-lifts-the-doubt: ready-for-dev
+  #   ✅ Contexted, validated (two layers), arbitrated twice by Guy 2026-09-25 (story §0.8, §0.11).
+  #   Both answers are OPERATOR rows in l2_pair_decision; 0013 admits match for OPERATOR only.
   #   ✅ The release it waited for is out: v0.6.0 published 2026-09-25 (tag on dde0257, image verified).
   #   ✅ It RUNS ON THE NAS (Guy, 2026-09-25). Next: use it; then this story's planning act.
   #   ⚠️ SEQUENCED AFTER THE NEXT RELEASE (its "IPAM notes are BLOCKING" was stale — B2 was discharged by v0.5.0): 6.14 → release → 6.14b, so obelix
   #   is seen and used on the NAS before its gesture is written. First obligation: a planning act on what
   #   each answer WRITES (no_match by OPERATOR; "same machine" needs a device nobody mints).
+  6-14c-a-machine-called-one-is-shown-as-one: backlog
+  #   INSERTED 2026-09-25 at 6.14b's arbitration (A1): the device, its membership and the inventory;
+  #   its producer is 6.14b's OPERATOR match. First obligation: what a grouped machine's row SHOWS.
   # 🔴 the five rules take the bucket 11 -> 3, NOT 0. This closes NFR4 and milestone J4 -- the gate's first green since story 4.6b
   6-15-must-abstain-traps-are-routed: backlog
   # 300 hosts; the seed's PROVENANCE guarded, per 5.11b's finding

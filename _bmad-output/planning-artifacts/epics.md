@@ -2056,6 +2056,16 @@ So that the engine stops asking it and the answer is kept as mine.
 
 _**INSERTED by Guy's act of 2026-09-25**, at story 6.14's arbitration, on the 6b.4/6b.4b and 6.4/6.4b precedent: *a display story whose gesture's semantics are unspecified is two stories*. **Sequenced AFTER the next release**, so that `obelix` is seen and used on the NAS before its gesture is written. **Its first obligation is a planning act, not code**: what each answer WRITES — *"not the same machine"* (an OPERATOR `no_match` row in `l2_pair_decision`, D21's shape; it needs a `rule_id`, a `verdicts` and a `ruleset_version`) and *"the same machine"* (a device, whose mint 6.12 left ownerless, and a `match` outcome `0012` refuses) — and whether the glossary's `attach`/*rattacher* already names the positive answer. The engine already leaves an operator's pair alone (6.12's code review). **Resolve replaces Document on an ambiguous card** is Epic 7's by its coverage line (UX-DR43); this story decides whether to take it._
 
+_✅ **ARBITRATED 2026-09-25 by Guy** (story file §0.8, §0.11): both answers are OPERATOR rows in `l2_pair_decision` (`0013` admits `match` for `OPERATOR` only), written on the pairs that ARE the question and refused with 409 when the group changed under the page; *Ajouter* yields to an open question (UX-DR43, taken here); **the device and the inventory go to story 6.14c, inserted below**._
+
+### Story 6.14c: A machine the operator called one is shown as one — INSERTED 2026-09-25
+
+As the operator,
+I want the machine I said was one to appear once in the inventory,
+So that the product counts boxes, not network cards.
+
+_**INSERTED by Guy's act of 2026-09-25**, at story 6.14b's arbitration (A1): 6.14b records the operator's answer and mints nothing. **This story's producer is 6.14b's OPERATOR `match`** — the first real producer the device mint has had, which 6.12 found missing. Its scope: the device and its N:N membership (D14, *"`interface.device_id` is NOT a unique FK"*); the inventory showing a declared entity through the device its interface belongs to, **without ever updating `declared_attribute.entity_id`** (D15) — a path address → interface already exists (`ambiguity_view::ambiguity_rows`); and the double documentation 6.14b registers (*Ajouter* returns on both addresses after *the same machine*). Its first obligation is a planning act on what the inventory row of a grouped machine SHOWS._
+
 ### Story 6.15: The `must-abstain` traps are routed, and the release gate falls green
 
 As the next developer,
