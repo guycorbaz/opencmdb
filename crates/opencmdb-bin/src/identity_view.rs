@@ -128,6 +128,11 @@ pub(crate) struct IdentityView {
     pub(crate) settled: Vec<IdentitySettledRow>,
     /// Has the engine seen anything at all? Distinguishes *"nothing yet"* from *"nothing unplaced"*.
     pub(crate) has_any: bool,
+    /// How many GROUPS of interfaces the engine will not say are one machine or several — story 6.14's
+    /// L2 questions, each one row in the triage queue. **Its own unit, never summed** with the sighting
+    /// counts above (story 5.14b's arbitration 10). Only `/triage` reads the L2 table, so this is `0`
+    /// wherever else this section renders — registered rather than implied.
+    pub(crate) ambiguous_groups: usize,
 }
 
 /// An identity abstention cause as the operator reads it: its label, **and why it carries no
@@ -236,6 +241,7 @@ pub(crate) fn build_identity_view(rows: Vec<EngineReachRow>) -> IdentityView {
         }
     }
     IdentityView {
+        ambiguous_groups: 0,
         placed,
         not_placed,
         causes,

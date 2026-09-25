@@ -10,6 +10,7 @@
 // `warn` for now, graduating to `-D missing_docs` once the tree is clean.
 #![deny(missing_docs)]
 
+mod ambiguity_view;
 mod arp_ping;
 mod auth;
 mod dashboard_view;
@@ -56,6 +57,7 @@ mod source_scan;
 mod sources_view;
 mod state_vocabulary;
 mod trap_gate;
+mod triage_view;
 mod write_guard;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is

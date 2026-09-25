@@ -245,7 +245,7 @@ mod tests {
 /// that the copy must answer to a document written elsewhere. `CLAUDE.md` protects this
 /// redundancy by name.
 #[cfg(test)]
-pub(crate) const BINDING_GESTURE_AXIS: [(&str, &str); 12] = [
+pub(crate) const BINDING_GESTURE_AXIS: [(&str, &str); 13] = [
     ("observed", "observé"),
     ("declared", "déclaré"),
     ("gap", "écart"),
@@ -273,6 +273,9 @@ pub(crate) const BINDING_GESTURE_AXIS: [(&str, &str); 12] = [
     // adds it, and adding it is what will pull this row into `GLOSSARY_BACKED` and make the
     // rendered copy answer to it. Transcribed now so this constant does not lag its own source.
     ("release", "libérer"),
+    // Minted 2026-09-25 by Guy's planning act at story 6.14's arbitration (PR #213): the AMBIGUITY's
+    // gesture, named before it acts — story 6.14 shows it labelled, story 6.14b makes it act.
+    ("resolve", "résoudre"),
     ("triage", "triage"),
     ("source", "source"),
 ];
@@ -351,7 +354,7 @@ mod gesture_axis_tests {
     /// key added to `app.yml` under `gesture.` and listed in neither table below reds this test,
     /// which is the moment to ask whether the glossary needs a row — the question story 6b.7
     /// answered by refusing to extend the table *"prematurely, not wrongly"*.
-    const GLOSSARY_BACKED: [(&str, &str); 5] = [
+    const GLOSSARY_BACKED: [(&str, &str); 6] = [
         // ⚠️ The KEY keeps the identifier (`document`, as in `document-all`); the pair it is checked
         // against is the LABEL. This is the one row where the two differ — D11's supersession of
         // 2026-08-30 explains why, and both binding tables now carry the distinction in the row.
@@ -360,13 +363,18 @@ mod gesture_axis_tests {
         ("gesture.snooze", "snooze"),
         ("gesture.attach", "attach"),
         ("gesture.exclude", "exclude"),
+        // Story 6.14: the glossary gained `resolve`/*résoudre* by Guy's planning act of 2026-09-25
+        // (PR #213) — the AMBIGUITY's gesture. It sat in the table below until then, as *"a gesture
+        // with NO row in either binding table"*.
+        ("gesture.resolve", "resolve"),
     ];
 
     /// `gesture.*` keys that are NOT glossary gestures, each with why.
     ///
-    /// ⚠️ **Three of these are gestures with no binding row, and that is registered, not fixed**:
+    /// ⚠️ **Two of these are gestures with no binding row, and that is registered, not fixed** (three
+    /// until story 6.14, whose planning act gave `resolve` its row):
     /// extending a binding table is a planning act and Guy's (story 6b.7's precedent, where it was
-    /// refused as *premature, not wrong*). `baseline` is a fourth of the same class, already owned
+    /// refused as *premature, not wrong*). `baseline` is a third of the same class (a fourth until story 6.14 gave `resolve` its row), already owned
     /// by Epic 9.
     const NOT_A_GLOSSARY_GESTURE: [(&str, &str); 7] = [
         (
@@ -378,16 +386,16 @@ mod gesture_axis_tests {
             "the sentence under the bar (story 6b.4b)",
         ),
         (
+            "gesture.not_built_resolve",
+            "the sentence under an AMBIGUITY's bar, saying what *Résoudre* will do (story 6.14)",
+        ),
+        (
             "gesture.badge_off",
             "the *built and switched off* marker, not a gesture (story 6.4's code review)",
         ),
         (
             "gesture.not_enabled",
             "its sentence, which names the switch rather than a term (story 6.4's code review)",
-        ),
-        (
-            "gesture.resolve",
-            "a gesture with NO row in either binding table — Epic 6 owns FR16's ranked candidates",
         ),
         (
             "gesture.check_now",

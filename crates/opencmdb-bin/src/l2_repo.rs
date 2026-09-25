@@ -212,6 +212,88 @@ where
         .collect())
 }
 
+/// Every current ENGINE `Ambiguous` pair, as `(interface_low, interface_high, verdicts)` — the
+/// questions story 6.14 shows on `/triage`.
+///
+/// ⚠️ **ENGINE rows only, by decision**: an OPERATOR row on a pair is an answer, not a question
+/// (Guy, 2026-09-25, at story 6.12's code review), and a `no_match` is a decision the software took
+/// (case one of Guy's taxonomy) — neither is shown as a doubt to lift.
+///
+/// # Errors
+///
+/// Any database error.
+pub(crate) async fn load_current_ambiguous_pairs<'e, E>(
+    executor: E,
+) -> Result<Vec<(String, String, String)>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    sqlx::query_as(
+        "SELECT interface_low, interface_high, verdicts FROM l2_pair_decision \
+         WHERE is_current = 1 AND decided_by = 'ENGINE' AND outcome = 'abstained' \
+         AND abstention_cause = 'ambiguous'",
+    )
+    .fetch_all(executor)
+    .await
+}
+
+/// For every interface in a current ENGINE `Ambiguous` pair: its id, its hardware address, and the
+/// observation(s) of its LATEST current placement — what the candidates pane shows *as seen now*.
+///
+/// 🔑 **Per-interface latest, in SQL** — bounded to the ambiguous interfaces rather than the whole
+/// `identity_link` table (measured by story 6.14's review at 0.18 s over 40 000 extra current links;
+/// the correlated `MAX` is per interface, so the cost grows with each interface's sweeps and not with the
+/// network's).
+///
+/// 🔴 **EVERY observation tied at that instant comes back, and the caller keeps them all.** Every
+/// observation of one sweep is dated at the sweep's start, so an interface answering at two addresses in
+/// one sweep has two latest sightings. The first version kept one by id, and the review measured the
+/// other address's `Nouveau` row losing its link to the question — which address won depending on the
+/// order of freshly minted ids.
+///
+/// 🔴 **The MAC comes from `interface` itself, through a LEFT JOIN**: an interface with no current
+/// placement still comes back, with no observation (`None`), so its candidate keeps its hardware address.
+/// The first version read the MAC through the link and rendered an EMPTY heading for such a candidate
+/// (measured on a booted server by the review; axe exited 0 over it).
+///
+/// ⚠️ It reads the SAME pairs as [`load_current_ambiguous_pairs`] — current, ENGINE, `abstained`,
+/// `ambiguous` — in one condition written twice rather than two conditions that could drift (they did:
+/// the first version filtered `outcome` in one reader and not in the other).
+///
+/// # Errors
+///
+/// Any database error.
+pub(crate) async fn load_ambiguous_interface_sightings<'e, E>(
+    executor: E,
+) -> Result<Vec<(String, String, Option<String>)>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    sqlx::query_as(
+        "SELECT i.id, i.mac_canon, l.observation_id \
+         FROM interface i \
+         LEFT JOIN identity_link l ON l.interface_id = i.id AND l.outcome = 'match' \
+              AND l.valid_to = ? \
+              AND (SELECT o.observed_at FROM observation_record o WHERE o.id = l.observation_id) = ( \
+                  SELECT MAX(o2.observed_at) FROM identity_link l2 \
+                  JOIN observation_record o2 ON o2.id = l2.observation_id \
+                  WHERE l2.interface_id = i.id AND l2.outcome = 'match' AND l2.valid_to = ?) \
+         WHERE i.id IN ( \
+             SELECT interface_low FROM l2_pair_decision WHERE is_current = 1 \
+                 AND decided_by = 'ENGINE' AND outcome = 'abstained' \
+                 AND abstention_cause = 'ambiguous' \
+             UNION \
+             SELECT interface_high FROM l2_pair_decision WHERE is_current = 1 \
+                 AND decided_by = 'ENGINE' AND outcome = 'abstained' \
+                 AND abstention_cause = 'ambiguous') \
+         ORDER BY i.id, l.observation_id",
+    )
+    .bind(OPEN_END)
+    .bind(OPEN_END)
+    .fetch_all(executor)
+    .await
+}
+
 /// The current decision about `(low, high)`, if any — the engine's or an operator's.
 ///
 /// # Errors

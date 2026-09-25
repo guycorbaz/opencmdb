@@ -1524,8 +1524,9 @@ mod tests {
         let seeded = load_sightings(&pool).await.expect("read");
         assert_eq!(
             seeded.len(),
-            15,
-            "the premise: the seed sights fifteen (address, MAC) pairs — four without a MAC, seven \
+            17,
+            "the premise: the seed sights seventeen (address, MAC) pairs — story 6.14 added the L2 \
+             question's two NICs at .200/.201; before it: fifteen — four without a MAC, seven \
              story 14.3b added so the audit has a case on a page each gate walks, and TWO its code \
              review added, because the seed walked no conflict outside a `static` range and none on \
              a defined address, so two of the audit's rules were on no page either gate opens. \

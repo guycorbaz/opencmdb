@@ -3978,6 +3978,7 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   small set difference, and `Ambigu` needs FR16's ranked candidates, which `link_candidate` stores and
   nothing reads. **Owner: Epic 6** (stories 6.13/6.14), and the queue must gain the row the day it
   lands rather than being rediscovered then.
+  ✅ **CLOSED by story 6.14**: story 6.12 produces it and the queue carries it — ONE row per GROUP of interfaces (Guy's decision D), and `the_queue_carries_the_five_kinds_the_engine_can_produce_and_no_others` asserts exactly five.
 
 - ⚠️ **`the_view_builder_has_no_clock_so_one_store_renders_identically` proves nothing about
   `build_view`.** Measured at 6b.4's validation: that guard calls `build_view` with EMPTY declared and
@@ -5435,6 +5436,7 @@ Two rows, plus one re-ownership.
   6.12**, which builds that plumbing — and which should decide whether de-duplication belongs in the
   rule or in the caller's group construction, rather than adding it in both.
   ⚠️ **Moot for PERSISTENCE since story 6.12** — `l2_pair_decision` stores the verdict vector and no observation ids (Guy's decision F) — and live for any in-memory reader. ↺ **Re-owned to story 6.14**, the first that will display a decision's evidence.
+  ↺ **Story 6.14 displays no observation-id evidence** — the pane reads the stored verdict VECTOR and each candidate's CURRENT names (decision F) — so the row stays moot for display too. Re-owned to **Epic 6's RETROSPECTIVE**, with the question of what a stored decision's evidence should be.
 
 ## Raised by the operator, using the product (2026-08-30, v0.3.1)
 
@@ -6462,6 +6464,7 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   had historically failed to ask and which this story's own §6 had not. **Owner: Epic 6's RETROSPECTIVE** —
   a count is not a story's to decide, and the number is the thing.
   ⚠️ **Story 6.12 makes it SIX** — its pass has a production caller and WRITES on a real network, and still changes no screen: no view reads `l2_pair_decision`. Story 6.14 is where the run can end.
+  ✅ **Story 6.14 ENDS the run at six**: `obelix` becomes VISIBLE on `/triage` as one question with its candidates and the reason the engine asks. ⚠️ The operator still cannot ANSWER it until story 6.14b.
 
 ## Story 6.12 — the L2 pass persists its decisions about pairs of interfaces
 
@@ -6481,6 +6484,7 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   occur*, and story 6.13's criterion that it *"REDS here, by design"* was unmeetable under every option
   (`epics.md` annotated by Guy's act, PR #210). **Owner: story 6.14** — a slice with two interfaces and a
   shared name, read from wherever the screen reads L2 decisions.
+  ✅ **CLOSED by story 6.14**: the tripwire stays (it still pins that no `Ambiguous` enters `identity_link`) with its false doc struck, and its REPLACEMENT as the FR16 signal is `the_production_pass_shows_an_l2_ambiguity_as_one_question` — two NICs sharing a name through the production pass give ONE question on `/triage`.
 - ⚠️ **Two interfaces seen only in DIFFERENT sweeps are never paired.** Guy's decision D judges the
   interfaces one sweep carried, so a machine whose second NIC answers only when the first does not is
   never judged as a pair. The price of never vacating an interface that missed a sweep (story 5.14's
@@ -6491,6 +6495,7 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   covered by `a_pair_that_decays_to_absence_of_proof_is_closed_with_no_successor`; **not measured on the
   NAS**, where the rate is unknown. **Owner: story 6.14**, the first to show the decision — and the first
   place its churn would be visible.
+  ↺ **Story 6.14 (Guy's decision F)**: the row follows the CURRENT state and the pane says the candidates are shown as the network shows them now. The churn itself is still unmeasured on the NAS — **re-owned to Epic 6's RETROSPECTIVE**, a memory of past answers being a decision rule and not display.
 
 ## Deferred from: code review of 6-12-resolver-writes-device-groupings.md (2026-09-25)
 
@@ -6513,8 +6518,34 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   by 6.14 from the two interfaces' CURRENT observations at display time. ⚠️ **Cost, stated**: the screen
   shows today's names, not those the decision was reached on. **Owner: story 6.14**, whose criterion
   (`epics.md`, *"from the persisted `link_candidate` rows"*, already annotated) must be read with this.
+  ✅ **ANSWERED by story 6.14**: each candidate's addresses and names are read from its interface's LATEST placed sighting (`load_ambiguous_interface_sightings`, per interface in SQL), and the pane says *shown as the network shows them now*.
 - ✅ **A pair holding a current OPERATOR row is left to the operator** — Guy, 2026-09-25, at 6.12's code
   review, on the edge layer's measurement that the first version rolled EVERY sweep back once such a row
   existed. Recorded as a decision rather than a deferral so that **story 6.14, the first operator writer,
   inherits it**: the engine neither adopts nor supersedes a human's L2 row (D14), counts it as
   `operator_held`, and `a_pair_an_operator_decided_is_left_to_the_operator` pins it.
+  ✅ **And not shown as a question** — story 6.14's reader reads current ENGINE `Ambiguous` pairs only; `the_screen_reads_engine_ambiguities_and_nothing_else` pins it (the validation's M2, green until then).
+
+## Story 6.14 — the ambiguity explains itself on the page
+
+- ⚠️ **Only `/triage` reads `l2_pair_decision`, so the reach section on `/dashboard` and in the
+  reconciliation card shows no L2 line.** `IdentityView::ambiguous_groups` is filled by `/triage`'s
+  handler alone and is `0` wherever else the section renders — a partial picture, stated in the field's
+  doc rather than implied. **Owner: Epic 6's RETROSPECTIVE.** _(It named a second, conditional owner until
+  6.14's code review — a row with an either/or owner is weaker than the house rule of one.)_
+- ⚠️ **One Ambigu row per GROUP is exact only while an L2 `Ambiguous` comes from an EQUIVALENCE.** Today it
+  arises from `l2-hostname-agrees` alone, whose agreement is set equality, so a group is a clique. A rule
+  whose agreement is not transitive — an uplink or a switch port — can make a group join two interfaces
+  the engine never compared. **Owner: story 6.8** (the next L2 rule producing `Supports`), which must
+  re-examine the grouping or say why it still holds.
+- ⚠️ **The Ambigu row is appended at the END of the queue**, away from the `Nouveau` rows of its own
+  addresses; the link from each of those rows to the question is what ties them. Ordering the question
+  beside them is a display decision nobody has taken. **Owner: story 6.14b**, which puts the answer on
+  that row.
+
+## Deferred from: code review of 6-14-ambiguity-explains-itself.md (2026-09-25)
+
+- ⚠️ **One machine counts THREE times in the triage queue's *Pending* count** — its two `Nouveau` rows and
+  its one Ambigu row (the seed's question reads *Pending 16*). It follows from Guy's decision C (the addresses
+  keep *Ajouter*); what the count should mean once grouping exists is not a display story's to decide.
+  **Owner: Epic 6's RETROSPECTIVE.**

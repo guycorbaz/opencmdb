@@ -764,8 +764,15 @@ mod tests {
     /// 🔴 **Struck: both now have a producer** — `l2::verdict_for_hostname` since story 6.7,
     /// `l2::verdict_for_hostname_agreement` since story 6.9 — **and the conclusion survives for a
     /// narrower reason**: neither has a PRODUCTION CALLER, so the pass this test drives still cannot
-    /// see an L2 verdict. **Story 6.12 is the first caller, and it is what turns this tripwire red**,
-    /// exactly as story 5.14b's comment said it would.
+    /// see an L2 verdict. ~~**Story 6.12 is the first caller, and it is what turns this tripwire red**,
+    /// exactly as story 5.14b's comment said it would.~~
+    ///
+    /// 🔴 **Struck again at story 6.14, because it was false twice** (found by 6.12's review and 6.14's
+    /// validation): story 6.12 persists L2 decisions in `l2_pair_decision`, which `count_engine_reach`
+    /// never reads, AND this slice forms ONE interface, so there is no L2 pair to judge at all. This
+    /// test stays — it still pins that the pass writes no `Ambiguous` into `identity_link` — and its
+    /// REPLACEMENT as the FR16 signal is `the_production_pass_shows_an_l2_ambiguity_as_one_question`,
+    /// just below.
     ///
     /// ⚠️ _The strike first stopped one clause EARLY, leaving two live sentences the same commit
     /// falsified: *"which is the structural reason no `Ambiguous` can arise"* — the reason is now the
@@ -815,6 +822,104 @@ mod tests {
              story-5.14 clause that an ambiguity must SHOW ITS CANDIDATES from `link_candidate` \
              (FR16). That clause is unimplemented and owned by Epic 6. Implement it rather than \
              deleting this assertion. Rows: {reach:?}"
+        );
+    }
+
+    /// **Story 6.14, AC6 — the replacement of the tripwire above.** Two NICs answering to one name go
+    /// through the PRODUCTION pass, and `/triage`'s view shows ONE question: one Ambigu row, one group on
+    /// the reach line. The first end-to-end measurement of an L2 decision reaching the screen.
+    #[tokio::test]
+    async fn the_production_pass_shows_an_l2_ambiguity_as_one_question() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = empty_pool().await else {
+            return;
+        };
+        let nic = |id: u128, address: &str, last: u8| Observation {
+            obs_id: ObsId::from_uuid(uuid::Uuid::from_u128(id)),
+            connector_id: connector_id(),
+            observed_at: at(1_700_000_900),
+            scope: scope(),
+            facts: vec![
+                Fact::IpV4 {
+                    addr: address.parse().expect("a documentation address"),
+                },
+                Fact::Mac {
+                    addr: MacAddr([0x00, 0x11, 0x22, 0x33, 0x44, last]),
+                    locally_administered: false,
+                },
+                Fact::Hostname {
+                    name: "obelix.home.arpa".to_string(),
+                    source: opencmdb_core::observation::HostnameSource::Dns,
+                },
+            ],
+            raw: None,
+        };
+        // The fixture connector refuses a fact its capabilities do not declare, so this source
+        // declares `Hostname` — the shipped connector does since the reverse-DNS story.
+        let mut source = FixtureConnector::from_observations(
+            connector_id(),
+            Capabilities {
+                as_of: at(1_700_000_000),
+                kinds: BTreeSet::from([FactKind::IpV4, FactKind::Mac, FactKind::Hostname]),
+            },
+            vec![scope()],
+            "story 6.14 obelix",
+            vec![nic(40, "203.0.113.8", 0x08), nic(41, "203.0.113.9", 0x09)],
+        )
+        .expect("the source accepts facts it declares");
+        let outcome = poll_ingest_resolve(&mut source, at(1_700_000_900), &pool).await;
+        let resolution = outcome.resolution.expect("the pass must have RUN");
+        assert_eq!(
+            resolution.l2.written, 1,
+            "premise: the pass persisted one ambiguity"
+        );
+
+        let questions = |view: &crate::triage_view::TriageView| -> Vec<String> {
+            view.rows
+                .iter()
+                .map(|row| row.id.clone())
+                .filter(|id| id.starts_with("ambigu:"))
+                .collect()
+        };
+        let (view, identity) = crate::page::triage_view(&pool, None, false, false)
+            .await
+            .unwrap_or_else(|response| panic!("the triage view builds: {}", response.status()));
+        let first = questions(&view);
+        assert_eq!(first.len(), 1, "ONE question for obelix: {first:?}");
+        assert_eq!(identity.ambiguous_groups, 1);
+        // AC5 through the HANDLER — the one place a sum could be written (story 5.14b's lesson: the pure
+        // reach test cannot see it). Both sightings are placed, so nothing is *not placed*; the review
+        // measured a handler adding the groups to `not_placed` GREEN before this line.
+        assert_eq!(
+            (identity.placed, identity.not_placed),
+            (2, 0),
+            "the question count is never summed with the sighting counts"
+        );
+
+        // AC1: STABLE across sweeps — a second sweep with FRESH observation ids, as the shipped connector
+        // mints them, gives the SAME row id (the review found no test on the id itself).
+        let mut again = FixtureConnector::from_observations(
+            connector_id(),
+            Capabilities {
+                as_of: at(1_700_000_000),
+                kinds: BTreeSet::from([FactKind::IpV4, FactKind::Mac, FactKind::Hostname]),
+            },
+            vec![scope()],
+            "story 6.14 obelix, again",
+            vec![nic(50, "203.0.113.8", 0x08), nic(51, "203.0.113.9", 0x09)],
+        )
+        .expect("the source accepts facts it declares");
+        poll_ingest_resolve(&mut again, at(1_700_000_900), &pool)
+            .await
+            .resolution
+            .expect("the second pass must have RUN");
+        let (view, _) = crate::page::triage_view(&pool, None, false, false)
+            .await
+            .unwrap_or_else(|response| panic!("the triage view builds: {}", response.status()));
+        assert_eq!(
+            questions(&view),
+            first,
+            "the same question, under the same id"
         );
     }
 

@@ -113,7 +113,7 @@
      into a stack that dominated the pane and saying the same thing over and over. A `title=` was
      worse still — invisible to a keyboard and to a touch screen. This shape keeps both properties
      that matter: the sentence is VISIBLE once, and a screen reader announces it on EACH control. -#}
-<p id="gesture-not-built" class="gesture-note">{{ s.gesture_not_built }}</p>
+<p id="gesture-not-built" class="gesture-note">{% if pane.not_built.is_empty() %}{{ s.gesture_not_built }}{% else %}{{ pane.not_built }}{% endif %}</p>
 {#- 🔑 Rendered ONLY when a control is actually in that state. A note about a state nothing on the
      screen is in is a false line, and this project counts a false line as a defect — which is
      precisely how the sentence above came to be wrong the day one control went live. -#}

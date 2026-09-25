@@ -43,6 +43,11 @@
     {% endfor %}
     </ul>
     {%- endif %}
+    {#- Story 6.14, AC5: the L2 questions in their OWN unit, on a line of their own — never summed with
+         the sighting counts above (story 5.14b's arbitration 10). -#}
+    {% if identity.ambiguous_groups > 0 %}
+    <p class="pair ambiguous"><span class="muted">{{ s.identity_ambiguous }}</span> <span class="count">{{ identity.ambiguous_groups }}</span></p>
+    {% endif %}
     <p class="muted note">{{ s.identity_unit }}</p>
     <p class="muted note">{{ s.identity_floor }}</p>
   {% else %}
