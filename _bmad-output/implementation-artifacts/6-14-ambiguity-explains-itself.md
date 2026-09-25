@@ -536,6 +536,7 @@ so a single-site anchor cannot reach it; it is carried by the assertion added to
 - registered: Only `/triage` reads `l2_pair_decision`
 - registered: One Ambigu row per GROUP is exact only while an L2 `Ambiguous` comes from an EQUIVALENCE
 - registered: The Ambigu row is appended at the END of the queue
+- registered: One machine counts THREE times in the triage queue's *Pending* count
 - file: .github/workflows/ci.yml
 - file: CLAUDE.md
 - file: _bmad-output/implementation-artifacts/6-14-ambiguity-explains-itself.md
