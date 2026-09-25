@@ -1,7 +1,8 @@
 # Story 6.14: The ambiguity explains itself on the page
 
-Status: **contexted and VALIDATED 2026-09-25 — `ready-for-dev` in `sprint-status.yaml`, and ⚠️ NOT developable
-until Guy's arbitration on §0.5 (revised by §0.6).** Both validation layers tried to refute §0.1–§0.3 and all
+Status: **contexted, VALIDATED and ARBITRATED 2026-09-25 — `ready-for-dev`.** Guy took all six decisions on
+the recommendation (§0.8); ⚠️ **development waits for the planning act (glossary row + 6.14b) to be MERGED**,
+because AC8 renders the term that act binds. Both validation layers tried to refute §0.1–§0.3 and all
 three survive; the gap-hunt BUILT the recommended shape and it changed two recommendations (D, and the action
 bar) and added two decisions.
 
@@ -267,9 +268,24 @@ come first.
   Recommendation: show the CURRENT state and say so; the churn stays registered, owner re-set to the story that
   gives L2 a memory of past answers (or Epic 6's retrospective).
 
+### §0.8 — ✅ GUY'S ARBITRATION, 2026-09-25 — all six on the recommendation
+
+| | decision | refused, and why |
+|---|---|---|
+| **A** | **Display + a LABELLED Resolve control; the gesture goes to an INSERTED story 6.14b**, whose planning act first says what each answer writes (and whether `attach`/*rattacher* is already the positive answer's word) | (A2) half a gesture with a whole write route's cost; (A3) a device mint and a new `match` outcome inside a display story |
+| **B** | **« Résoudre » / *Resolve* names the AMBIGUITY gesture** — a new glossary row, Guy's planning act — **and a Conflit row's primary becomes the documenting gesture at FIELD level** (`gesture.document`, `Planned`, owner **Epic 7**, FR13(b)): two sources disagreeing about one field are answered by declaring the field's value, which needs no new word. `gesture.not_built`'s sentence and `NOT_A_GLOSSARY_GESTURE` change in the same act | (B2) a new word for the ambiguity while the UX specification binds *Resolve* to it in six places |
+| **C** | **Nouveau rows keep *Ajouter*** and say they belong to an open question, linking to it | removing the product's only live gesture from the machine on screen to put a control that does not act — and *Resolve replaces Document* is Epic 7's by coverage (UX-DR43) |
+| **D** | **ONE Ambigu row per GROUP** of interfaces linked by current `Ambiguous` pairs, and ONE reach line counting groups | per pair: 10 rows for 4 NICs, 4950 for 100 same-named devices — FR16b's *"not N failures"* |
+| **E** | **The Ambigu pane carries the Resolve control ALONE** | Epic 7's four gap gestures answer a gap, not a doubt |
+| **F** | **Flapping names: the row follows the CURRENT state, said on the screen**; the churn stays registered | a memory of past answers is a new decision rule, not display |
+
+🔑 **And the sequence, Guy's too**: **6.14 → the release (its IPAM notes are BLOCKING, action B2) → 6.14b**, so that
+`obelix` is SEEN on the NAS and used before its gesture is written — the project's own rule, *use it before
+writing more of it*.
+
 ---
 
-## 1. Acceptance criteria — DRAFT, written for (A1)+(B1)+(C2)+(D)
+## 1. Acceptance criteria — written for Guy's arbitration (§0.8)
 
 ⚠️ *Rewritten on §0.6/§0.7 for (A1)+(B1)+(C2)+(D revised)+(E)+(F).*
 
@@ -311,7 +327,11 @@ and creates two interfaces, their links and one `Ambiguous` pair; `AXE_REQUIRE_A
 the id prefix `sel=ambigu:`, never by a word; the keyboard gate reaches the row and its labelled control; the
 floor moves with the checks, prose and constant in one commit.
 
-**AC8 — the glossary term is the one Guy chose (B)**, in both locales, through keys; `copy-vocabulary` green.
+**AC8 — (B) in the code**: the Ambigu pane's control renders `gesture.resolve` (*Résoudre*/*Resolve*), bound by
+the glossary row the planning act adds; a **Conflit row's primary becomes `gesture.document`**, `Planned`, owner
+**7** — the `"gesture.resolve" => "6"` arm at `page.rs:727-730` goes; `gesture.not_built`'s sentence stops
+promising *"resolve an ambiguity"* under a conflict; `NOT_A_GLOSSARY_GESTURE` (`state_vocabulary.rs:389`) loses
+`gesture.resolve` now that a row binds it; `copy-vocabulary` green.
 
 **AC9 — `page.rs` is split before it grows**, behaviour-neutral, in its own commit — with the two hazards the
 prototype measured checked by name: no doc comment left on the wrong side of the cut (the compiler catches it
@@ -354,6 +374,7 @@ it** until 6.14b — say so on the screen, not only here.
 |---|---|
 | 2026-09-25 | contexted on `dabe1f5` (two Explore passes: planning documents, and the triage/route/gate code); four findings; four decisions posed (§0.5) |
 | 2026-09-25 | validated by two fresh-context layers with their own databases — §0.1–§0.3 survive; the fact-check corrected the Epic 7 claim (UX-DR43 is Epic 7's by coverage), found the collision already rendering and two missing register rows; the gap-hunt BUILT the shape: every existing guard blind to `Ambigu`, a false *Declared* heading, per-pair rows exploding (10 rows for 4 NICs), the gates exiting 0 without visiting the pane. (D) revised to one row per group; (E) and (F) added (§0.7) |
+| 2026-09-25 | **Guy's arbitration**: all six on the recommendation (§0.8); sequence 6.14 → release → 6.14b; the planning act (glossary row, 6.14b) is a separate PR |
 
 ## References
 
