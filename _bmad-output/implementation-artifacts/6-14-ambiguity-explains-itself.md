@@ -458,8 +458,12 @@ it** until 6.14b — say so on the screen, not only here.
   clean; fmt; `cargo xtask ci` ten gates green.
 - **Both browser gates, on a booted binary with the seed**: axe under all SEVEN flags (`AXE_REQUIRE_AMBIGUOUS`
   included) — **10 routes + 6 states, 0 violation nodes**, the Ambigu pane among them; kbd-probe — **65
-  checks, 0 failed**. ⚠️ Run on port **18614**: port 8080 is held by a long-running `opencmdb` process
-  that is not this session's and was left alone.
+  checks, 0 failed**. ⚠️ First run on port **18614**, because port 8080 was held by a long-running
+  `opencmdb`; ✅ **re-run on 8080 after Guy asked for every `opencmdb` process to be stopped** (two, both
+  left by a previous session — one started from an audit worktree since deleted — running for 1 day 18 h):
+  the full Rust suite on a virgin store with `RUSTFLAGS="-D warnings"` (795 + 219 + 110, 43 s), clippy, ten
+  gates, and all three CI browser passes — axe empty plan (1 route, 0 nodes), axe seeded under all seven
+  flags (10 routes + 6 states, 0 nodes), kbd 65 checks 0 failed.
 - Both manuals build; the user manual gains the Ambiguous line and *Resolve*.
 
 ### File List
