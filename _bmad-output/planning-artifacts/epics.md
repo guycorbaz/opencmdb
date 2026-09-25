@@ -2026,6 +2026,8 @@ So that *"I don't know"* can show its work.
 
 _🔴 **ABSORBED INTO STORY 6.12 on 2026-09-24 by Guy's act.** Its writer — `Ambiguous` persisted with its candidates — is 6.12's criterion now, stored in a sibling table rather than in `link_candidate`, which references `identity_link` and cannot hold an L2 candidate. ⚠️ **And the third criterion above is UNMEETABLE under every option, measured by two validation layers independently**: the tripwire's slice forms ONE interface and therefore no L2 pair at all, and it reads `count_engine_reach`, which reads `identity_link` only. A tripwire over a slice with no L2 pair is a guard placed where the defect cannot occur. What replaces it — a slice with two interfaces and a shared name, read from wherever L2 decisions live — is story 6.14's, together with the display. Whether this story is then closed or keeps a residue is decided at 6.12's merge._
 
+_✅ **CLOSED by Guy's decision of 2026-09-25**, after 6.12 and 6.14 merged: no residue was found — the writer is 6.12's, the guard is bypassed at L2 by design, and the tripwire's replacement is 6.14's `the_production_pass_shows_an_l2_ambiguity_as_one_question`. Marked `done` in `sprint-status.yaml`, which has no status for *absorbed*; no story file was ever written._
+
 ### Story 6.14: The ambiguity explains itself on the page
 
 As the operator,
