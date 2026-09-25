@@ -299,3 +299,83 @@ pub(crate) fn resolve_bar() -> Vec<GestureView> {
         t!("gesture.resolve").to_string(),
     )]
 }
+
+/// Tests for the grouping and the evidence sentences — pure; the rendered pane is tested in `page.rs`.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const AGREES: &str =
+        "l2-different-hostname=neutral;l2-hostname-agrees=supports;l2-virtual-mac-prefix=neutral";
+
+    fn pair(a: &str, b: &str) -> (String, String, String) {
+        (a.to_string(), b.to_string(), AGREES.to_string())
+    }
+
+    /// Decision D: three NICs sharing a name are THREE pairs and ONE question. The validation measured
+    /// the per-pair shape at 10 rows for 4 NICs.
+    #[test]
+    fn a_clique_of_three_interfaces_is_one_group() {
+        let groups = groups(&[pair("i1", "i2"), pair("i1", "i3"), pair("i2", "i3")]);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].interfaces, vec!["i1", "i2", "i3"]);
+        assert_eq!(
+            groups[0].id, "ambigu:i1",
+            "the id is the smallest member's — stable"
+        );
+        assert_eq!(groups[0].verdicts, vec![AGREES.to_string()]);
+    }
+
+    /// Two unrelated questions stay two, in a deterministic order.
+    #[test]
+    fn two_disjoint_pairs_are_two_groups_ordered_by_their_smallest_member() {
+        let groups = groups(&[pair("i7", "i9"), pair("i2", "i4")]);
+        let ids: Vec<&str> = groups.iter().map(|g| g.id.as_str()).collect();
+        assert_eq!(ids, vec!["ambigu:i2", "ambigu:i7"]);
+    }
+
+    /// A chain whose pairs arrive in an order that folds a root under a later one still lands in ONE
+    /// group rooted at its smallest member — the union must follow roots, not the ids it was handed.
+    #[test]
+    fn a_chain_arriving_out_of_order_is_still_one_group() {
+        let groups = groups(&[pair("i3", "i4"), pair("i1", "i2"), pair("i2", "i3")]);
+        assert_eq!(groups.len(), 1, "{groups:?}");
+        assert_eq!(groups[0].interfaces, vec!["i1", "i2", "i3", "i4"]);
+    }
+
+    /// The sentences are TOTAL: an unfamiliar `rule=verdict` renders a generic sentence, never itself,
+    /// and a `Neutral` — a rule that did not speak — renders nothing.
+    #[test]
+    fn the_evidence_is_said_in_words_and_never_as_a_token() {
+        let sentences = evidence_sentences(&[AGREES.to_string()]);
+        assert_eq!(
+            sentences,
+            vec![t!("triage.ambiguous.evidence.same_name").to_string()],
+            "the one verdict that argued, and no neutral one"
+        );
+        let unknown = evidence_sentences(&["l2-future-rule=supports".to_string()]);
+        assert_eq!(
+            unknown,
+            vec![t!("triage.ambiguous.evidence.unfamiliar").to_string()]
+        );
+        assert!(unknown.iter().all(|s| !s.contains("l2-")), "{unknown:?}");
+    }
+
+    /// Three NICs sharing a name are ONE queue row carrying three candidates.
+    #[test]
+    fn three_nics_sharing_a_name_are_one_row_with_three_candidates() {
+        let input = AmbiguityInput {
+            pairs: vec![pair("i1", "i2"), pair("i1", "i3"), pair("i2", "i3")],
+            sightings: Vec::new(),
+        };
+        let (rows, panes, _) = ambiguity_rows(
+            &input,
+            &[],
+            chrono::DateTime::from_timestamp(1_000, 0).expect("in range"),
+            false,
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(panes[0].1.candidates.len(), 3);
+        assert!(rows[0].count.contains('3'), "{}", rows[0].count);
+    }
+}

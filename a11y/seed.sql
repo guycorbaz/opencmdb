@@ -36,6 +36,11 @@ DELETE FROM ip_range;
 DELETE FROM ip_subnet;
 DELETE FROM link_candidate;
 DELETE FROM identity_link;
+-- Story 6.14: the L2 decisions and the interfaces they name. ⚠️ `interface` was NOT cleared before
+-- this story — the suite left one row of residue behind (measured by its validation) — and the rows
+-- below carry FIXED ids, so a re-seed (which `kbd-probe.mjs` requires) would collide on them.
+DELETE FROM l2_pair_decision;
+DELETE FROM interface;
 DELETE FROM observation_record;
 -- Story 14.3a: the address sighting summary is cleared beside the observations it summarises.
 -- ⚠️ The binary's one-time backfill ran at BOOT, before this file — so it never sees these rows,
@@ -324,3 +329,51 @@ INSERT INTO ip_address (id, subnet_id, addr, label) VALUES
    -- the way the adapter does, so the first spelling would have seeded an address OUTSIDE its own
    -- subnet — a fixture that contradicts itself and that every reader would then have to explain.
    '2001:0db8:1466:0000:0000:0000:0000:0090', 'NAS v6');
+
+-- ── Story 6.14: ONE L2 question — two NICs answering to one name ────────────────────────────
+--
+-- 🔴 WITHOUT THESE ROWS NEITHER BROWSER GATE EVER VISITS AN AMBIGU PANE. Measured by the story's
+-- validation: with a prototype of the screen booted, the axe gate under all six CI flags reported
+-- 0 nodes and exit 0, and the keyboard gate 62 checks and exit 0 — and neither had opened the one
+-- pane the story adds. `AXE_REQUIRE_AMBIGUOUS=1` turns a store with no such row into *the gate could
+-- not run*; these rows are what let it run.
+--
+-- ⚠️ `.200` and `.201`, outside every subnet of the plan: the gap `.46–.79` must stay covered by
+-- nothing (see the ranges above), and an address no subnet claims leaves the plan's own cases alone.
+-- The two sightings are written as the resolver would: an interface per MAC, a current `match` link
+-- placing each observation on it, and one current ENGINE `Ambiguous` decision about the pair.
+INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantage, facts, raw) VALUES
+  ('dddddddd-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.200"}},{"Mac":{"addr":[2,0,94,0,0,225],"locally_administered":true}},{"Hostname":{"name":"twin-nas.example","source":"Dns"}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000e2', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.201"}},{"Mac":{"addr":[2,0,94,0,0,226],"locally_administered":true}},{"Hostname":{"name":"twin-nas.example","source":"Dns"}}]', NULL);
+
+INSERT INTO address_sighting (addr, l2_domain, mac, first_seen_at, last_seen_at) VALUES
+  ('192.000.002.200', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:e1', @t, @t),
+  ('192.000.002.201', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:e2', @t, @t);
+
+INSERT INTO interface (id, l2_domain, mac_canon, first_seen_at, last_seen_at) VALUES
+  ('55555555-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-000000000000',
+   '02:00:5e:00:00:e1', @t, @t),
+  ('55555555-0000-0000-0000-0000000000e2', '00000000-0000-0000-0000-000000000000',
+   '02:00:5e:00:00:e2', @t, @t);
+
+INSERT INTO identity_link
+  (id, observation_id, interface_id, current_subject, outcome, rule_id, abstention_cause,
+   evidence, ruleset_version, decided_by, valid_from, valid_to) VALUES
+  ('11111111-0000-0000-0000-0000000000e1', 'dddddddd-0000-0000-0000-0000000000e1',
+   '55555555-0000-0000-0000-0000000000e1', '55555555-0000-0000-0000-0000000000e1',
+   'match', 'l1-exact-mac', NULL, '[]', 1, 'ENGINE', @t, '9999-12-31 23:59:59.999999'),
+  ('11111111-0000-0000-0000-0000000000e2', 'dddddddd-0000-0000-0000-0000000000e2',
+   '55555555-0000-0000-0000-0000000000e2', '55555555-0000-0000-0000-0000000000e2',
+   'match', 'l1-exact-mac', NULL, '[]', 1, 'ENGINE', @t, '9999-12-31 23:59:59.999999');
+
+INSERT INTO l2_pair_decision
+  (id, interface_low, interface_high, outcome, rule_id, abstention_cause, verdicts,
+   ruleset_version, decided_by, valid_from, valid_to, is_current) VALUES
+  ('66666666-0000-0000-0000-0000000000e1', '55555555-0000-0000-0000-0000000000e1',
+   '55555555-0000-0000-0000-0000000000e2', 'abstained', NULL, 'ambiguous',
+   'l2-different-hostname=neutral;l2-hostname-agrees=supports;l2-virtual-mac-prefix=neutral',
+   1, 'ENGINE', @t, '9999-12-31 23:59:59.999999', 1);

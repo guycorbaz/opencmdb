@@ -148,6 +148,7 @@ jobs:
             OPENCMDB_BASIC_PASSWORD="$OPENCMDB_BASIC_PASSWORD" \
             AXE_REQUIRE_QUEUE=1 \
             AXE_REQUIRE_GESTURE=1 \
+            AXE_REQUIRE_AMBIGUOUS=1 \
             AXE_REQUIRE_PLAN=1 \
             AXE_REQUIRE_AUDIT=1 \
             AXE_REQUIRE_VLAN=1 \

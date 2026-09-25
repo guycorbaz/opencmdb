@@ -110,6 +110,13 @@ const REQUIRE_QUEUE = process.env.AXE_REQUIRE_QUEUE === "1";
 // With `AXE_REQUIRE_GESTURE=1` (CI sets it) a run that finds no such row is *the gate could
 // not run*, never a pass: an unmounted route and a clean page are indistinguishable to axe.
 const REQUIRE_GESTURE = process.env.AXE_REQUIRE_GESTURE === "1";
+// 🔴 **Story 6.14's Ambigu pane is on no page a gate walks unless it is ASKED for.** Its validation
+// measured it: with the screen prototyped and the seed extended, this gate reported 0 nodes and exit 0
+// under every CI flag — and had never opened the one pane the story adds, because the first queue row
+// and the gesture row are both other rows. `AXE_REQUIRE_AMBIGUOUS=1` (CI sets it) makes a run with no
+// such row *the gate could not run*. 🔑 The row is found by its id PREFIX, `sel=ambigu:`, in the href
+// the product itself renders — never by a translated word.
+const REQUIRE_AMBIGUOUS = process.env.AXE_REQUIRE_AMBIGUOUS === "1";
 // 🔴 **`/ipam` IS THE SAME SHAPE AS AN EMPTY QUEUE, and story 14.2 is where it starts mattering.**
 // The screen's whole content — 256 cells each carrying its own accessible name, a subnet selector,
 // a legend — exists only when the store holds a subnet. Against a virgin store the route answers
@@ -823,6 +830,24 @@ async function main() {
     console.log(
       `⚠️  no queue row carries ${GESTURE}: the documenting gesture was NOT measured. ` +
         `Set AXE_REQUIRE_GESTURE=1 to make that a refusal rather than a gap.`,
+    );
+  }
+
+  // The Ambigu pane (story 6.14), found by the selector prefix of the product's own href.
+  const ambiguousRow = queueRows.find((route) => route !== null && route.includes("sel=ambigu:"));
+  if (ambiguousRow !== undefined) {
+    if (!states.includes(ambiguousRow)) {
+      states.push(ambiguousRow);
+    }
+  } else if (REQUIRE_AMBIGUOUS) {
+    cannotRun(
+      `no queue row at ${SEED} is an ambiguity (\`sel=ambigu:\`), so the candidates pane story 6.14 ` +
+        `adds is on no page this gate walks. Seed the store with an L2 question before the gate runs.`,
+    );
+  } else {
+    console.log(
+      `⚠️  no queue row is an ambiguity: the candidates pane was NOT measured. ` +
+        `Set AXE_REQUIRE_AMBIGUOUS=1 to make that a refusal rather than a gap.`,
     );
   }
 

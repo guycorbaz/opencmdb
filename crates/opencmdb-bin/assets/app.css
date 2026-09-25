@@ -563,10 +563,15 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
    observed side's faint rule: the treatment says *neither is the truth* — here, *neither is the answer*.
    Deliberately no amber: the colour is the documenting gesture's alone. */
 .photo.candidate { border-left: 2px solid var(--border); }
+/* A candidate's heading is its hardware address: `.photos h3` UPPERCASES headings, which turned
+   `02:00:5e:…` into `02:00:5E:…` — a spelling the product writes nowhere else (seen in Chrome). */
+.photo.candidate h3 { text-transform: none; letter-spacing: 0; }
 .cols.candidates { margin-bottom: 4px; }
 .evidence { margin: 4px 0 12px; padding-left: 18px; }
 .evidence li { margin: 2px 0; }
 .open-question { margin: 8px 0 0; }
+/* The browser's default blue, seen in Chrome — the product's links carry its own ink. */
+.open-question a { color: var(--text); text-decoration: underline; }
 .identity .pair.ambiguous { margin-top: 4px; }
 .photo .meta { margin: 4px 0 0; font-size: 11px; overflow-wrap: anywhere; }
 

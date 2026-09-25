@@ -608,7 +608,7 @@ pub(crate) fn now_utc() -> chrono::DateTime<chrono::Utc> {
 ///
 /// 🔴 The instant is taken HERE, once, and passed into [`build_triage`] as a parameter — so the
 /// builder stays pure and one store renders identically twice.
-async fn triage_view(
+pub(crate) async fn triage_view(
     pool: &MySqlPool,
     selected: Option<&str>,
     sort_by_age: bool,
@@ -4484,20 +4484,19 @@ mod tests {
         assert_eq!(t!("time.hours", n = 1, locale = "fr"), "il y a 1 h");
     }
 
-    /// 🔴 **The queue's row vocabulary is the engine's, and `Ambigu` is absent because nothing
-    /// produces it.**
+    /// 🔴 **The queue's row vocabulary is the engine's — FIVE kinds since story 6.14.**
     ///
-    /// Of the mock's five kinds, three are already typed by `gap::reconcile` — a `Gap` is *Écart*,
-    /// `NoObservedValue` is *Absence*, `ConflictingObservations` is *Conflit* — *Nouveau* is an
-    /// observed address no declared entity claims, and `Ambigu` needs FR16's ranked candidates,
-    /// which `link_candidate` stores and nothing reads. **Epic 6's, and its absence is asserted so
-    /// nobody adds a row the engine cannot fill.**
+    /// Three are typed by `gap::reconcile` — a `Gap` is *Écart*, `NoObservedValue` is *Absence*,
+    /// `ConflictingObservations` is *Conflit* — *Nouveau* is an observed address no declared entity
+    /// claims, and *Ambigu* is a GROUP of interfaces the L2 engine will not say are one machine or
+    /// several (story 6.12 persists it, story 6.14 shows it). _(This doc said `Ambigu` was absent and
+    /// that its absence was ASSERTED; the body never asserted it — found by story 6.14's validation.)_
     ///
     /// ⚠️ `OutOfPerimeter` is never a row: `reconcile` is written for ONE perimeter, so each pass
     /// counts every OTHER entity's observations as out of perimeter. It is noise of the loop, and
     /// surfacing it would put one row per entity per other entity on the operator's screen.
     #[test]
-    fn the_queue_carries_the_four_kinds_the_engine_can_produce_and_no_others() {
+    fn the_queue_carries_the_five_kinds_the_engine_can_produce_and_no_others() {
         let declared = vec![
             // A drift: hostname declared `nas`, observed `intruder`.
             declared_row("drift", "ipv4", "192.0.2.10"),
@@ -4517,9 +4516,29 @@ mod tests {
             // An address nobody declared.
             batch("arp", 50, vec![ipv4("192.0.2.99")]),
         ];
-        let view = build_triage(declared, Vec::new(), observations, at(1_000), None, false);
+        // An ambiguity: `obelix`'s two NICs, answering to one name (story 6.14).
+        let (question, obelix) = obelix_question(60);
+        let observations: Vec<_> = observations.into_iter().chain(obelix).collect();
+        let view = build_triage_offering(
+            declared,
+            Vec::new(),
+            observations,
+            at(1_000),
+            None,
+            false,
+            false,
+            &question,
+        );
 
         let kinds: Vec<&str> = view.rows.iter().map(|r| r.kind.as_str()).collect();
+        let distinct: std::collections::BTreeSet<&str> = kinds.iter().copied().collect();
+        assert_eq!(
+            distinct,
+            ["Absence", "Ambiguous", "Conflict", "Gap", "New"]
+                .into_iter()
+                .collect(),
+            "exactly the five kinds the engine produces, and no other"
+        );
         // ⚠️ « Gap » and not « Drift »: story 6b.6's glossary check found that the English
         // locale rendered a SYNONYM for the product's core term, which the binding table
         // forbids in so many words. This assertion's own message already said *"a Gap"*.
@@ -5791,6 +5810,207 @@ mod tests {
             ),
             "`Résoudre` stays planned even with the flag on — it has no route, and a live control \
              would take the amber the spec reserves for documenting"
+        );
+        // 🔴 Story 6.14: the bar an Ambigu pane REALLY carries is `resolve_bar`, not `action_bar` —
+        // so the guard asserts on the one production builds, and on a whole pane built with the flag on.
+        assert!(
+            crate::ambiguity_view::resolve_bar()
+                .iter()
+                .all(|g| matches!(g.nature, GestureRender::Planned(_))),
+            "the Ambigu pane's *Résoudre* does not act — what an answer writes is story 6.14b's"
+        );
+        let (question, obelix) = obelix_question(60);
+        let pane = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            obelix,
+            at(1_000),
+            Some("ambigu:iface-a"),
+            false,
+            true,
+            &question,
+        )
+        .selected
+        .expect("the Ambigu pane");
+        assert!(
+            pane.gestures
+                .iter()
+                .all(|g| !matches!(g.nature, GestureRender::Live(_))),
+            "no live control on an ambiguity, even with the documenting route mounted"
+        );
+    }
+
+    /// Render `/triage`'s body for a view — the path the operator gets, not a builder.
+    fn triage_body(view: TriageView, identity: IdentityView) -> String {
+        TriageBody {
+            triage: view,
+            identity,
+            documented: String::new(),
+            s: strings(),
+        }
+        .render()
+        .expect("the triage body renders")
+    }
+
+    /// The part of the page inside `<aside class="photos">` — the selected row's pane.
+    fn pane_html(html: &str) -> &str {
+        let start = html
+            .find(r#"<aside class="photos">"#)
+            .expect("a pane is rendered");
+        let end = html[start..].find("</aside>").expect("the pane closes") + start;
+        &html[start..end]
+    }
+
+    /// AC2 — an Ambigu pane shows its CANDIDATES and no declared side. 🔴 Rendered in the two-photo
+    /// shape, one candidate sat under a *Declared* heading (the validation's prototype) — a false
+    /// heading no guard could see, so this one reads the RENDERED pane.
+    #[test]
+    fn an_ambiguity_pane_shows_its_candidates_and_no_declared_side() {
+        let (question, obelix) = obelix_question(60);
+        let view = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            obelix,
+            at(1_000),
+            Some("ambigu:iface-a"),
+            false,
+            true,
+            &question,
+        );
+        let html = triage_body(view, no_reach());
+        let pane = pane_html(&html);
+        let s = strings();
+        assert!(
+            !pane.contains(&format!("<h3>{}</h3>", s.declared)),
+            "no *Declared* heading over an observed candidate"
+        );
+        for needle in [
+            "00:11:22:33:44:08",
+            "00:11:22:33:44:09",
+            "192.0.2.8",
+            "192.0.2.9",
+            "obelix.home.arpa",
+        ] {
+            assert!(pane.contains(needle), "{needle} is on the pane");
+        }
+        assert_eq!(
+            pane.matches(r#"class="col photo candidate""#).count(),
+            2,
+            "one photo per candidate, each with its own freshness"
+        );
+        assert!(
+            pane.contains(&s.ambiguous_seen_now),
+            "the *as seen now* cost is said on screen"
+        );
+        assert!(
+            pane.contains(&rust_i18n::t!("triage.ambiguous.evidence.same_name").to_string()),
+            "the verdict that argued is said in words"
+        );
+        for raw in ["l2-hostname-agrees", "supports", "iface-a", "iface-b"] {
+            assert!(!pane.contains(raw), "no raw token or id on the pane: {raw}");
+        }
+    }
+
+    /// AC2 / decision F — the candidates are shown AS THE NETWORK SHOWS THEM NOW. Two sightings of one
+    /// interface with DIFFERENT addresses and the same stored verdicts: the pane shows the later one.
+    /// 🔴 The validation's M1 (show the OLDEST sighting) was green without a test of this shape.
+    #[test]
+    fn the_candidates_are_shown_as_the_network_shows_them_now() {
+        let (mut question, mut batches) = obelix_question(60);
+        let later = batch_with_id(
+            "arp",
+            600,
+            vec![ipv4("192.0.2.18"), hostname("obelix.home.arpa")],
+            0xB8,
+        );
+        question.sightings[0].2 = later.id.to_string();
+        batches.push(later);
+        let pane = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            batches,
+            at(1_000),
+            Some("ambigu:iface-a"),
+            false,
+            true,
+            &question,
+        )
+        .selected
+        .expect("the Ambigu pane");
+        let addresses: Vec<&str> = pane
+            .candidates
+            .iter()
+            .map(|c| c.addresses.as_str())
+            .collect();
+        assert!(
+            addresses.contains(&"192.0.2.18"),
+            "the LATEST sighting: {addresses:?}"
+        );
+        assert!(
+            !addresses.contains(&"192.0.2.8"),
+            "not the earlier one: {addresses:?}"
+        );
+    }
+
+    /// AC4 — decision C: a `Nouveau` row whose address a candidate carries keeps *Ajouter* and links to
+    /// the open question; one that no candidate carries has no link.
+    #[test]
+    fn a_new_row_of_an_ambiguous_address_keeps_add_and_links_to_the_question() {
+        let (question, obelix) = obelix_question(60);
+        let observations: Vec<_> = obelix
+            .into_iter()
+            .chain([batch_with_id("arp", 70, vec![ipv4("192.0.2.77")], 0xC7)])
+            .collect();
+        let pane_for = |sel: &str| {
+            build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                observations.clone(),
+                at(1_000),
+                Some(sel),
+                false,
+                true,
+                &question,
+            )
+            .selected
+            .expect("the pane")
+        };
+        let obelix_row = pane_for("nouveau:192.0.2.8");
+        assert!(
+            matches!(obelix_row.gestures[0].nature, GestureRender::Live(_)),
+            "the address keeps *Ajouter* — the product's one live gesture is not taken away"
+        );
+        assert_eq!(
+            obelix_row.open_question.as_deref(),
+            Some("/triage?sel=ambigu:iface-a"),
+            "and it links to the question its address belongs to"
+        );
+        assert_eq!(pane_for("nouveau:192.0.2.77").open_question, None);
+    }
+
+    /// AC5 — the reach section counts L2 questions in their OWN unit, on a line of their own, and says
+    /// nothing about them when there are none.
+    #[test]
+    fn the_reach_line_counts_questions_in_their_own_unit() {
+        let s = strings();
+        let mut identity = build_identity_view(vec![reach("match", None, 2)]);
+        let without = identity_section_of(&triage_body(
+            build_triage(Vec::new(), Vec::new(), Vec::new(), at(1_000), None, false),
+            build_identity_view(vec![reach("match", None, 2)]),
+        ));
+        assert!(
+            !without.contains(&s.identity_ambiguous),
+            "no line when there is no question"
+        );
+        identity.ambiguous_groups = 3;
+        let with = identity_section_of(&triage_body(
+            build_triage(Vec::new(), Vec::new(), Vec::new(), at(1_000), None, false),
+            identity,
+        ));
+        assert!(with.contains(&s.identity_ambiguous));
+        assert!(
+            with.contains(r#"<p class="pair ambiguous">"#) && with.contains(">3</span>"),
+            "the count stands on its own line: {with}"
         );
     }
 

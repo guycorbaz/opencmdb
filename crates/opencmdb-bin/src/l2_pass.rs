@@ -891,4 +891,86 @@ mod tests {
             "{refused:?}"
         );
     }
+
+    /// Story 6.14: the screen reads current ENGINE `Ambiguous` pairs ONLY — never a `NoMatch` (the
+    /// software decided) and never an OPERATOR row (an answer, not a question). 🔴 The validation's M2
+    /// (drop the ENGINE filter) was green before a test of this shape existed.
+    #[tokio::test]
+    async fn the_screen_reads_engine_ambiguities_and_nothing_else() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        sweep(
+            &pool,
+            vec![
+                sighting(1, nic(8), Some("obelix"), 100),
+                sighting(2, nic(9), Some("obelix"), 100),
+                sighting(3, vrrp(), Some("gw"), 100),
+            ],
+        )
+        .await
+        .expect("the sweep");
+        assert_eq!(
+            current(&pool).await.len(),
+            3,
+            "premise: one ambiguity and two refusals"
+        );
+        let pairs = crate::l2_repo::load_current_ambiguous_pairs(&pool)
+            .await
+            .expect("read");
+        assert_eq!(
+            pairs.len(),
+            1,
+            "the ambiguity, and not the two `NoMatch`: {pairs:?}"
+        );
+        sqlx::query(
+            "UPDATE l2_pair_decision SET decided_by = 'OPERATOR' WHERE outcome = 'abstained'",
+        )
+        .execute(&pool)
+        .await
+        .expect("a human answers");
+        assert!(
+            crate::l2_repo::load_current_ambiguous_pairs(&pool)
+                .await
+                .expect("read")
+                .is_empty(),
+            "an operator's row is an answer, not a question"
+        );
+    }
+
+    /// Story 6.14, decision F: each interface's LATEST placed sighting is what the pane shows — read in
+    /// SQL, one row per interface, and the later sweep wins.
+    #[tokio::test]
+    async fn the_candidates_are_read_from_each_interfaces_latest_sighting() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        sweep(
+            &pool,
+            vec![
+                sighting(1, nic(8), Some("obelix"), 100),
+                sighting(2, nic(9), Some("obelix"), 100),
+            ],
+        )
+        .await
+        .expect("first sweep");
+        sweep(
+            &pool,
+            vec![
+                sighting(11, nic(8), Some("obelix"), 400),
+                sighting(12, nic(9), Some("obelix"), 400),
+            ],
+        )
+        .await
+        .expect("second sweep");
+        let sightings = crate::l2_repo::load_ambiguous_interface_sightings(&pool)
+            .await
+            .expect("read");
+        let observations: std::collections::BTreeSet<String> =
+            sightings.iter().map(|(_, _, o)| o.clone()).collect();
+        let expected: std::collections::BTreeSet<String> = [11_u128, 12]
+            .into_iter()
+            .map(|n| ObsId::from_uuid(uuid::Uuid::from_u128(n)).to_string())
+            .collect();
+        assert_eq!(sightings.len(), 2, "one row per interface: {sightings:?}");
+        assert_eq!(observations, expected, "the LATER sweep's observations");
+    }
 }
