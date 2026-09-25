@@ -1348,7 +1348,8 @@ the rule requires._
 | Attach a discovery to an existing record | **attach** | **rattacher** | A link; no data moves |
 | **Put an object outside the frame of the question** | **exclude** | **exclure** | **SETTLED — replaces `ignore`.** The object is out of scope: factual, reversible, no verdict. **Deliberately the same words as an out-of-capability field — one concept, one term** (see *Source State: Two Axes*) |
 | **Stop the plan holding an address** | **release** | **« libérer »** | The plan stops holding the address: it ceases to be a finding and becomes offerable again. **A release is a ROW, never a deletion** — the kept history is what tells a re-sighting from a sighting that never stopped. ⚠️ **Not a software release** (a published version), which is what this word means everywhere else in the project — the one row here whose EN term carries a second meaning, admitted deliberately and named so it cannot surprise |
-| Resolving inbox items | **triage** | **triage** | document / accept-gap / attach / create / **exclude** / snooze |
+| **Lift the doubt of an ambiguity** | **resolve** | **résoudre** | The gesture of the `ambiguous` state: the operator chooses among the candidates the engine refused to guess between. **Named here before it acts** — story 6.14 shows the control labelled, and what each answer WRITES is story 6.14b's. ⚠️ **Not a conflict's gesture**: two sources disagreeing about one field are answered by *document* at field level. ⚠️ FR33 also lists *resolve* among an alert's actions; that use is the alerts epic's to reconcile with this row |
+| Resolving inbox items | **triage** | **triage** | document / accept-gap / attach / create / **exclude** / snooze / **resolve** |
 | A discovery origin | **source** | **source** | UniFi controller, generic scan, manual |
 
 #### The STATE axis (binding — added 2026-08-19 by Guy's arbitration, story 6b.6)

@@ -2044,6 +2044,16 @@ So that I can lift the doubt the engine refused to guess at.
 
 **And** the count keeps the honest unit story 5.14b's arbitration 13 fixed, and ⚠️ **Epic 6 is where that unit stops being honest**: once grouping exists, *sighting* is no longer the true word, and the locale keys change with it. Registered at 5.14b as a scheduled consequence, not a correction.
 
+_✅ **ARBITRATED 2026-09-25 by Guy** (story file §0.8), and read with two corrections. **Criterion 2's premise is stale**: the documenting gesture belongs to `Nouveau` since story 6.4's re-aim, not to `AbsenceOfProof`. And *"carries the gesture that LIFTS A DOUBT"* is met by a **labelled** control, *Résoudre* — the glossary row this act adds — **which does not act yet**: nothing specified what an answer WRITES, and the positive answer needs a device nobody mints. **One Ambigu row per GROUP of interfaces**, not per pair (measured: 10 rows for 4 NICs). **The gesture itself is story 6.14b**, below._
+
+### Story 6.14b: The operator lifts the doubt — INSERTED 2026-09-25
+
+As the operator,
+I want to answer the question an ambiguity asks,
+So that the engine stops asking it and the answer is kept as mine.
+
+_**INSERTED by Guy's act of 2026-09-25**, at story 6.14's arbitration, on the 6b.4/6b.4b and 6.4/6.4b precedent: *a display story whose gesture's semantics are unspecified is two stories*. **Sequenced AFTER the next release**, so that `obelix` is seen and used on the NAS before its gesture is written. **Its first obligation is a planning act, not code**: what each answer WRITES — *"not the same machine"* (an OPERATOR `no_match` row in `l2_pair_decision`, D21's shape; it needs a `rule_id`, a `verdicts` and a `ruleset_version`) and *"the same machine"* (a device, whose mint 6.12 left ownerless, and a `match` outcome `0012` refuses) — and whether the glossary's `attach`/*rattacher* already names the positive answer. The engine already leaves an operator's pair alone (6.12's code review). **Resolve replaces Document on an ambiguous card** is Epic 7's by its coverage line (UX-DR43); this story decides whether to take it._
+
 ### Story 6.15: The `must-abstain` traps are routed, and the release gate falls green
 
 As the next developer,
