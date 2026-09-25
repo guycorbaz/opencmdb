@@ -42,8 +42,9 @@
 //! 6.12 arrives.)_
 //!
 //! `l1.rs` says the two organs do not consult each other; **nothing had ever said it about
-//! `decide`'s ARGUMENT**, and this paragraph is that sentence. The invariant is registered against
-//! story 6.12, which should consider closing it in a TYPE rather than in prose.
+//! `decide`'s ARGUMENT**, and this paragraph is that sentence. ✅ **Story 6.12 closed the ordinary path
+//! in a function rather than in prose**: [`decide_pair`] takes a pair and two sides and builds the vector
+//! itself, so the resolver never holds one. ⚠️ A TRIPWIRE, not a barrier — `cascade::decide` stays `pub`.
 //!
 //! # ⚠️ How a wrong rule id is caught here, and how it is NOT
 //!
@@ -72,7 +73,8 @@
 use std::collections::BTreeSet;
 
 use crate::identity::blocking::L2CandidatePair;
-use crate::identity::cascade::{RuleVerdict, Verdict};
+use crate::identity::cascade::{Decision, RuleVerdict, Verdict, decide};
+use crate::identity::l1::CURRENT_RULESET_VERSION;
 use crate::observation::{Fact, MacAddr, ObsId, Observation};
 use crate::trap::RuleId;
 
@@ -155,8 +157,9 @@ impl<'a> L2Side<'a> {
 /// but [`verdict_for_hostname`] answers **`Opposes`**, which is D20's named bug in the direction story
 /// 6.7's review closed **for the whole-string case only**. ⚠️ Not live through the shipped connector
 /// (`reverse_dns::sanitise` refuses U+200B) and live for any other producer and for this function as a
-/// domain primitive. Found by story 6.9's edge-case review layer; registered with story 6.12, which is
-/// the first caller that can reach it.
+/// domain primitive. Found by story 6.9's edge-case review layer; registered with story 6.12, which
+/// re-owned it to the first story that gives the product a second hostname source — the shipped
+/// connector still cannot reach it.
 ///
 /// ⚠️ **A second limit, stated**: a name of only non-ASCII letters — a purely Cyrillic or CJK hostname —
 /// carries no ASCII alphanumeric and is therefore read as absent. That is a REFUSAL TO SPEAK, never
@@ -232,8 +235,9 @@ pub fn hostnames_of(side: &L2Side<'_>) -> BTreeSet<String> {
 ///
 /// ⚠️ **It is NOT de-duplicated**, and that is stated rather than discovered: a side holding one
 /// observation twice, or a multi-homed observation standing on both sides, puts an `ObsId` in twice.
-/// Unreachable through the corpus today and reachable by a caller building a malformed group —
-/// story 6.12's plumbing is where that becomes possible.
+/// Unreachable through the corpus today and reachable by a caller building a malformed group. Story
+/// 6.12's plumbing persists no observation ids (Guy's decision F), so it is moot for storage; the row
+/// is re-owned to story 6.14, the first to display a decision's evidence.
 /// A `Neutral` legitimately carries none: D19's *"a rule that fires without leaving its `rule_id`
 /// in the database is a rule we cannot debug"* is about a verdict that ARGUES.
 pub fn verdict_for_hostname(a: &L2Side<'_>, b: &L2Side<'_>) -> RuleVerdict {
@@ -280,8 +284,8 @@ pub fn verdict_for_hostname(a: &L2Side<'_>, b: &L2Side<'_>) -> RuleVerdict {
 ///
 /// ⚠️ **It is NOT de-duplicated**, and that is stated rather than discovered: a side holding one
 /// observation twice, or a multi-homed observation standing on both sides, puts an [`ObsId`] in
-/// twice. Unreachable through the corpus today; **story 6.12's plumbing is where it becomes
-/// possible**, and it is registered there rather than guarded here.
+/// twice. Unreachable through the corpus today; story 6.12's plumbing stores no observation ids, so it
+/// is moot for storage, and the register row is re-owned to story 6.14 rather than guarded here.
 fn evidence_of(a: &L2Side<'_>, b: &L2Side<'_>) -> Vec<ObsId> {
     let mut evidence: Vec<_> = a
         .observations
@@ -381,7 +385,8 @@ pub const L2_HOSTNAME_AGREES: &str = "l2-hostname-agrees";
 /// different thing and is not closed here: an FQDN against a short label is `Neutral` here while
 /// [`verdict_for_hostname`] confidently **`Opposes`**. Nothing is live today — the one connector that
 /// emits a name strips the trailing dot at `reverse_dns.rs:137` — but *that is a property of one
-/// connector and not of [`hostnames_of`]*, so the question is registered with story 6.12 rather than
+/// connector and not of [`hostnames_of`]*, so the question is registered — with story 6.12 first, which
+/// re-owned it to the first story that gives the product a second hostname source — rather than
 /// answered by a sentence.
 ///
 /// # 🔴 A `Supports` cannot make a merge, and the trap that names this rule therefore FAILS
@@ -554,8 +559,10 @@ pub const L2_VIRTUAL_MAC_PREFIX: &str = "l2-virtual-mac-prefix";
 /// [`RuleVerdict::evidence`] is documented as *"the observations the rule READ to say it"*. This reading
 /// read a key and no observation, so an empty vector is what is true; attaching ids it never looked at
 /// would be the invention D19 exists to prevent. ⚠️ **The cost is stated rather than hidden**: an operator
-/// meeting this refusal sees the rule and not the pair, and the pair is the caller's to record. Story 6.12
-/// is the first caller with both in hand.
+/// meeting this refusal sees the rule and not the pair, and the pair is the caller's to record. ✅ Story
+/// 6.12 records it: `l2_pair_decision` stores the pair beside the rule. ⚠️ *No view reads that table
+/// yet* — story 6.14 is the first — so what is guaranteed is that the pair is STORED with the rule, not
+/// that anything is shown.
 ///
 /// # 🔴 The verdict this produces can never be NAMED beside an L1 `Disqualifying`, for ANY trap, ever
 ///
@@ -587,6 +594,44 @@ pub fn verdict_for_virtual_mac(pair: &L2CandidatePair) -> RuleVerdict {
     }
 }
 
+/// Judge one L2 candidate pair with EVERY L2 rule and nothing else, and return the engine's decision.
+///
+/// This is the L2 twin of [`crate::identity::l1::decide_pair`], and it exists for one reason: **a caller
+/// that assembles the verdict vector by hand can put an L1 verdict in it**, and an L1 `Disqualifying`
+/// then erases this level for every pair, for ever — `decide` names the lexicographically smallest
+/// `Disqualifying`, and every `l1-*` id sorts before every `l2-*` id (story 6.11's registered row). Here
+/// the caller hands over a pair and its two sides and never sees a vector, so the vector this function
+/// builds holds the three L2 verdicts and only those.
+///
+/// ⚠️ **A TRIPWIRE, not a barrier** (story 5.12's narrowing): [`crate::identity::cascade::decide`] stays
+/// `pub` and callable with any vector. What this function buys is that the ordinary path — the one story
+/// 6.12's resolver takes — cannot mix levels, and a test asserts the vector's rule ids are exactly the
+/// three L2 ones.
+///
+/// # Arguments
+///
+/// `a` is the side of `pair.low()` and `b` the side of `pair.high()`. The two hostname rules are
+/// symmetric and the virtual-MAC reading reads the pair itself, so swapping `a` and `b` changes no
+/// conclusion — a test asserts that too, because the caller's pairing of sides to keys is exactly the kind
+/// of convention nothing else checks.
+///
+/// # What it can conclude today
+///
+/// `NoMatch { l2-virtual-mac-prefix }`, `Abstained { Ambiguous }` (`Supports` alone), or
+/// `Abstained { AbsenceOfProof }`. 🔴 **Never `Match`**: no L2 rule emits `Decisive`, and `decide` reaches
+/// `Match` only through one. That is story 6.12's headline finding and 6.9's before it; what makes a merge
+/// at L2 is registered with Epic 6's retrospective.
+pub fn decide_pair(pair: &L2CandidatePair, a: &L2Side<'_>, b: &L2Side<'_>) -> Decision {
+    decide(
+        vec![
+            verdict_for_hostname(a, b),
+            verdict_for_hostname_agreement(a, b),
+            verdict_for_virtual_mac(pair),
+        ],
+        CURRENT_RULESET_VERSION,
+    )
+}
+
 /// Tests for the L2 rules, over SYNTHETIC inputs only.
 ///
 /// Nothing here reads `fixtures/` — this crate may not touch the filesystem (D47). The
@@ -600,6 +645,7 @@ pub fn verdict_for_virtual_mac(pair: &L2CandidatePair) -> RuleVerdict {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identity::cascade::{Conclusion, IdentityAbstentionCause};
     use crate::observation::{
         ConnectorId, HostnameSource, L2DomainId, MacAddr, ObsId, Scope, Timestamp, VantageId,
     };
@@ -1555,5 +1601,114 @@ mod tests {
         // here: `Conclusion::Abstained { cause }` has no rule field, so the struct literal above would
         // not compile if it gained one. That is a better carrier than an assertion, and saying which
         // carries what is the point.
+    }
+
+    // ---- `decide_pair` (story 6.12): the L2 cascade, composed here so no caller mixes levels ----
+
+    fn nic(last: u8) -> MacAddr {
+        MacAddr([0x00, 0x11, 0x22, 0x33, 0x44, last])
+    }
+
+    /// The rule ids a decision's vector carries, in order.
+    fn rules_of(decision: &Decision) -> Vec<String> {
+        decision
+            .verdict_vector
+            .iter()
+            .map(|verdict| verdict.rule.0.clone())
+            .collect()
+    }
+
+    /// `obelix`: two NICs, one name. The shape the reference network carries (issue #158).
+    #[test]
+    fn two_nics_answering_to_one_name_are_an_ambiguity_and_never_a_match() {
+        let a = [observation(1, 1, Some("obelix.home.arpa"))];
+        let b = [observation(2, 2, Some("obelix.home.arpa"))];
+        let decision = decide_pair(&pair(nic(1), nic(2)), &side(&a), &side(&b));
+        assert_eq!(
+            decision.conclusion,
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::Ambiguous
+            },
+            "a shared name is weak evidence: Supports alone abstains, it never merges"
+        );
+    }
+
+    /// The vector carries EXACTLY the three L2 rules — no L1 verdict can enter through this path.
+    #[test]
+    fn the_vector_holds_the_three_l2_rules_and_nothing_else() {
+        let a = [observation(1, 1, Some("obelix"))];
+        let b = [observation(2, 2, Some("obelix"))];
+        let decision = decide_pair(&pair(nic(1), nic(2)), &side(&a), &side(&b));
+        assert_eq!(
+            rules_of(&decision),
+            vec![
+                "l2-different-hostname".to_string(),
+                "l2-hostname-agrees".to_string(),
+                "l2-virtual-mac-prefix".to_string(),
+            ]
+        );
+        assert!(
+            rules_of(&decision)
+                .iter()
+                .all(|rule| rule.starts_with("l2-")),
+            "an l1-* verdict here would erase this level for every pair"
+        );
+    }
+
+    /// A VRRP address in the pair is refused, and the refusal NAMES the reading — which it can only do
+    /// in an L2-only vector.
+    #[test]
+    fn a_virtual_router_address_in_the_pair_is_a_no_match_naming_the_reading() {
+        let a = [observation(1, 1, Some("rtr"))];
+        let b = [observation(2, 2, Some("rtr"))];
+        let decision = decide_pair(&pair(nic(1), virtual_mac()), &side(&a), &side(&b));
+        assert_eq!(
+            decision.conclusion,
+            Conclusion::NoMatch {
+                rule: RuleId("l2-virtual-mac-prefix".to_string())
+            }
+        );
+    }
+
+    /// Two different names, and no name at all, both abstain on absence of proof.
+    #[test]
+    fn disagreement_and_silence_both_abstain_on_absence_of_proof() {
+        let absence = Conclusion::Abstained {
+            cause: IdentityAbstentionCause::AbsenceOfProof,
+        };
+        let a = [observation(1, 1, Some("asterix"))];
+        let b = [observation(2, 2, Some("obelix"))];
+        assert_eq!(
+            decide_pair(&pair(nic(1), nic(2)), &side(&a), &side(&b)).conclusion,
+            absence
+        );
+        let a = [observation(1, 1, None)];
+        let b = [observation(2, 2, None)];
+        assert_eq!(
+            decide_pair(&pair(nic(1), nic(2)), &side(&a), &side(&b)).conclusion,
+            absence
+        );
+    }
+
+    /// Swapping the two sides changes no conclusion — the pairing of sides to keys is a convention
+    /// nothing else checks.
+    #[test]
+    fn swapping_the_sides_changes_no_conclusion() {
+        let cases: [(Option<&str>, Option<&str>); 4] = [
+            (Some("obelix"), Some("obelix")),
+            (Some("asterix"), Some("obelix")),
+            (None, Some("obelix")),
+            (None, None),
+        ];
+        for (x, y) in cases {
+            let a = [observation(1, 1, x)];
+            let b = [observation(2, 2, y)];
+            let p = pair(nic(1), nic(2));
+            assert_eq!(
+                decide_pair(&p, &side(&a), &side(&b)).conclusion,
+                decide_pair(&p, &side(&b), &side(&a)).conclusion,
+                "{x:?} / {y:?}"
+            );
+        }
     }
 }

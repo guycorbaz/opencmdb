@@ -1,10 +1,12 @@
 # generated: 2026-07-21
-# last_updated: 2026-08-30   (this commented twin had read 2026-08-01 while the live
+# last_updated: 2026-09-24   (this commented twin had read 2026-08-01 while the live
 #                             `last_updated:` field below said 2026-08-07 — two representations of
 #                             one date, one of them stale. Synced 2026-08-10; keep them in step.
 #                             ⚠️ They had DRIFTED AGAIN — 2026-08-26 here against 2026-08-24 below
 #                             — and were re-synced on 2026-08-28. Twice now: the comment asking
 #                             for them to be kept in step is not a mechanism.)
+#                             ⚠️ A THIRD drift, found 2026-09-24 at 6.12's contexting: 2026-08-30
+#                             here against 2026-09-19 below, both stale. Re-synced.
 # project: opencmdb
 # project_key: NOKEY
 # tracking_system: file-system
@@ -78,7 +80,7 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-09-19  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
+last_updated: 2026-09-24  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
                           # The first time in five weeks that what was built reached its user: the
                           # NAS had been on `0.1.0`, older than the identity engine, the write route
                           # and the ten screens, and nobody had checked.
@@ -5082,9 +5084,24 @@ development_status:
   #   ⚠️ And story 6.9 leaves it a measured warning: three L2 `must-merge` traps cannot pass under
   #       the present algebra, so no L2 story should promise the trap gate will close.
   # 5.9b's precedent; ⚠️ two races registered at Epic 5 lose their shield here
-  6-12-resolver-writes-device-groupings: ready-for-dev
-  #   🔑 NEXT, by Guy's reorder of 2026-09-23 and story 6.11's close on 2026-09-24 — the PIVOT:
-  #   the first story of this epic with a production caller, where `obelix` stops being two rows.
+  6-12-resolver-writes-device-groupings: review
+  #   🔧 DEVELOPED 2026-09-24 on its branch: l2::decide_pair, migration 0012 (l2_pair_decision, pair-keyed),
+  #   l2_repo.rs, l2_pass.rs; 777+219+110, ten gates; mutation pass 8 of 9 conforming (M6 is the finding).
+  #   ✅ CODE-REVIEWED 2026-09-25 by three isolated layers (25 findings, 2 decisions by Guy, 22 patches applied,
+  #   3 deferred); see the story's Review Findings.
+  #   📝 CONTEXTED 2026-09-24 (`6-12-resolver-writes-device-groupings.md`) — NOT developable until arbitrated
+  #   (true at contexting, discharged the same day):
+  #   (§0.1) no L2 rule emits `Decisive`, so no L2 pair can conclude `Match` and criterion 1 writes no
+  #   grouping of two interfaces on any input; (§0.2) `obelix` concludes `Ambiguous`, which
+  #   `guard_decision(&[])` refuses — inside the sweep's one transaction that rolls back L1 too;
+  #   (§0.3) no screen reads an interface or a device. Four decisions posed to Guy (§0.4 A–D).
+  #   ✅ VALIDATED 2026-09-24 by two layers: §0.1–§0.3 survive; the gap-hunt BUILT the recommended
+  #   shape and found four HIGHs against it (the grain, cross-sweep churn, two unfailable guards, and
+  #   6.13's tripwire promise unmeetable). ✅ ARBITRATED by Guy 2026-09-24: all seven on the
+  #   recommendation (A2 · sibling table · no interface adoption, re-owned to 6.18 · pair-keyed · evidence
+  #   on interfaces · persist Ambiguous+NoMatch only). obelix = two NICs (Guy). 6.14 follows 6.12 directly.
+  #   🔑 Queued NEXT by Guy's reorder of 2026-09-23 as the PIVOT: the first story of this epic with a
+  #   production caller. ~~where `obelix` stops being two rows~~ — FALSE twice (§0.2); withdrawn by PR #210.
   #   ⚠️ It inherits by NAME rather than by implication:
   #   (a) story 6.11's registered row: no L2 rule can ever be NAMED in the presence of any L1
   #       `Disqualifying` (`min()` over ids, and every `l1-*` sorts before every `l2-*`), so 6.12

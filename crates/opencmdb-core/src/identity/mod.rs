@@ -32,10 +32,13 @@
 //! files away, and its T9 named this file: the adjacent sentence was re-read and the false one two
 //! lines above was not. **A promise to re-read is not a re-read of what you did not look at.**)_
 //!
-//! **The L2 blocker has no production caller**, which is a different and still-true statement:
-//! [`blocking::l2_candidates`] is reached from its own tests and from `fixtures.rs`'s test module
-//! only. Story 6.12 is the first that will hand it a population. L1 emits three of the five
-//! verdicts; `Supports` and `Opposes` gain a producer with Epic 6's `l2-*` rules.
+//! **The L2 blocker has had a production caller since story 6.12**: `opencmdb-bin`'s `l2_pass::judge`
+//! hands [`blocking::l2_candidates`] every interface key of a sweep, and [`l2::decide_pair`] judges
+//! each proposed pair with the L2 rules alone. _(This paragraph read "has no production caller … Story
+//! 6.12 is the first that will hand it a population" — true until that story, and corrected in it.)_
+//! L1 emits three of the five verdicts; the `l2-*` rules emit `Supports`, `Opposes` and
+//! `Disqualifying` — and **no L2 rule emits `Decisive`, so no L2 pair can conclude `Match`** (story
+//! 6.12's headline finding).
 //!
 //! The architecture's source tree names an `IdentityError` on this module [architecture.md:3366].
 //! It is absent because there is no fallible operation to carry it: choosing a cause enum cannot

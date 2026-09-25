@@ -94,19 +94,22 @@
 //! [`load_current_engine_link`] says which test measures which, because the doc used to claim the
 //! second while every test in the workspace exercised the first.
 //!
-//! # Not wired into `main.rs`
+//! # Wired into the shipped binary since story 5.14
 //!
-//! By decision, not by omission. The named consumers are stories 5.10 and 5.11; wiring the startup
-//! scan would make every deployment write links with no page to display them (story 5.14) and no
-//! purge to remove them (story 5.10) — a behaviour change no acceptance criterion asks for. Hence
-//! the `allow` below, in the idiom `repo.rs:11` already carries.
-#![allow(dead_code)]
+//! `scan_pass::poll_ingest_resolve` calls [`resolve`] after every sweep, inside one transaction.
+//! _(This section read **"Not wired into `main.rs` — by decision"**, over a blanket
+//! `#![allow(dead_code)]`, until story 6.12: true when story 5.9b wrote it and false from story 5.14
+//! onward, for seven epics' worth of stories that each read this file. The blanket `allow` went with
+//! it, so what is dead here is now named rather than hidden — PR #163's P5 measured a blanket `allow`
+//! hiding a severed MAC read.)_
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use opencmdb_core::identity::blocking::{CandidatePair, candidates};
 use opencmdb_core::identity::cascade::{Conclusion, Decision, IdentityAbstentionCause, decide};
-use opencmdb_core::identity::l1::{CURRENT_RULESET_VERSION, decide_pair, decide_singleton, join};
+use opencmdb_core::identity::l1::{
+    CURRENT_RULESET_VERSION, L1Key, decide_pair, decide_singleton, join,
+};
 use opencmdb_core::observation::{InterfaceId, LinkId, ObsId, Observation, Timestamp};
 use opencmdb_core::repo::RepositoryError;
 use sqlx::MySqlConnection;
@@ -171,6 +174,8 @@ pub struct Resolution {
     /// the fact kinds the shipped connector cannot see. *A capability the source lacks is one
     /// sentence about the source, not one row per sighting forever.*
     pub sightings_without_a_key: usize,
+    /// What the L2 pass did over the same sweep (story 6.12).
+    pub l2: crate::l2_pass::L2Resolution,
 }
 
 impl Resolution {
@@ -282,6 +287,8 @@ pub async fn resolve_within(
     // Which SUBJECTS this pass wrote or kept, per observation. What is not in here at the end is a
     // slot the input no longer supports, and the tail below closes it.
     let mut visited: BTreeMap<ObsId, BTreeSet<String>> = BTreeMap::new();
+    // The interface each key landed on — what the L2 pass judges pairs of (story 6.12).
+    let mut interfaces: BTreeMap<L1Key, InterfaceId> = BTreeMap::new();
 
     for ((l2_domain, mac_canon), group) in &groups {
         let (first_seen_at, last_seen_at) = seen_window(group, &by_id);
@@ -313,6 +320,7 @@ pub async fn resolve_within(
                 minted
             }
         };
+        interfaces.insert((*l2_domain, *mac_canon), interface);
 
         for obs_id in group {
             let observation = by_id[obs_id];
@@ -392,6 +400,10 @@ pub async fn resolve_within(
             summary.links_vacated += 1;
         }
     }
+
+    // L2 after L1, in the same transaction: every pair of the interfaces this sweep carried
+    // (story 6.12). See `l2_pass`'s module doc for what is written and what never is.
+    summary.l2 = crate::l2_pass::judge(&mut *conn, &groups, &by_id, &interfaces).await?;
 
     Ok(summary)
 }
@@ -519,6 +531,9 @@ fn seen_window(
 /// `cascade.rs` says Epic 6's cascade ends it. On that day the evidence of verdicts 2..n would
 /// vanish with nothing red. Registered with Epic 6 rather than pre-solved: unioning evidence across
 /// a vector is a decision about what a link MEANS, and no producer exists to decide it against.
+/// ⚠️ *Story 6.12 did not end it*: the L2 pass writes its three-verdict decisions through
+/// `l2_repo`, which stores the verdict vector and no observation ids (Guy's arbitration F) — this
+/// function still sees L1's single-verdict decisions only.
 async fn write_link(
     conn: &mut MySqlConnection,
     observation: &Observation,
@@ -698,6 +713,12 @@ fn same_decision(
 ///   `IS NOT NULL`. *"A decision names the rule that settled it"* is not met by an empty name, and
 ///   D19 wants the id left behind because a rule that fires without one is undebuggable.
 ///   `0003_resolver_guards.sql` carries the same refusal in DDL, as a second line of defence.
+///
+/// ✅ **Story 6.12 produced the first `Ambiguous` and it does NOT come through here**: an L2 ambiguity is
+/// written by `l2_pass` into `l2_pair_decision`, whose two NOT NULL interface columns ARE its
+/// candidates — so the invariant this guard protects holds there by construction. Routed through this
+/// guard inside the sweep's transaction, the same decision rolled back every L1 link (measured by
+/// 6.12's validation). What follows is therefore still true of L1 alone.
 ///
 /// ⚠️ **Nothing fills `candidates_for_link` yet**: the only call site passes `&[]`, and this pass
 /// writes no `link_candidate` row because L1 has no ambiguity to hold candidates for. So the day a
