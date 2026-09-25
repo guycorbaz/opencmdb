@@ -5115,7 +5115,10 @@ development_status:
   #   (d) story 6.9's warning stands: three L2 `must-merge` traps cannot pass under the present
   #       algebra, so 6.12 must not promise the trap gate will close.
   # `link_candidate`'s first production writer; ⚠️ story 5.14b's tripwire REDS here by design
-  6-13-first-ambiguous-with-its-candidates: backlog
+  6-13-first-ambiguous-with-its-candidates: done
+  #   ✅ CLOSED by Guy, 2026-09-25 — ABSORBED, no story file ever written: its writer is 6.12's
+  #   (`l2_pair_decision`, Ambiguous with the pair as its candidates), its guard is bypassed at L2 by design,
+  #   and its tripwire was replaced by 6.14's end-to-end test. `done` because no status says "absorbed".
   #   🔴 ABSORBED into 6.12 by Guy's act of 2026-09-24: its writer (Ambiguous + candidates) moved there,
   #   and its tripwire criterion is unmeetable (the slice has no L2 pair). Closed or kept at 6.12's merge.
   #   ⚠️ 6.12 IS MERGED (2026-09-25) and NO residue was found: its writer is 6.12's, its guard is bypassed by
