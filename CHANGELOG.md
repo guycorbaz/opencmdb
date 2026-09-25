@@ -8,6 +8,52 @@ schema will move.
 
 ---
 
+## 0.6.0 — the product shows you the machine it may be counting twice
+
+🔑 **A machine with two network cards answering to one name is now ONE question on the triage screen,
+where it used to be two unrelated rows.** `0.5.0` taught the scanner to read hardware addresses, so the
+product could see two interfaces; this version compares them. Two cards that answer to the same name
+appear as one **Ambiguous** line: its pane lists each card's hardware address, addresses and names *as
+the network shows them now*, says why the engine asks rather than decides — a shared name is weak
+evidence on its own, since several machines can share one — and carries one control, **Resolve**,
+labelled *not yet*.
+
+⚠️ **You cannot answer the question yet.** What *"these are one machine"* or *"these are two"* should
+record is still being decided; until then the engine keeps asking rather than guessing. The addresses
+concerned keep their own *Add* control, and each says it belongs to an open question — ⚠️ adding one
+creates a record for that address alone and does not answer the question.
+
+⚠️ **The question follows the network.** If the names stop matching — a reverse-DNS answer that comes
+and goes — it leaves the queue, and it returns when they match again.
+
+### Also in this version
+
+- **The documenting control says what it does.** You press *Add* and the product now answers that it
+  **added** the record — it used to answer *Documented*, the internal name of the gesture, in twenty-one
+  places in both languages (issue #200). The inventory says what you can and cannot do from it (#201).
+- **A conflict's control changed name.** Two sources disagreeing about one field used to offer
+  *Resolve*; it now offers *Add* at field level, still labelled *not yet* — *Resolve* names the
+  ambiguity only, so one word no longer names two acts.
+- **The identity section counts, on a line of its own, the machines possibly counted more than once**
+  — never added to the sighting counts beside it.
+
+### When you upgrade
+
+⚠️ **One migration applies at boot, `0012`**, and it is additive: it creates the table where the engine
+keeps its decisions about PAIRS of interfaces (`l2_pair_decision`). Nothing is written to it until the
+next sweep. The engine's rows in it can be deleted by hand and are rebuilt by the following sweeps; the
+administrator manual says how. As always here, **no upgrade path is promised between `0.x` tags**.
+
+### What this version does NOT do
+
+It groups nothing. **No rule yet concludes that two interfaces ARE one machine** — the one that
+compares names only ever supports the idea, and support alone is weak evidence by design — so nothing
+is merged, and the inventory still lists what you documented. The machine running opencmdb is still
+never among the interfaces (a host keeps no neighbour entry for its own address), and a deployment
+behind a Docker bridge still reads no hardware address at all.
+
+---
+
 ## 0.5.1 — the version the binary reports
 
 🔴 **`0.5.0`'s image reports `0.4.0`.** The tag was cut over a `crates/opencmdb-bin/Cargo.toml`
