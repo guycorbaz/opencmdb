@@ -10,6 +10,7 @@
 // `warn` for now, graduating to `-D missing_docs` once the tree is clean.
 #![deny(missing_docs)]
 
+mod ambiguity_view;
 mod arp_ping;
 mod auth;
 mod dashboard_view;

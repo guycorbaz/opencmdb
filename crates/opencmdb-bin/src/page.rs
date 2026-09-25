@@ -231,6 +231,16 @@ pub(crate) struct Strings {
     pub(crate) identity_nothing_seen: String,
     pub(crate) identity_all_placed: String,
     pub(crate) identity_settled: String,
+    /// The L2 questions' reach line — its OWN unit, groups of interfaces (story 6.14, AC5).
+    pub(crate) identity_ambiguous: String,
+    /// Under an Ambigu pane's candidates: they are shown AS SEEN NOW, not as the decision saw them
+    /// (Guy's decision F — its cost said on the screen, story 6.14).
+    pub(crate) ambiguous_seen_now: String,
+    /// The heading over an Ambigu pane's evidence sentences (story 6.14).
+    pub(crate) ambiguous_why: String,
+    /// On a `Nouveau` pane whose address a candidate carries: the link to the open question
+    /// (Guy's decision C, story 6.14).
+    pub(crate) ambiguous_open_question: String,
 }
 
 /// A count and its noun, INFLECTED — `1 field`, `2 fields`, `1 champ`, `2 champs`.
@@ -305,6 +315,10 @@ pub(crate) fn strings() -> Strings {
         identity_unit: t!("identity.unit").to_string(),
         identity_nothing_seen: t!("identity.nothing_seen").to_string(),
         identity_all_placed: t!("identity.all_placed").to_string(),
+        identity_ambiguous: t!("identity.ambiguous_groups").to_string(),
+        ambiguous_seen_now: t!("triage.ambiguous.seen_now").to_string(),
+        ambiguous_why: t!("triage.ambiguous.why").to_string(),
+        ambiguous_open_question: t!("triage.ambiguous.open_question").to_string(),
         identity_settled: t!("identity.settled").to_string(),
     }
 }
@@ -606,6 +620,17 @@ async fn triage_view(
         .map_err(server_error)?;
     let observations = load_observation_facts(pool).await.map_err(server_error)?;
     let reach = count_engine_reach(pool).await.map_err(server_error)?;
+    // Story 6.14: the L2 questions, and each of their interfaces' latest placed sighting.
+    let ambiguity = crate::ambiguity_view::AmbiguityInput {
+        pairs: crate::l2_repo::load_current_ambiguous_pairs(pool)
+            .await
+            .map_err(server_error)?,
+        sightings: crate::l2_repo::load_ambiguous_interface_sightings(pool)
+            .await
+            .map_err(server_error)?,
+    };
+    let mut identity = build_identity_view(reach);
+    identity.ambiguous_groups = crate::ambiguity_view::groups(&ambiguity.pairs).len();
     Ok((
         build_triage_offering(
             declared,
@@ -615,8 +640,9 @@ async fn triage_view(
             selected,
             sort_by_age,
             document_enabled,
+            &ambiguity,
         ),
-        build_identity_view(reach),
+        identity,
     ))
 }
 
@@ -2393,7 +2419,7 @@ mod tests {
         // beside it claimed the opposite. Moving either number is a deliberate act.
         assert_eq!(
             (literals, checked),
-            (19, 169),
+            (19, 173),
             "the walk found {literals} `…Strings` literal(s) and {checked} field(s); if that is \
              deliberate, move these numbers after READING what the walk printed"
         );
@@ -3478,7 +3504,54 @@ mod tests {
             selected,
             sort_by_age,
             false,
+            &crate::ambiguity_view::AmbiguityInput::default(),
         )
+    }
+
+    /// The verdict vector `obelix`'s pair carries — two NICs, one name (story 6.14).
+    const OBELIX_VERDICTS: &str =
+        "l2-different-hostname=neutral;l2-hostname-agrees=supports;l2-virtual-mac-prefix=neutral";
+
+    /// `obelix` as the triage screen reads it: ONE current ENGINE `Ambiguous` pair over two interfaces,
+    /// each placed on a sighting carrying its own address and the shared name, taken at `seconds`.
+    ///
+    /// 🔴 **The guards story 6.14's AC1 names are fed THIS, never the empty input** — the validation
+    /// measured every existing kind and gesture guard green over a prototype that could have put a live
+    /// documenting gesture on an Ambigu pane, because they never met one.
+    fn obelix_question(
+        seconds: i64,
+    ) -> (
+        crate::ambiguity_view::AmbiguityInput,
+        Vec<crate::repo::ObservedBatch>,
+    ) {
+        let a = batch_with_id(
+            "arp",
+            seconds,
+            vec![ipv4("192.0.2.8"), hostname("obelix.home.arpa")],
+            0xA8,
+        );
+        let b = batch_with_id(
+            "arp",
+            seconds,
+            vec![ipv4("192.0.2.9"), hostname("obelix.home.arpa")],
+            0xA9,
+        );
+        let input = crate::ambiguity_view::AmbiguityInput {
+            pairs: vec![("iface-a".into(), "iface-b".into(), OBELIX_VERDICTS.into())],
+            sightings: vec![
+                (
+                    "iface-a".into(),
+                    "00:11:22:33:44:08".into(),
+                    a.id.to_string(),
+                ),
+                (
+                    "iface-b".into(),
+                    "00:11:22:33:44:09".into(),
+                    b.id.to_string(),
+                ),
+            ],
+        };
+        (input, vec![a, b])
     }
 
     fn batch(source: &str, seconds: i64, facts: Vec<Fact>) -> crate::repo::ObservedBatch {
@@ -4962,13 +5035,14 @@ mod tests {
         );
     }
 
-    /// The bar carries the mock's five controls, all planned, and `Résoudre` follows the CAUSE.
+    /// The bar carries the mock's five controls on a gap and a conflict, all planned, and `Résoudre` is
+    /// the AMBIGUITY's control alone (story 6.14 — it followed the conflict's cause until then).
     ///
     /// 🔴 **The primary is chosen from the cause, never from the translated `kind`.** Branching on
     /// the rendered string would be story 6b.3's `role_key: "example.badge"` defect: a real,
     /// resolving, wrong value that every shape and resolvability check passes.
     #[test]
-    fn the_bar_shows_five_planned_controls_and_resolve_follows_the_cause() {
+    fn the_bar_shows_five_planned_controls_and_resolve_belongs_to_the_ambiguity() {
         let declared = vec![
             declared_row("drift", "ipv4", "192.0.2.10"),
             declared_row("drift", "hostname", "nas"),
@@ -5031,9 +5105,36 @@ mod tests {
 
         let conflict = pane_for("conflit:clash");
         assert_eq!(
-            conflict.gestures[0].label, resolving,
-            "a CONFLICT offers Resolve — and the choice comes from the cause, not from the \
-             translated kind string"
+            conflict.gestures[0].label, documenting,
+            "a CONFLICT offers the documenting gesture at field level (Guy's decision B, story 6.14): \
+             two sources disagreeing about a field are answered by declaring its value. It offered \
+             *Résoudre* until then, because the mock did — one word naming two acts"
+        );
+        assert!(
+            conflict.gestures.iter().all(|g| g.label != resolving),
+            "no control on a conflict says *Résoudre* — that word is the ambiguity's now"
+        );
+
+        // 🔴 Story 6.14: an AMBIGUITY is fed to this guard, so it MEETS an Ambigu pane. Guy's decision
+        // E: *Résoudre* ALONE, planned — not Epic 7's four gap gestures, which answer a gap.
+        let (question, obelix) = obelix_question(60);
+        let ambiguous = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            obelix,
+            at(1_000),
+            Some("ambigu:iface-a"),
+            false,
+            true,
+            &question,
+        )
+        .selected
+        .expect("the Ambigu row has a pane");
+        assert_eq!(ambiguous.gestures.len(), 1, "one control on an ambiguity");
+        assert_eq!(ambiguous.gestures[0].label, resolving);
+        assert!(
+            matches!(ambiguous.gestures[0].nature, GestureRender::Planned(_)),
+            "*Résoudre* does not act yet — what an answer writes is story 6.14b's"
         );
     }
 
@@ -5075,6 +5176,7 @@ mod tests {
             Some("nouveau:192.0.2.88"),
             false,
             false,
+            &crate::ambiguity_view::AmbiguityInput::default(),
         ));
         assert_eq!(
             wrapped, direct,
@@ -5103,6 +5205,7 @@ mod tests {
                 Some("nouveau:192.0.2.77"),
                 false,
                 enabled,
+                &crate::ambiguity_view::AmbiguityInput::default(),
             )
             .selected
             .expect("the nouveau row has a pane")
@@ -5164,6 +5267,11 @@ mod tests {
             batch("arp", 40, vec![ipv4("192.0.2.30"), hostname("two")]),
             batch_with_id("arp", 50, vec![ipv4("192.0.2.99")], 0xB2),
         ];
+        // 🔴 Story 6.14: fed an ambiguity — `obelix`'s two NICs — so this guard MEETS an Ambigu row.
+        // Its first form never did, and the validation measured it green over a prototype that could
+        // have put a live documenting gesture on an Ambigu pane.
+        let (question, obelix) = obelix_question(60);
+        let observations: Vec<_> = observations.into_iter().chain(obelix).collect();
         let view = build_triage_offering(
             declared.clone(),
             Vec::new(),
@@ -5172,6 +5280,7 @@ mod tests {
             None,
             false,
             true,
+            &question,
         );
 
         let ids: Vec<String> = view.rows.iter().map(|r| r.id.clone()).collect();
@@ -5186,6 +5295,7 @@ mod tests {
                     Some(id),
                     false,
                     true,
+                    &question,
                 )
                 .selected
                 .expect("every queued row has a pane")
@@ -5202,11 +5312,23 @@ mod tests {
             "the premise: this fixture produces kinds other than `nouveau`, {} rows in all: {ids:?}",
             ids.len()
         );
+        assert!(
+            ids.iter().any(|id| id.starts_with("ambigu:")),
+            "the premise: an Ambigu row is on screen, or this guard says nothing about it: {ids:?}"
+        );
+        let mut live = live;
+        live.sort();
         assert_eq!(
             live,
-            vec!["nouveau:192.0.2.99".to_string()],
+            vec![
+                "nouveau:192.0.2.8".to_string(),
+                "nouveau:192.0.2.9".to_string(),
+                "nouveau:192.0.2.99".to_string(),
+            ],
             "the documenting gesture belongs to the UNKNOWN case alone — every other kind names \
-             an entity that already exists, where `POST /document-all` can only answer 409"
+             an entity that already exists, where `POST /document-all` can only answer 409, and an \
+             AMBIGUITY is a doubt to lift, not an entity to create. ⚠️ `obelix`'s two addresses keep \
+             theirs: Guy's decision C (story 6.14)"
         );
     }
 
@@ -5266,6 +5388,7 @@ mod tests {
             Some("nouveau:192.0.2.77"),
             false,
             true,
+            &crate::ambiguity_view::AmbiguityInput::default(),
         );
         let pane = view.selected.expect("the nouveau row has a pane");
 
@@ -5356,6 +5479,7 @@ mod tests {
             Some("nouveau:192.0.2.77"),
             false,
             true,
+            &crate::ambiguity_view::AmbiguityInput::default(),
         );
         let identity = build_identity_view(vec![
             reach("abstained", Some("absence_of_proof"), 7),
@@ -5445,6 +5569,7 @@ mod tests {
             Some("nouveau:192.0.2.77"),
             false,
             true,
+            &crate::ambiguity_view::AmbiguityInput::default(),
         );
 
         let rows: Vec<_> = view
@@ -5579,6 +5704,7 @@ mod tests {
                 None,
                 false,
                 true,
+                &crate::ambiguity_view::AmbiguityInput::default(),
             )
             .total
         };
@@ -5689,6 +5815,7 @@ mod tests {
                 Some("nouveau:192.0.2.77"),
                 false,
                 enabled,
+                &crate::ambiguity_view::AmbiguityInput::default(),
             );
             let subject = view
                 .selected
@@ -5826,6 +5953,7 @@ mod tests {
                     Some("nouveau:192.0.2.77"),
                     false,
                     enabled,
+                    &crate::ambiguity_view::AmbiguityInput::default(),
                 ),
                 identity: no_reach(),
                 documented: String::new(),

@@ -80,8 +80,10 @@ identity.because:
   en: "Not placed, because:"
   fr: "Non rattachés, parce que :"
 identity.all_placed:
-  en: "Every sighting was placed."
-  fr: "Chaque constat a été rattaché."
+  # ⚠️ "…placed ON AN INTERFACE" since story 6.14: rendered directly under an Ambigu pane, the bare
+  # "Every sighting was placed." read as if every question were settled — true at L1, silent on L2.
+  en: "Every sighting was placed on an interface."
+  fr: "Chaque constat a été rattaché à une interface."
 identity.nothing_seen:
   # 🔴 This sentence used to read "Nothing observed yet — run a scan and this fills in." It was
   # true of a virgin install and FALSE the moment a scan landed on a source that cannot identify
@@ -95,8 +97,15 @@ identity.nothing_seen:
 # THIS BUILD that Epic 6 removes; the second is a permanent property of the problem. A reader who
 # meets them fused carries the temporary one as permanent.
 identity.unit:
-  en: "This counts sightings, not devices: one machine seen ten times counts ten. Grouping them is still to come."
-  fr: "Ceci compte des constats, pas des appareils : une machine vue dix fois compte dix. Leur regroupement reste à venir."
+  # ⚠️ "Grouping them is still to come" stood here until story 6.14, which put an L2 question on the
+  # same screen: the engine now COMPARES interfaces and, where two may be one machine, ASKS rather
+  # than groups. The sighting unit itself stays true — no L2 `Match` exists, so nothing is grouped.
+  en: "This counts sightings, not devices: one machine seen ten times counts ten. The engine does not group interfaces into machines; where several may be one machine, it asks in the queue."
+  fr: "Ceci compte des constats, pas des appareils : une machine vue dix fois compte dix. Le moteur ne regroupe pas les interfaces en machines ; quand plusieurs peuvent n'en faire qu'une, il pose la question dans la file."
+identity.ambiguous_groups:
+  # Story 6.14, AC5: the L2 questions in THEIR unit — groups of interfaces — never summed with sightings.
+  en: "Machines possibly counted more than once:"
+  fr: "Machines peut-être comptées plus d'une fois :"
 identity.floor:
   en: "The floor is set by the data, not by the engine: no amount of correctness recovers a signal the source never sent."
   fr: "Le plancher est fixé par les données, pas par le moteur : aucune justesse ne récupère un signal que la source n'a jamais émis."
@@ -335,6 +344,36 @@ triage.n_fields_one:
 triage.n_fields_other:
   en: "%{n} fields"
   fr: "%{n} champs"
+triage.ambiguous.n_candidates_one:
+  en: "%{n} candidate"
+  fr: "%{n} candidat"
+triage.ambiguous.n_candidates_other:
+  en: "%{n} candidates"
+  fr: "%{n} candidats"
+triage.ambiguous.no_address:
+  en: "no address seen"
+  fr: "aucune adresse vue"
+triage.ambiguous.seen_now:
+  # Guy's decision F (2026-09-25): the decision stores its verdicts, not what they read — so the
+  # candidates are shown as the network shows them NOW, and the screen says so.
+  en: "Shown as the network shows them now; the engine may have reached its decision on older answers."
+  fr: "Affichés tels que le réseau les montre maintenant ; le moteur a pu décider sur des réponses plus anciennes."
+triage.ambiguous.why:
+  en: "Why the engine asks rather than decides:"
+  fr: "Pourquoi le moteur demande au lieu de décider :"
+triage.ambiguous.evidence.same_name:
+  en: "They answer to the same name — weak evidence on its own, since several machines can share one."
+  fr: "Elles répondent au même nom — un indice faible à lui seul, car plusieurs machines peuvent en partager un."
+triage.ambiguous.evidence.different_names:
+  en: "They answer to different names."
+  fr: "Elles répondent à des noms différents."
+triage.ambiguous.evidence.unfamiliar:
+  # Total over a token this build does not know (story 5.14b's arbitration 11: the reader never fails).
+  en: "A rule this version does not describe weighed in."
+  fr: "Une règle que cette version ne décrit pas a pesé."
+triage.ambiguous.open_question:
+  en: "This address belongs to an open question: are these interfaces one machine?"
+  fr: "Cette adresse fait partie d'une question ouverte : ces interfaces sont-elles une seule machine ?"
 inventory.title:
   en: "Your records"
   fr: "Vos fiches"
@@ -504,8 +543,13 @@ gesture.not_built:
   # plain sentence — and `the_rendered_bar_says_the_gesture_is_not_built` reds on exactly that: the
   # sentence names the badge it scopes itself to, INTERPOLATED, so the two cannot drift apart. The
   # improvement was to say what the gestures DO; losing the coupling was not part of it.
-  en: "The gestures marked %{badge} are still to come: resolve an ambiguity, accept a gap as permanent, snooze a question, attach a sighting to a device."
-  fr: "Les gestes marqués %{badge} sont à venir : résoudre une ambiguïté, accepter un écart durable, mettre une question en veille, rattacher un constat à un appareil."
+  # ⚠️ "resolve an ambiguity" was the first item of this list until story 6.14 — and the sentence
+  # rendered under a CONFLICT's bar, whose *Résoudre* it thereby promised to resolve an ambiguity:
+  # the collision story 6b.4 noted and nobody registered. Guy's decision B moved *Résoudre* to the
+  # ambiguity, whose pane says its own sentence (`gesture.not_built_resolve`); this list names what
+  # IS on these bars, the field-level documenting gesture first.
+  en: "The gestures marked %{badge} are still to come: declare a field's value, accept a gap as permanent, snooze a question, attach a sighting to a device."
+  fr: "Les gestes marqués %{badge} sont à venir : déclarer la valeur d'un champ, accepter un écart durable, mettre une question en veille, rattacher un constat à un appareil."
 # 🔴 `gesture.document`, NOT `gesture.merge`, and the English value is `Document` — Guy's
 # arbitration 1 of 2026-08-21, story 6b.10. The binding glossary retires `merge` IN ENGLISH by
 # name (`prd.md:1037`, `ux-design-specification.md:1386`): *"it names the forbidden operation —
@@ -538,6 +582,11 @@ gesture.document:
 gesture.resolve:
   en: "Resolve"
   fr: "Résoudre"
+gesture.not_built_resolve:
+  # Story 6.14: the sentence under an AMBIGUITY's bar, which carries *Résoudre* alone. What an answer
+  # WRITES is story 6.14b's — so this says what answering will be, and that it is not here yet.
+  en: "Marked %{badge}: resolving — saying whether these interfaces are one machine or several — is still to come. Until then the engine keeps asking rather than guessing."
+  fr: "Marqué %{badge} : résoudre — dire si ces interfaces sont une seule machine ou plusieurs — est à venir. D'ici là, le moteur continue de demander plutôt que de deviner."
 gesture.accept_gap:
   en: "Accept the gap"
   fr: "Accepter l'écart"

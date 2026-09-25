@@ -182,17 +182,12 @@ pub(crate) enum PrimaryState {
 }
 
 pub(crate) fn action_bar(primary_key: &'static str, primary: PrimaryState) -> Vec<GestureView> {
-    // ⚠️ The primary's owner FOLLOWS the primary: *Merger* is story 6.4's (FR13(a) on the
-    // abstention line), *Résoudre* needs FR16's ranked candidates and is Epic 6's. This read "6.4"
-    // for both until the code review — invisible, because nothing renders `owner`, which is exactly
-    // why it would still have been wrong the day something did.
-    // ⚠️ *Merger* on a row that is not `Nouveau` is FIELD-level documenting — FR13(b), Epic 7's —
-    // and not the whole-record gesture story 6.4 shipped. This read `"6.4"` until that story's
-    // code review, i.e. it named as owner a story that had already shipped.
-    let primary_owner = match primary_key {
-        "gesture.resolve" => "6",
-        _ => "7",
-    };
+    // ⚠️ The primary's owner is Epic 7's wherever it does not act: the documenting gesture at FIELD
+    // level — FR13(b) — on a gap, an absence or a conflict. 🔴 This read `"gesture.resolve" => "6"`
+    // until story 6.14, because a CONFLICT carried *Résoudre* after the mock. Guy's decision B moved
+    // *Résoudre* to the AMBIGUITY, whose pane builds its own bar (`ambiguity_view::resolve_bar`), and
+    // gave the conflict the documenting gesture — so no caller passes `gesture.resolve` here now.
+    let primary_owner = "7";
     let mut bar = planned_gestures(&[
         ("gesture.accept_gap", "7"),
         ("gesture.snooze", "7"),
@@ -339,6 +334,19 @@ pub(crate) struct DetailPane {
     /// Guy's arbitration — so the gesture writes what the network shows now, not the first thing
     /// it ever showed.
     pub(crate) subject: String,
+    /// The candidates of an Ambigu row — two observed interfaces or more, and NO declared side
+    /// (story 6.14). Empty on every other kind, where the two photos stand instead. 🔴 An ambiguity
+    /// rendered in the two-photo shape put one candidate under a *Declared* heading — a false
+    /// heading no guard could see (the validation's prototype).
+    pub(crate) candidates: Vec<crate::ambiguity_view::Candidate>,
+    /// One sentence per verdict that argued, for an Ambigu row; empty otherwise.
+    pub(crate) evidence: Vec<String>,
+    /// For a `Nouveau` row whose address a candidate of an open question carries: the link to that
+    /// question (Guy's decision C — the row keeps *Ajouter*, and says it belongs to a question).
+    pub(crate) open_question: Option<String>,
+    /// The sentence under this pane's bar when it is not the generic one — an Ambigu pane says what
+    /// *Résoudre* will do (story 6.14). Empty everywhere else, where `gesture.not_built` stands.
+    pub(crate) not_built: String,
 }
 
 /// Everything `/triage` renders: the queue, the selection, and the sort's state.
@@ -423,6 +431,7 @@ pub(crate) fn build_triage_offering(
     selected: Option<&str>,
     sort_by_age: bool,
     document_enabled: bool,
+    ambiguity: &crate::ambiguity_view::AmbiguityInput,
 ) -> TriageView {
     use rust_i18n::t;
 
@@ -520,6 +529,10 @@ pub(crate) fn build_triage_offering(
             panes.push((
                 id,
                 DetailPane {
+                    candidates: Vec::new(),
+                    evidence: Vec::new(),
+                    open_question: None,
+                    not_built: String::new(),
                     // No documenting gesture on this kind, so no subject to act on. ⚠️ NOT
                     // `SwitchedOff`: adopting one field of an existing record is FR13(b), Epic
                     // 7's, and telling the operator to set a switch would name a remedy that
@@ -567,18 +580,20 @@ pub(crate) fn build_triage_offering(
             panes.push((
                 id,
                 DetailPane {
+                    candidates: Vec::new(),
+                    evidence: Vec::new(),
+                    open_question: None,
+                    not_built: String::new(),
                     // No documenting gesture on this kind, so no subject to act on.
                     subject: String::new(),
                     // 🔴 From the CAUSE, never from the translated label: the mock shows *Résoudre*
                     // on a conflict and *Merger* elsewhere, and branching on the rendered string is
                     // story 6b.3's wrong-namespace defect waiting.
-                    gestures: action_bar(
-                        match cause {
-                            AbstentionCause::ConflictingObservations => "gesture.resolve",
-                            _ => "gesture.document",
-                        },
-                        PrimaryState::NotBuilt,
-                    ),
+                    // Guy's decision B (2026-09-25, story 6.14): *Résoudre* names the AMBIGUITY gesture,
+                    // and two sources disagreeing about a field are answered by declaring its value —
+                    // the documenting gesture at field level, Epic 7's FR13(b). A conflict used to
+                    // carry *Résoudre* because the mock put it there, which made one word name two acts.
+                    gestures: action_bar("gesture.document", PrimaryState::NotBuilt),
                     kind: label.to_string(),
                     entity: ipv4.clone(),
                     field: String::new(),
@@ -686,6 +701,10 @@ pub(crate) fn build_triage_offering(
             panes.push((
                 id,
                 DetailPane {
+                    candidates: Vec::new(),
+                    evidence: Vec::new(),
+                    open_question: None,
+                    not_built: String::new(),
                     // The MOST RECENT sighting of this address, overwritten in place
                     // above when a later one arrives (Guy's arbitration, story 6.4).
                     subject: batch.id.to_string(),
@@ -713,6 +732,20 @@ pub(crate) fn build_triage_offering(
     }
 
     // AC3: age sorting is available and OFF by default — oldest first when on.
+    // The L2 questions (story 6.14): one row per group, and the link from each `Nouveau` row whose
+    // address a candidate carries.
+    let (ambiguous_rows, ambiguous_panes, address_to_group) =
+        crate::ambiguity_view::ambiguity_rows(ambiguity, &observations, now, sort_by_age);
+    for (id, pane) in &mut panes {
+        if let Some(address) = id.strip_prefix("nouveau:")
+            && let Some(group) = address_to_group.get(address)
+        {
+            pane.open_question = Some(row_href(group, sort_by_age));
+        }
+    }
+    rows.extend(ambiguous_rows);
+    panes.extend(ambiguous_panes);
+
     if sort_by_age {
         rows.sort_by_key(|r| std::cmp::Reverse(r.age_seconds));
     }

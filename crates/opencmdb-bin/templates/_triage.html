@@ -89,6 +89,29 @@
     <aside class="photos">
       <p class="kind mono">{{ pane.kind }}</p>
       <h2 class="mono">{{ pane.entity }}{% if !pane.field.is_empty() %} · {{ pane.field }}{% endif %}</h2>
+      {#- 🔴 An Ambigu pane has CANDIDATES and no declared side (story 6.14): rendered in the two-photo
+           shape, one candidate sat under a *Declared* heading — a false heading no guard could see. Each
+           candidate carries its own freshness (story 6b.4's rule), and the sentence under them says they
+           are shown AS SEEN NOW (Guy's decision F). -#}
+      {% if !pane.candidates.is_empty() %}
+      <div class="cols candidates">
+        {% for c in pane.candidates %}
+        <div class="col photo candidate">
+          <h3 class="mono">{{ c.mac }}</h3>
+          <p class="value mono">{{ c.addresses }}</p>
+          {% if !c.names.is_empty() %}<p class="value">{{ c.names }}</p>{% endif %}
+          <p class="meta muted">{{ c.freshness }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="muted">{{ s.ambiguous_seen_now }}</p>
+      {% if !pane.evidence.is_empty() %}
+      <p class="muted">{{ s.ambiguous_why }}</p>
+      <ul class="evidence">
+        {% for e in pane.evidence %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% else %}
       <div class="cols">
         <div class="col photo declared">
           <h3>{{ s.declared }}</h3>
@@ -101,6 +124,12 @@
           <p class="meta muted">{{ pane.observed_meta.source }}{% if !pane.observed_meta.freshness.is_empty() %} · {{ pane.observed_meta.freshness }}{% endif %}</p>
         </div>
       </div>
+      {% endif %}
+      {#- Guy's decision C: a `Nouveau` row keeps *Ajouter*, and SAYS its address belongs to an open
+           question — linking to it rather than taking the gesture away. -#}
+      {% if let Some(question) = pane.open_question %}
+      <p class="open-question"><a href="{{ question }}">{{ s.ambiguous_open_question }}</a></p>
+      {% endif %}
       {#- The action bar goes UNDER the two photos, where the mock puts it. -#}
       {% let gestures = pane.gestures %}
       {% include "_action_bar.html" %}

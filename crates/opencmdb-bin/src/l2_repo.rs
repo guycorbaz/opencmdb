@@ -212,6 +212,72 @@ where
         .collect())
 }
 
+/// Every current ENGINE `Ambiguous` pair, as `(interface_low, interface_high, verdicts)` — the
+/// questions story 6.14 shows on `/triage`.
+///
+/// ⚠️ **ENGINE rows only, by decision**: an OPERATOR row on a pair is an answer, not a question
+/// (Guy, 2026-09-25, at story 6.12's code review), and a `no_match` is a decision the software took
+/// (case one of Guy's taxonomy) — neither is shown as a doubt to lift.
+///
+/// # Errors
+///
+/// Any database error.
+pub(crate) async fn load_current_ambiguous_pairs<'e, E>(
+    executor: E,
+) -> Result<Vec<(String, String, String)>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    sqlx::query_as(
+        "SELECT interface_low, interface_high, verdicts FROM l2_pair_decision \
+         WHERE is_current = 1 AND decided_by = 'ENGINE' AND outcome = 'abstained' \
+         AND abstention_cause = 'ambiguous'",
+    )
+    .fetch_all(executor)
+    .await
+}
+
+/// For every interface in a current ENGINE `Ambiguous` pair: its id, its hardware address, and the
+/// observation of its LATEST current placement — what the candidates pane shows *as seen now*.
+///
+/// 🔑 **Per-interface latest, in SQL**, and the reason is a projection: every observation's placement
+/// link stays current for ever, so reading the whole `identity_link` table per render would grow by
+/// about one row per host per sweep (reasoned by story 6.14's validation, ≈13k a day at the reference
+/// cadence). Several observations tied at the same instant all come back; the caller keeps one.
+///
+/// # Errors
+///
+/// Any database error.
+pub(crate) async fn load_ambiguous_interface_sightings<'e, E>(
+    executor: E,
+) -> Result<Vec<(String, String, String)>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    sqlx::query_as(
+        "SELECT i.id, i.mac_canon, l.observation_id \
+         FROM interface i \
+         JOIN identity_link l ON l.interface_id = i.id AND l.outcome = 'match' \
+              AND l.valid_to = ? \
+         JOIN observation_record o ON o.id = l.observation_id \
+         WHERE i.id IN ( \
+             SELECT interface_low FROM l2_pair_decision WHERE is_current = 1 \
+                 AND decided_by = 'ENGINE' AND abstention_cause = 'ambiguous' \
+             UNION \
+             SELECT interface_high FROM l2_pair_decision WHERE is_current = 1 \
+                 AND decided_by = 'ENGINE' AND abstention_cause = 'ambiguous') \
+         AND o.observed_at = ( \
+             SELECT MAX(o2.observed_at) FROM identity_link l2 \
+             JOIN observation_record o2 ON o2.id = l2.observation_id \
+             WHERE l2.interface_id = i.id AND l2.outcome = 'match' AND l2.valid_to = ?) \
+         ORDER BY i.id, l.observation_id",
+    )
+    .bind(OPEN_END)
+    .bind(OPEN_END)
+    .fetch_all(executor)
+    .await
+}
+
 /// The current decision about `(low, high)`, if any — the engine's or an operator's.
 ///
 /// # Errors
