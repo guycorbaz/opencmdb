@@ -1,14 +1,20 @@
 # Story 6.14b: The operator lifts the doubt
 
 Status: **ready-for-dev** — arbitrated (§0.8, §0.11) and validated (§0.9, two layers, one database each). The arbitration inserts
-story 6.14c (A1). ~~a planning act recorded in `epics.md`~~ — ⚠️ *not yet: `epics.md` carries no 6.14c; the
-fact-check caught this line asserting it.* ✅ It lands in this story's planning PR, with the glossary edit §0.9(G) owes.
+story 6.14c (A1). ~~a planning act recorded in `epics.md`~~ — ~~⚠️ *not yet: `epics.md` carries no 6.14c; the
+fact-check caught this line asserting it.*~~ ✅ Recorded by this story's planning PR (#219): `epics.md` carries 6.14c,
+and the glossary edit §0.9(G) owes. **Code-reviewed on that PR (2026-09-26)**, three isolated layers: six decisions
+by Guy, 23 patches applied (see *Review Findings*); still `ready-for-dev`.
 
 **Epic 6.** Inserted by Guy's act of 2026-09-25 at story 6.14's arbitration, and sequenced after `v0.6.0`,
-which is published and **runs on the NAS**, so the precondition for writing this story is met.
+which is published and **runs on the NAS**. ~~so the precondition for writing this story is met.~~ ⚠️ *The epic
+asks that `obelix` be **seen and used** there; the review found only "runs" recorded.* ✅ **`obelix` was seen on the
+NAS as ONE Ambigu question** (Guy, 2026-09-26). That is the *seen* half; nothing it offers can be *used* before
+this story, whose gesture is the use.
 **Base:** `master` at `75a9037`, clean tree. **Live count at base:** 802 + 219 + 110 as measured at 6.14's
-merge. It must be **re-measured** with `cargo test -p <crate> --locked -- --list` before it is written into
-the Record, because this figure is recalled and not measured on this tree.
+merge, ~~recalled and not measured on this tree~~ and re-measured on `75a9037` by §0.9's prototype layer. It must
+be **re-measured again** with `cargo test -p <crate> --locked -- --list` before it is written into the Record,
+because the base will have moved by then.
 
 ## Story
 
@@ -56,10 +62,11 @@ right shape for the other real case (two machines that share a factory hostname,
    **no membership table**. D14 says *"`interface.device_id` is NOT a unique FK … N:N from day 1"* (VRRP), and
    `interface` carries no `device_id` column at all (measured: `grep device_id crates/` gives zero code hits).
 3. **What the operator SEES.** 🔴 **The inventory does not list interfaces. It lists DECLARED entities**
-   (`inventory_view.rs:17`, *"the declared side, and only that"*), one per *Ajouter* pressed. `obelix` is
+   (`inventory_view.rs:19`, *"the declared side, and only that"*), one per *Ajouter* pressed. `obelix` is
    two inventory rows because it was documented twice, once per address. So a device over two interfaces
    **does not by itself make `obelix` one row**: the inventory would have to map declared entities to
-   interfaces (through the declared `mac`, since PR #163) and interfaces to a device. And D15 forbids the
+   interfaces ~~(through the declared `mac`, since PR #163)~~ (⚠️ *§0.9(K): a path by ADDRESS already exists;
+6.14c needs no `mac` for it*) and interfaces to a device. And D15 forbids the
    shortcut, because `declared_attribute.entity_id` is never updated.
 
 ⚠️ **Layer 3 is where operator-visible value lives, and it is the heaviest.** Layers 1+2 without 3 give:
@@ -71,20 +78,22 @@ The glossary row reads *"Attach a discovery to an existing record: a link; no da
 answer attaches nothing to an existing record: at the moment of the answer **no device exists**, and the
 answer is what creates one. It is also symmetric (two interfaces, neither of which is the record), where
 `attach` is directional. The `resolve`/*résoudre* row already covers both answers (*"the operator chooses
-among the candidates"*), so **no glossary edit is owed**. The two ANSWERS are labels of one gesture, not two
+among the candidates"*), ~~so **no glossary edit is owed**~~ (⚠️ *refuted by §0.9(G): the row became false and
+did not obviously cover "none of them is the other"; §0.11 rewrote it in PR #219*). The two ANSWERS are labels of one gesture, not two
 gestures. ⚠️ Their wording (*« Même machine »* / *« Machines distinctes »* or similar) is copy rather than
-vocabulary; it still passes the `copy-vocabulary` gate. ⚠️ *Corrected by the fact-check:* `fusionner` is on no
-list; the EN column forbids `merge` and its forms, and the KEY-name column forbids `merge*`.
+vocabulary; it must still pass the `copy-vocabulary` gate, which the dev agent's gate run measures (contexting
+did not). ⚠️ *Corrected by the fact-check:* contexting had named `fusionner` as a forbidden word for the labels;
+it is on no list. The EN column forbids `merge` and its forms, and the KEY-name column forbids `merge*`.
 
 ### §0.4 — Measured facts the dev agent inherits
 
 - **The pass already leaves an operator's pair alone.** `l2_pass.rs:152` counts `operator_held` and skips
   the pair when its current row `is_operators()`. So an OPERATOR row written by this story silences the
   question at the next sweep **without touching the pass**. It is pinned by
-  `a_pair_an_operator_decided_is_left_to_the_operator` (`l2_pass.rs:795`), which today forges the operator
+  `a_pair_an_operator_decided_is_left_to_the_operator` (`l2_pass.rs:795`; the forging `UPDATE` at `:807`), which today forges the operator
   row with a raw `UPDATE`. That test gains a real producer.
 - **The readers already exclude operator rows.** `load_current_ambiguous_pairs` reads ENGINE rows only, so
-  once answered, the Ambigu row leaves `/triage` by construction. It is pinned at `l2_pass.rs:896–936` (*"an
+  once answered, the Ambigu row leaves `/triage` by construction. It is pinned at `l2_pass.rs:899` (forging `UPDATE` at `:926`) (*"an
   operator's row is an answer, not a question"*).
 - **`insert_l2_decision` takes an engine `Decision`** (`l2_repo.rs:352`), and `is_persisted` turns `Match`
   into `Err(l2_match_not_persisted)`. An operator answer is not a `decide` output: it needs **its own
@@ -135,7 +144,8 @@ guard, which a clock cannot give.
 
 **(D) A group of three or more.** (D1) One binary answer for the whole group: *same machine* writes `match`
 on every pair; *distinct machines* writes `no_match` on every pair. (D2) A per-candidate choice (partition).
-**Recommendation: (D1)**, and the partition case is registered. The reference LAN's only question is a pair,
+⚠️ *Narrowed by §0.11(1a): "every pair" is every ENGINE-ambiguous pair of the group, and none elsewhere.*
+**Recommendation: (D1)**, and the partition case is registered (row written by PR #219's review). The reference LAN's only question is a pair,
 and D2 is a form whose correctness is its own story.
 
 **(E) The *Ajouter* control on an ambiguous address (UX-DR43, *"never a blind document"*).** 6.14 kept it
@@ -158,7 +168,7 @@ guards is absent. The release notes say so, as 14.2's did.
 another OPERATOR row). But **no screen shows an answered pair**, so a wrong *distinct machines* would be
 invisible and permanent.
 (G1) The reach section gains ONE line counting answered questions, with no gesture; changing an answer is
-registered with an owner. (G2) Nothing is shown; the whole matter is registered.
+registered with an owner (row written by PR #219's review; the owner is posed to Epic 6's retrospective). (G2) Nothing is shown; the whole matter is registered.
 **Recommendation: (G1).** One sentence costs little, and it keeps the answer from vanishing, which is this
 story's *so that* (*"kept as mine"*).
 
@@ -173,7 +183,8 @@ consequences reads backwards.
 for `OPERATOR` only. **Story 6.14c is INSERTED** for the device, the membership and the inventory showing
 `obelix` as one machine; its producer is this story's `match`. `rule_id='operator'`, and the superseded
 ENGINE row's vector and version are copied. The instant is the one the operator was shown, and a stale page
-answers 409. A group gets one binary answer; the partition is registered. *Ajouter* yields to the question
+answers 409. A group gets one binary answer (on its ENGINE-ambiguous pairs, §0.11(1a)); the partition is
+registered. *Ajouter* yields to the question
 while it is open. No switch. One reach line counts answered questions. The question sits before its
 addresses' rows.
 
@@ -216,16 +227,23 @@ What works, measured twice on a populated `0012` store:
   ENGINE `match` name `rule_xor_cause`, which reds `l2_repo::tests::a_match_or_an_absence_of_proof_is_refused_by_the_schema`
   for no defect.
 
-The shape measured to keep that test green:
-- `outcome IN ('no_match','abstained') OR (outcome = 'match' AND decided_by = 'OPERATOR')`
+The shape measured to keep that test green (⚠️ *the TRIM idiom below was written in by PR #219's review; the
+prototype measured the shape without it, so T1 measures it with it*):
+- `outcome IN ('no_match','abstained') OR (outcome = 'match' AND decided_by = 'OPERATOR' AND
+  LENGTH(decided_by) = LENGTH(TRIM(decided_by)))`
 - `rule_xor_cause` is three arms:
   - ENGINE `abstained`/`ambiguous`, rule NULL;
   - ENGINE `no_match` with a rule neither empty nor `'operator'`;
-  - OPERATOR `match`|`no_match` with `rule_id = 'operator'`, cause NULL.
+  - OPERATOR `match`|`no_match` with `rule_id = 'operator'`, cause NULL, **and** `LENGTH(decided_by) =
+    LENGTH(TRIM(decided_by))` **and** `LENGTH(rule_id) = LENGTH(TRIM(rule_id))`.
 
-So an OPERATOR `abstained` is refused, and an ENGINE row may not claim `rule_id='operator'`. The new CHECKs
-carry 14.1's `LENGTH(x) = LENGTH(TRIM(x))` idiom: `ascii_bin` is PAD SPACE, and `'OPERATOR '` passes the CHECK
-and then reads as the engine's in `is_operators()`.
+So an OPERATOR `abstained` is refused, and an ENGINE row may not claim `rule_id='operator'`. The idiom is owed
+because `ascii_bin` is PAD SPACE: `'OPERATOR '` passes `l2_pair_decision_decided_by` and `= 'OPERATOR'` alike,
+and then reads as the engine's in `is_operators()`; `'operator '` passes `= 'operator'` and is a second
+spelling of the token. On the ENGINE arm, `<> 'operator'` already refuses `'operator '` under the same padding,
+so no idiom is needed there. ⚠️ `ascii_bin` is case-sensitive: an ENGINE `rule_id = 'Operator'` passes, and is
+not the operator's token — `is_operators()` reads `decided_by`, never `rule_id`, and no runner routes a token
+outside `l1-`/`l2-`.
 
 **(B) 🔴 The strict CHECK breaks two tests and any reused store holding their residue.**
 - `a_pair_an_operator_decided_is_left_to_the_operator` (`l2_pass.rs:807`) and
@@ -292,9 +310,9 @@ edit can say it.
 - E1 and H1 change nothing for `obelix` on the NAS: both addresses are already documented, so there is no
   `Nouveau` row. H1's rule when the question has no such row: it keeps its place at the end. `?sort=age`
   re-sorts after placement.
-- `is_persisted(&decision)?` runs BEFORE the operator skip (`l2_pass.rs:149`). Harmless while no L2 rule is
-  `Decisive`; the day one is, an engine `Match` on an operator-held pair aborts the sweep. Registered, owner:
-  the story that first produces an L2 `Decisive`.
+- `is_persisted(&decision)?` runs BEFORE the operator skip (`l2_pass.rs:150`, ~~`:149`~~). Harmless while no L2
+  rule is `Decisive`; the day one is, an engine `Match` on an operator-held pair aborts the sweep. Registered
+  (row written by PR #219's review), owner: the story that first produces an L2 `Decisive`.
 - Docs that become false and are corrected in the code change:
   - `CurrentL2Decision::outcome` (*"`no_match` or `abstained`"*);
   - `l2_repo.rs`'s module doc (*"never says `Match`"*);
@@ -304,8 +322,9 @@ edit can say it.
   be registered, since both files grow here.
 - A path from a declared entity to an interface already exists **by address** (`ambiguity_rows` maps address →
   interface → group). 6.14c needs no `mac` for it; A1 stands.
-- Citations corrected: D14 `:1068–1104`, D21's quote `:1460`, `inventory_view.rs:19`, the test at
-  `l2_pass.rs:794/899`.
+- Citations corrected: D14 `:1068–1104`, D21's quote `:1460`, `inventory_view.rs:19`, the tests at
+  ~~`l2_pass.rs:794/899`~~ `l2_pass.rs:795` and `:899` (their forging `UPDATE`s at `:807` and `:926`; `:794` is the
+  attribute line — corrected by PR #219's review).
 
 ### §0.10 — The decisions the validation opened, each with a recommendation
 
@@ -317,6 +336,9 @@ of the group, the pairs that ARE the question, and none on a pair with no row or
 **Recommendation: (1a).**
 - (1b) would override an engine `no_match` (`l2-virtual-mac-prefix`) by answering a question it never asked.
 - In (1a), the chain's `match` rows are what 6.14c's union-find joins, so the machine is still one.
+  ⚠️ *PR #219's review: that join crosses the ENGINE `no_match` (1b) was refused for overriding — transitively,
+  one story later. **Guy, 2026-09-26:** carried into 6.14c's entry in `epics.md` and into the register, not
+  decided here.*
 
 **(2) The answer that races a sweep.**
 (2a) The pass treats a close that finds no current row as *a human took it*: it re-reads the slot, and skips it
@@ -365,8 +387,15 @@ The planning act rides with this story file, as PR #213 did for 6.14:
 
 ## 1. Acceptance criteria — under Guy's arbitrations (§0.8, §0.11) and the validation (§0.9)
 
-1. **The answers are live, and a type says so.** **Given** an open Ambigu question on `/triage`, **when** it is
-   selected, **then** its bar carries *Résoudre*'s two answers (*the same machine* / *distinct machines*).
+1. **The answers are live, and a type says so.** **Given** an open Ambigu question on `/triage` whose group has a
+   current placement (the other case is AC5's), **when** it is selected, **then** its bar carries the gesture's
+   name, *Résoudre* (the glossary's `resolve`), and under it its two answers (*the same machine* / *distinct
+   machines*). A test fails if the name is absent while the answers render (Guy, 2026-09-26: the binding term
+   must not leave the screen).
+   - **A group that re-forms around an already-answered pair** (Guy, 2026-09-26): the pairs the operator
+     already answered are not part of the question, and the pane names the members already joined by an earlier
+     answer, with that answer. A test answers A–B, adds a third candidate D ambiguous with both, and asserts the
+     pane names A–B's answer and the POST writes only D's pairs.
    - Each is a `<button>` reachable by Tab, with an accessible name naming the answer and the group it answers.
    - They are carried by a NEW `Gesture` variant (§0.9(C)), not by `Gesture::Live`. They are not amber, and the
      pane carries no `btn-document`.
@@ -384,13 +413,23 @@ The planning act rides with this story file, as PR #213 did for 6.14:
    No other pair is written: not a pair without a row, and not an ENGINE `no_match`. Nothing is deleted. The
    test uses a CHAIN of three interfaces whose third pair carries an ENGINE `no_match`, and asserts that pair
    untouched.
+   - The adapter reads the group's current rows with a **locking read** (`FOR UPDATE`), which also serialises
+     C1's stale check against a sweep and a second answer. Under MariaDB's default REPEATABLE READ a plain read
+     sees a snapshot (measured by PR #219's review).
+   - The instant shown is bounded on both sides: an instant LATER than the newest freshness the route
+     recomputes for the group is a forged or garbled value and answers 422. A forged `9999-12-31
+     23:59:59.999998` passes the stale check and the interval CHECK otherwise (measured).
 3. **The schema admits the operator's `match` and nothing more.** **Given** `0013`, a single `ALTER` re-adding
    `l2_pair_decision_outcome` then `l2_pair_decision_rule_xor_cause` with no `IF NOT EXISTS` on the ADD
    (§0.9(A)), **then** each of the following is proved by a raw insert naming its constraint:
    - an OPERATOR `match` or `no_match` with `rule_id='operator'` is accepted;
    - an ENGINE `match` is refused naming **`l2_pair_decision_outcome`** (the existing test stays green
      unmodified);
-   - an OPERATOR `abstained`, an ENGINE row with `rule_id='operator'`, and a padded `'OPERATOR '` are refused.
+   - an OPERATOR `abstained`, an ENGINE row with `rule_id='operator'`, a padded `decided_by = 'OPERATOR '` and a
+     padded `rule_id = 'operator '` are refused, each test naming the constraint it expects. Predicted, to be
+     measured at T1: a padded-`decided_by` `match` names `l2_pair_decision_outcome`; a padded-`decided_by`
+     `no_match` and a padded `rule_id` name `l2_pair_decision_rule_xor_cause` (the two are re-added last, and
+     `l2_pair_decision_decided_by` accepts the padding).
 
    Applied twice to a populated `0012` store, it succeeds both times, and `information_schema.CHECK_CONSTRAINTS`
    shows both widened clauses after the second run. The header carries the `Dirty(13)` recovery recipe
@@ -408,25 +447,41 @@ The planning act rides with this story file, as PR #213 did for 6.14:
    - a stale page (an ENGINE row whose `valid_from` is later than the instant shown; equality is accepted, and
      the instant carries microseconds, §0.9(D)) → 409;
    - a group whose members changed, grown OR shrunk (§0.9(E)) → 409;
-   - a question no longer open (already answered, gone, never existed) → ONE keyed 409 (§0.9(I));
+   - a question no longer open (already answered, gone, never existed) → ONE keyed 409 (§0.9(I)); a close
+     that finds no row (`NotFound`) and an insert refused by `l2_pair_decision_one_current`
+     (`Constraint("unique")`) inside the answer's transaction are this case and map to this 409, never a 500;
+   - two concurrent answers to one question: exactly one current OPERATOR row, the winner answers its
+     redirect and the loser this keyed 409 — a test drives both;
    - a malformed request → 422;
    - a cross-site Origin → 403.
 
    A test builds its instant from a sub-second sweep and asserts the answer is accepted. The page's form never
-   carries `UNIX_EPOCH`: a group with no current placement is shown without the controls, and says why.
+   carries `UNIX_EPOCH`: a group with no current placement is shown without the controls, and says why — **a
+   decision, Guy's, 2026-09-26** (§0.9(D) had left it open). The sentence is a key of its own
+   (`triage.ambiguous.no_placement` or its measured name), in both locales, and a test renders such a group and
+   asserts no answer control and the sentence.
 6. **An answer does not cost a sweep.** **Given** an answer committed while a sweep is judging the same pair,
    **then** the sweep skips it (it re-reads the slot, and an OPERATOR row is current). It commits its L1
    placements, and its summary counts the pair as `operator_held` (§0.11(2a)). The test drives both
    transactions.
+   - The re-read is a **locking read** (`SELECT … FOR UPDATE`). Measured by PR #219's review under REPEATABLE
+     READ: a plain re-`SELECT` in the sweep's transaction returns the stale ENGINE row, and only the locking
+     read returns the OPERATOR row. If the locking re-read finds no OPERATOR row, the original error stands.
+   - The sweep reaches the close only when its decision DIFFERS from the stored row (`l2_pass.rs:162-177`); an
+     unchanged pair counts `unchanged` from the snapshot. The test therefore builds a sweep whose decision
+     changes (a supersede or a vacate) — otherwise it measures nothing.
 7. **The addresses yield to the question.** **Given** an open question, **then** each `Nouveau` row of its
    addresses shows the link to it instead of *Ajouter*, and `triage.ambiguous.add_alone` no longer says the
    opposite. **Given** the question answered THROUGH THE ROUTE, either way, **then** *Ajouter* returns. The test
-   asserts both *"question gone"* and *"Ajouter present"* after the POST (§0.9(K)). The Ambigu row sits before
+   asserts both *"question gone"* and *"Ajouter present"* after the POST (§0.9(J)). The Ambigu row sits before
    the first `Nouveau` row of its addresses, stays at the end when it has none, and `?sort=age` re-sorts after
    placement.
 8. **The answer stays visible.** **Given** answered questions, **then** `/triage`'s reach section says how many,
-   counted in QUESTIONS (union-find over current OPERATOR rows). A group of three answered reads **1**, and the
-   test asserts it.
+   counted in QUESTIONS. A group of three answered once reads **1**, and the test asserts it.
+   - ⚠️ *PR #219's review:* a plain union-find over current OPERATOR rows merges two answers that share a member
+     (A–B answered, then B–C) into **1**. The count is per ANSWER: a second test answers A–B, then B–C, and reads
+     **2**. The mechanism (a union-find per answer, e.g. over the rows one answer wrote) is the dev agent's to
+     measure; if it needs a column, that is a planning question raised, not taken.
 9. **Both browser gates reach the answer.** `a11y/seed.sql` gains a SECOND question, already answered by an
    OPERATOR row, so that axe measures the answered state without pressing anything.
    - `kbd-probe.mjs` reads the open pane and E1's link, presses an answer with the keyboard, then reads that
@@ -434,13 +489,16 @@ The planning act rides with this story file, as PR #213 did for 6.14:
    - 6.14's *"one control, planned"* check is rewritten.
    - `MIN_CHECKS`, the seed's exact count, and `Strings`' literal-field guard move with what they count.
 10. **The record says what the product does.**
-    - The user manual's triage chapter says what each answer does, and that `/devices` still shows a machine
-      documented twice until 6.14c.
+    - The user manual's triage chapter says what each answer does, that `/devices` still shows a machine
+      documented twice until 6.14c, and that **an answer cannot be undone or changed from the screen** (the
+      register row *changing an answer* owns it).
     - The docs that become false are corrected: `CurrentL2Decision::outcome`, `l2_repo.rs`'s module doc,
       `0012`'s header, and `CHANGELOG`'s next section (the route has no opt-in).
-    - Register rows:
+    - Register rows (⚠️ *the first two, `is_persisted` and the chain across an ENGINE `no_match`, were written by
+      PR #219's review; the dev agent re-reads them and edits rather than duplicates*):
       - the partition of a group of three or more (D2);
       - changing an answer;
+      - a chain's `match` rows joining across an ENGINE `no_match` (owner 6.14c);
       - the double documentation after *the same machine* (owner 6.14c);
       - `is_persisted` before the operator skip (§0.9(K));
       - the `file-size` gate's blindness to `l2_repo.rs` and `main.rs`;
@@ -451,16 +509,54 @@ The planning act rides with this story file, as PR #213 did for 6.14:
 - [ ] T1 `0013_operator_answers.sql`: one `ALTER`, the two CHECKs re-added outcome-first, the TRIM idiom, the
       recovery recipe; its raw-insert tests (AC3).
 - [ ] T2 `l2_repo::record_operator_answer` (a sibling adapter; no forged `Decision`), with group recomputation,
-      the stale and changed-group checks, and the single transaction. Rewrite the two forging tests (AC2, AC4, AC5).
-- [ ] T3 `l2_pass`: the re-read on a close that finds nothing (AC6), with its two-transaction test.
+      the group's rows read `FOR UPDATE`, the stale, forged-instant and changed-group checks, `NotFound`/unique
+      mapped to the keyed 409, and the single transaction. Rewrite the two forging tests (AC2, AC4, AC5).
+- [ ] T3 `l2_pass`: the LOCKING re-read on a close that finds nothing (AC6), with its two-transaction test on
+      the changed-decision branch.
 - [ ] T4 The route (pool-bearing router, Origin check, keyed refusals, `HX-Redirect` with the confirmation; its
       row in the auth route-table test).
 - [ ] T5 `Gesture`'s new variant and render arm; `_action_bar.html`; the keys (§0.9(H)); E1, H1 and the reach
       line (AC1, AC7, AC8).
 - [ ] T6 Seed, `axe-gate.mjs`, `kbd-probe.mjs` (AC9).
 - [ ] T7 Mutation pass: predictions first; carriers derived by grepping the mutated token; `--baseline`; one
-      database per process.
+      database per process. It includes the re-read and the adapter's read made plain (drop `FOR UPDATE`), and
+      the TRIM idiom dropped from each OPERATOR arm.
 - [ ] T8 Docs, register rows, twins, the Record (AC10).
+
+### Review Findings
+
+Review of the planning PR #219 (2026-09-26), three isolated layers: blind (diff only), edge (worktree + a
+throw-away `mariadb:10.11.11` on port 13470), acceptance auditor. 49 raw findings → 24 distinct.
+
+⚠️ **Guy, 2026-09-26, on every arbitration of this story:** *the current choices are liable to be questioned once
+opencmdb is used regularly.* They are provisional against use, not settled against it.
+
+✅ **All 23 patches applied 2026-09-26** — the 17 below and the six decisions, each turned into a patch.
+
+- [x] [Review][Decision] A group that re-forms around an already-answered pair — `ambiguity_view::groups` is a union-find over ENGINE rows only, so after `obelix` A–B is answered a third same-named NIC D yields a group {A,B,D} shown as a fresh question with nothing saying A–B is answered; one binary answer then writes only the D pairs (*distinct* after an earlier *same* leaves A=B, D≠A, D≠B), and AC8's union-find over OPERATOR rows counts 1 where 2 questions were answered (edge 3, blind 12). → **Guy, 2026-09-26: (a)** — the screen excludes pairs the operator already answered from the group, and names members already joined by an earlier answer. Becomes a patch.
+- [x] [Review][Decision] (1a)'s chain joins across an ENGINE `no_match` in 6.14c — §0.10 refuses (1b) for overriding `l2-virtual-mac-prefix`'s `no_match`, then says the chain's `match` rows are what 6.14c's union-find joins "so the machine is still one", which overrides the same Disqualifying transitively one story later; 6.14c's entry in `epics.md` does not inherit the question (blind 6, auditor 9, edge 6). → **Guy, 2026-09-26: (a)** — carried into 6.14c's entry in `epics.md` and into the register. Becomes a patch.
+- [x] [Review][Decision] The glossary row `resolve` is in the present tense of behaviour no code has — "it acts since story 6.14b", "*the same machine* is what the device grouping reads (story 6.14c)" stand in two binding documents while 6.14b is `ready-for-dev` and 6.14c `backlog`; and "not `attach`: no record exists to attach to" overstates §0.3, `obelix`'s addresses being documented — it is no DEVICE record that exists (blind 1, 9). → **Guy, 2026-09-26: (a)** — time-neutral wording ("it acts with story 6.14b") and "no DEVICE record exists". Becomes a patch.
+- [x] [Review][Decision] AC5 settles an open case no arbitration took — "a group with no current placement is shown without the controls, and says why": §0.9(D) raised it, §0.10/§0.11 record no decision, and "says why" names no key and no test; it also conflicts with AC1's unconditional "its bar carries *Résoudre*'s two answers" (blind 8). → **Guy, 2026-09-26: (a)** — accepted as a decision: a group with no current placement shows no controls, with a named key and test; AC1 narrowed to match. Becomes a patch.
+- [x] [Review][Decision] The binding term *Résoudre* may vanish from the screen — AC1 removes the planned control and the two answers are not `GLOSSARY_BACKED` (§0.9(H)); no criterion requires the gesture's own name to appear (blind 19). → **Guy, 2026-09-26: (a)** — AC1 requires the bar to carry the gesture's name, the two answers under it. Becomes a patch.
+- [x] [Review][Decision] The precondition is claimed on a weaker fact than the epic states — the epic sequences 6.14b "so that `obelix` is seen and used on the NAS"; the story says v0.6.0 "runs on the NAS, so the precondition is met", and nothing records `obelix` seen as ONE question (blind 11). → **Guy, 2026-09-26: (a)** — `obelix` WAS seen as one Ambigu question on the NAS; the fact is recorded. Becomes a patch.
+- [x] [Review][Patch] AC6's re-read must be a LOCKING read, and its test must take the changed-decision branch — measured under REPEATABLE READ: a plain re-`SELECT` in the sweep's transaction returns the stale ENGINE row, `FOR UPDATE` returns the OPERATOR row; and `judge_within` reaches the close only when the decision changed, so an unchanged pair counts `unchanged`, not `operator_held`. Add a plain-read mutation to T7 [§1 AC6, §1b T3] (edge 1, 5; auditor 1; blind 5)
+- [x] [Review][Patch] The answer adapter's races: read the group's rows `FOR UPDATE` (serialising C1's stale check too), map `NotFound` and `Constraint("unique")` to AC5's keyed 409, and add a criterion for two concurrent answers and the loser's status [§1 AC2, AC5; §1b T2] (edge 2, auditor 5)
+- [x] [Review][Patch] The carried instant is bounded below only — a forged `9999-12-31 23:59:59.999998` passes the stale check and the interval CHECK; require it to equal (or not exceed) the newest `valid_from` of the recomputed group's ENGINE rows [§1 AC2, AC5] (edge 4)
+- [x] [Review][Patch] The CHECK shape does not carry the TRIM idiom it claims — under PAD SPACE `'OPERATOR '` and `rule_id = 'operator '` pass as written; write the idiom into the shape for `decided_by` and `rule_id`, and name in AC3 the constraint each padded row is refused by [§0.9(A), §1 AC3] (blind 7, auditor 6)
+- [x] [Review][Patch] The live count is called both "recalled and not measured" (header) and "measured" (§0.9) [header :9-11, §0.9 :202] (blind 2, auditor 3)
+- [x] [Review][Patch] §0.3's "no glossary edit is owed" stands unstruck while §0.9(G) and §0.11 refute it [§0.3 :74] (blind 3, auditor 3)
+- [x] [Review][Patch] §0.2(3)'s "through the declared `mac`" stands unstruck while §0.9(K) says 6.14c needs no `mac` [§0.2] (blind 13)
+- [x] [Review][Patch] §0.5(D1) "writes `match` on every pair" is narrowed by §0.11(1a) to the ambiguous pairs, with no mark at D1 or in §0.8's summary [§0.5, §0.8] (blind 6)
+- [x] [Review][Patch] The Status line strikes "a planning act recorded in `epics.md`" as "not yet" in the very PR that records it [header :3-5] (blind 14, auditor 3)
+- [x] [Review][Patch] Citations: References keep D14 `:1085–1104`, D21 `:1462` and `l2_pass.rs:…795,896`; §0.9(K)'s "corrected" `794/899` is itself off (tests at `:795`, `:899`; forging `UPDATE`s at `:807`, `:926`; `is_persisted` at `:150`, not `:149`) [References, §0.9(K)] (blind 4, auditor 3, edge)
+- [x] [Review][Patch] AC7 cites §0.9(K) for asserting "question gone" and "Ajouter present"; the content is §0.9(J)'s [§1 AC7 :424] (blind 17)
+- [x] [Review][Patch] §0.3 ends "Corrected by the fact-check: `fusionner` is on no list" with no remaining mention of `fusionner`, and asserts "it still passes the `copy-vocabulary` gate" with no measurement named [§0.3] (blind 16)
+- [x] [Review][Patch] "Registered" with no registration — the partition case (§0.8), `is_persisted` before the operator skip (§0.9(K)) and "changing an answer" (§0.5(G1), no owner named) are in no row of `deferred-work.md`, which this PR does not touch [§0.8 :176, §0.9(K), AC10] (auditor 2)
+- [x] [Review][Patch] §4 does not say an answer cannot be undone from the screen; AC10's manual sentence omits it too [§4, AC10] (auditor 4)
+- [x] [Review][Patch] Stale notes: `sprint-status.yaml` under 6.14b still reads "Next: use it; then this story's planning act", "SEQUENCED AFTER THE NEXT RELEASE" and "First obligation: a planning act…"; `CLAUDE.md`'s and `project-context.md`'s `v0.6.0` paragraph still names that planning act as next [sprint-status.yaml:5147-5150] (blind 10, auditor 10)
+- [x] [Review][Patch] `epics.md:433`, Epic 7's coverage line, still claims all of UX-DR43 while `epics.md:2059` takes part of it here [epics.md:433] (auditor 7)
+- [x] [Review][Patch] The register row "One machine counts THREE times … follows from Guy's decision C" states a premise E1 revokes while the question is open [deferred-work.md:6547] (auditor 8)
+- [x] [Review][Defer] The neighbouring glossary row `triage` differs between the twins (`create / attach` in `prd.md`, `attach / create` in the UX spec) [prd.md, ux-design-specification.md] — deferred, pre-existing
 
 ## 2. What this story must NOT do
 
@@ -486,6 +582,9 @@ The planning act rides with this story file, as PR #213 did for 6.14:
 
 They can answer the question about `obelix`, the answer is kept as theirs, and the product stops asking it.
 ⚠️ They cannot yet see `obelix` as ONE machine: `/devices` shows its two documented rows until 6.14c.
+⚠️ **They cannot undo or change an answer from the screen**: a wrong *distinct machines* stays until someone
+supersedes it by hand. The reach line (AC8) says HOW MANY questions were answered, not which. Registered
+(*changing an answer*).
 
 ## 5. Change Log
 
@@ -494,11 +593,12 @@ They can answer the question about `obelix`, the answer is kept as theirs, and t
 | 2026-09-25 | Contexted. Eight decisions posed with recommendations (§0.5). |
 | 2026-09-25 | **Guy's arbitration**: all eight on the recommendation (§0.8); story 6.14c inserted. |
 | 2026-09-25 | Validated by two layers (§0.9); **Guy's second arbitration**, all four on the recommendation (§0.11); criteria rewritten; `ready-for-dev`. |
+| 2026-09-26 | Code review of planning PR #219 (three layers): 24 findings, **six decisions by Guy** (all (a)), 23 patches applied — locking reads (AC2, AC6), the instant's upper bound, the TRIM idiom written into the shape, the re-formed group, the per-answer count, the no-placement case decided, *Résoudre* kept on screen; stale sentences struck. Still `ready-for-dev`. |
 
 ## References
 
 `epics.md` story 6.14b's insertion note · `prd.md:1000` (`attach`), `:1003` (`resolve`) ·
-`architecture.md` D12 (`:909`), D14 (`:1085–1104`), D15, D21 (`:1462`) ·
-`0006_entity_device_and_state.sql` · `0012_l2_pair_decision.sql` · `l2_pass.rs:25,152,795,896` ·
-`l2_repo.rs:352,406` · `inventory_view.rs:1–40` · `_triage.html` ·
+`architecture.md` D12 (`:909`), D14 (`:1068–1104`), D15, D21 (`:1460`) ·
+`0006_entity_device_and_state.sql` · `0012_l2_pair_decision.sql` · `l2_pass.rs:25,150,152,795,807,899,926` ·
+`l2_repo.rs:352,406` · `inventory_view.rs:19` · `_triage.html` ·
 `6-14-ambiguity-explains-itself.md` §0.5 (C), §0.8 · `deferred-work.md:6541`.

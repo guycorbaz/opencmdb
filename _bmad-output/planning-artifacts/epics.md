@@ -430,7 +430,7 @@ _**Why it is `6b` and not `7`:** renumbering seventeen epics to make room for on
 
 ### Epic 7: La boucle se ferme (v0.5)
 The rich triage inbox on a correct synchronous commit: review unreconciled discoveries; document (all/field); accept-gap (gap stays open, mandatory note, wakes on observed change); exclude; snooze; create; attach. This is the MVP "you could stop here" line — the product now reconciles, not just observes.
-**FRs covered:** FR12, FR13, FR14, FR15, FR18 (min). UX-DR13,14,15,16,22,23,42,43.
+**FRs covered:** FR12, FR13, FR14, FR15, FR18 (min). UX-DR13,14,15,16,22,23,42,43 (⚠️ UX-DR43 in part: story 6.14b takes *Ajouter* yielding to an open ambiguity on the `Nouveau` row; *Resolve instead of Document* on the card stays here).
 
 ### Epic 8: Triage fluide (v0.6)
 The optimistic UI over the inbox: the server-authoritative commit state machine (`in_queue → pending_commit → committed | failed`), scan-vs-triage quarantine (`superseded_by_pending`), undo, and the focus-management contract on every HTMX swap (accessibility requirement #1 — focus never lost).
@@ -2064,7 +2064,7 @@ As the operator,
 I want the machine I said was one to appear once in the inventory,
 So that the product counts boxes, not network cards.
 
-_**INSERTED by Guy's act of 2026-09-25**, at story 6.14b's arbitration (A1): 6.14b records the operator's answer and mints nothing. **This story's producer is 6.14b's OPERATOR `match`** — the first real producer the device mint has had, which 6.12 found missing. Its scope: the device and its N:N membership (D14, *"`interface.device_id` is NOT a unique FK"*); the inventory showing a declared entity through the device its interface belongs to, **without ever updating `declared_attribute.entity_id`** (D15) — a path address → interface already exists (`ambiguity_view::ambiguity_rows`); and the double documentation 6.14b registers (*Ajouter* returns on both addresses after *the same machine*). Its first obligation is a planning act on what the inventory row of a grouped machine SHOWS._
+_**INSERTED by Guy's act of 2026-09-25**, at story 6.14b's arbitration (A1): 6.14b records the operator's answer and mints nothing. **This story's producer is 6.14b's OPERATOR `match`** — the first real producer the device mint has had, which 6.12 found missing. Its scope: the device and its N:N membership (D14, *"`interface.device_id` is NOT a unique FK"*); the inventory showing a declared entity through the device its interface belongs to, **without ever updating `declared_attribute.entity_id`** (D15) — a path address → interface already exists (`ambiguity_view::ambiguity_rows`); and the double documentation 6.14b registers (*Ajouter* returns on both addresses after *the same machine*). Its first obligation is a planning act on what the inventory row of a grouped machine SHOWS. ⚠️ **It inherits a question, not an answer** (6.14b's code review, Guy 2026-09-26): 6.14b writes `match` only on the ENGINE-ambiguous pairs of a group, so a chain A–B, B–C whose A–C carries an ENGINE `no_match` (`l2-virtual-mac-prefix`, Disqualifying) joins A and C by union-find — overriding transitively the verdict 6.14b refused to override directly. This story decides whether the grouping honours it._
 
 ### Story 6.15: The `must-abstain` traps are routed, and the release gate falls green
 
