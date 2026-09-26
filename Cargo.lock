@@ -1600,7 +1600,7 @@ dependencies = [
  "surge-ping",
  "tokio",
  "tokio-util",
- "toml 0.8.23",
+ "toml 1.1.6+spec-1.1.0",
  "tower",
  "tracing",
  "tracing-appender",
@@ -2798,10 +2798,12 @@ version = "1.1.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "920602543f0911ab71da12c50d59701da54c196d1a2bf5cb4b75667f137a406a"
 dependencies = [
+ "indexmap",
  "serde_core",
  "serde_spanned 1.1.1",
  "toml_datetime 1.1.1+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 1.0.4",
 ]
 
@@ -2851,6 +2853,12 @@ name = "toml_write"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
+
+[[package]]
+name = "toml_writer"
+version = "1.1.2+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
 name = "tower"
@@ -3333,7 +3341,7 @@ dependencies = [
  "anyhow",
  "serde",
  "sha2 0.11.0",
- "toml 0.8.23",
+ "toml 1.1.6+spec-1.1.0",
  "walkdir",
  "yaml-rust2",
 ]
