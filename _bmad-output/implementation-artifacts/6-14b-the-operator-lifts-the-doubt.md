@@ -568,28 +568,30 @@ CI green on the head `1fce383` itself (run `36240311937`). No defect in the main
 - [x] [Review][Decision] An answer can contradict an earlier OPERATOR answer — A–B answered *distinct*, then *the same machine* on the re-formed {A,B,D} writes A=D and B=D, so A=B by transitivity, while the pane says *"that answer stands"*; the test `a_re_formed_group_writes_only_the_pairs_it_did_not_cover` asserts this state as correct, and no register row names it (blind HIGH; edge 8; auditor 9) → **Guy, 2026-09-26: (a)** — a group holding a pair already answered *distinct* is not offered *the same machine*; the pane says why, the route refuses it with a keyed 409, and the test that asserted the contradictory state is inverted.
 - [x] [Review][Decision] The answer's `FOR UPDATE` locks the whole table and can make the SWEEP the deadlock victim — `EXPLAIN` gives `type=ALL, key=NULL`; measured: an answer on G1 blocks on G2's row held by a sweep, and a `1213` deadlock rolled back the light sweep entirely (AC6's promise broken) or, against a heavy sweep, made the answer the victim under a *"may or may not have been kept"* sentence that is false for a deadlock (edge MED measured; auditor 7; blind MED) → **Guy, 2026-09-26: (a)** — the group is recomputed by a PLAIN read, then only the question's pairs are locked, one by one in `(low, high)` order, through the unique key, and re-verified; a deadlock the answer loses gets its own sentence (nothing was written); the residual deadlock on the SAME pairs is registered.
 - [x] [Review][Decision] Three new visible states are measured by no axe pass — the `?answered=` confirmation, the no-placement pane and the earlier-answers list (blind HIGH; auditor 4) → **Guy, 2026-09-26: (a)** — `/triage?answered=same` joins axe's states; the no-placement and earlier-answers panes are registered, their render carried by Rust tests.
-- [ ] [Review][Patch] The question filter is carried by no test — `.filter(|_| true)` leaves 828 green while one click answers every open question; add an adapter test with two open questions [l2_answer.rs, record_operator_answer] (edge HIGH, measured)
-- [ ] [Review][Patch] The store-side no-placement refusal is carried by no test — `None => {}` leaves 828 green and skips the Forged bound too [l2_answer.rs, newest_placement match] (edge MED, measured)
-- [ ] [Review][Patch] README says the question *"you cannot answer yet"* [README.md:17] (auditor MED)
-- [ ] [Review][Patch] The admin manual says *"No screen writes an operator's row yet"*, omits `POST /triage/answer` from the no-switch write surfaces, and does not say OPERATOR rows are answers not to be deleted [admin-manual.tex:399-413, 512-522] (auditor MED)
-- [ ] [Review][Patch] Two docs credit the locking read with serialising two answers while M2 measured the UPDATE carrying it [l2_answer.rs module doc; two_concurrent_answers… doc] (blind MED; edge MED)
-- [ ] [Review][Patch] Doc comments still describe decision C and a planned *Résoudre* [triage_view.rs DetailPane.open_question; page.rs the_resolve_gesture_cannot_go_live… message] (blind MED)
-- [ ] [Review][Patch] The earlier-answer render test builds a state the product cannot make — one pair current as ENGINE and OPERATOR at once [page.rs a_group_re_formed_around_an_answered_pair_names_the_earlier_answer] (blind MED)
-- [ ] [Review][Patch] The manual and changelog promise E1 prevents a double record, and do not say that pressing Add on both addresses after *the same machine* IS that double record [user-manual.tex; CHANGELOG.md] (blind MED)
-- [ ] [Review][Patch] An earlier answer is named only when BOTH its interfaces are in the re-formed group; a group {A,D} after A–B says nothing [ambiguity_view.rs earlier filter] (auditor 9; edge 8)
-- [ ] [Review][Patch] The earlier-answer sentence can print a raw interface id (`mac_of` falls back to the id) [ambiguity_view.rs] (blind LOW)
-- [ ] [Review][Patch] `0013`'s recovery recipe deletes only `abstained` while its header names rule ids other than `operator` too — measured still `ERROR 4025` after following it [0013 header] (blind LOW; edge LOW measured)
-- [ ] [Review][Patch] A leap-second `shown` (`…23:59:60.5Z`, accepted by chrono) reaches the store and answers 500; an uppercase `group` is refused while uppercase members are accepted [l2_answer.rs parse] (edge LOW measured)
-- [ ] [Review][Patch] No route-level test of the loser's 409 — the adapter asserts `NotOpen`, the mapping is a unit test [l2_answer.rs tests] (auditor 8)
-- [ ] [Review][Patch] `answered_questions`' test does not isolate its key: its "2" case differs in BOTH instant and outcome [page.rs answered_questions_are_counted…] (blind LOW)
-- [ ] [Review][Patch] No test that the gesture's name comes BEFORE its answers [page.rs the_ambiguity_pane_renders…] (blind LOW)
-- [ ] [Review][Patch] E1's comment claims a condition (*"only while a live gesture exists beside it"*) the code does not check [triage_view.rs] (blind LOW)
-- [ ] [Review][Patch] Record: *"Keys: 23 added"* is 18 (455 → 472); T6 ticked for `axe-gate.mjs`, untouched; T7 names three TRIM arms and M4 mutated one without saying which; M5 and M14 missing from the ids without a word [this file] (blind; auditor)
-- [ ] [Review][Patch] This file's header says `review` and *"still `ready-for-dev`"* in one paragraph; the Change Log's rows are out of order [this file :3, Change Log] (auditor 6)
-- [ ] [Review][Patch] `sprint-status.yaml`'s `last_updated` edit cut the head off a comment block [sprint-status.yaml:83] (blind LOW; auditor 5)
-- [ ] [Review][Patch] `CLAUDE.md`'s kbd sentence mangled by the insertion (*"sixty-six before it, — ⚠️"*) [CLAUDE.md:176] (blind LOW)
-- [ ] [Review][Patch] Two new register rows name no real owner (*"none"*, *"the story that raises the ceiling"*) [deferred-work.md] (auditor 10)
+- [x] [Review][Patch] The question filter is carried by no test — `.filter(|_| true)` leaves 828 green while one click answers every open question; add an adapter test with two open questions [l2_answer.rs, record_operator_answer] (edge HIGH, measured)
+- [x] [Review][Patch] The store-side no-placement refusal is carried by no test — `None => {}` leaves 828 green and skips the Forged bound too [l2_answer.rs, newest_placement match] (edge MED, measured)
+- [x] [Review][Patch] README says the question *"you cannot answer yet"* [README.md:17] (auditor MED)
+- [x] [Review][Patch] The admin manual says *"No screen writes an operator's row yet"*, omits `POST /triage/answer` from the no-switch write surfaces, and does not say OPERATOR rows are answers not to be deleted [admin-manual.tex:399-413, 512-522] (auditor MED)
+- [x] [Review][Patch] Two docs credit the locking read with serialising two answers while M2 measured the UPDATE carrying it [l2_answer.rs module doc; two_concurrent_answers… doc] (blind MED; edge MED)
+- [x] [Review][Patch] Doc comments still describe decision C and a planned *Résoudre* [triage_view.rs DetailPane.open_question; page.rs the_resolve_gesture_cannot_go_live… message] (blind MED)
+- [x] [Review][Patch] The earlier-answer render test builds a state the product cannot make — one pair current as ENGINE and OPERATOR at once [page.rs a_group_re_formed_around_an_answered_pair_names_the_earlier_answer] (blind MED)
+- [x] [Review][Patch] The manual and changelog promise E1 prevents a double record, and do not say that pressing Add on both addresses after *the same machine* IS that double record [user-manual.tex; CHANGELOG.md] (blind MED)
+- [x] [Review][Patch] An earlier answer is named only when BOTH its interfaces are in the re-formed group; a group {A,D} after A–B says nothing [ambiguity_view.rs earlier filter] (auditor 9; edge 8)
+- [x] [Review][Patch] The earlier-answer sentence can print a raw interface id (`mac_of` falls back to the id) [ambiguity_view.rs] (blind LOW)
+- [x] [Review][Patch] `0013`'s recovery recipe deletes only `abstained` while its header names rule ids other than `operator` too — measured still `ERROR 4025` after following it [0013 header] (blind LOW; edge LOW measured)
+- [x] [Review][Patch] A leap-second `shown` (`…23:59:60.5Z`, accepted by chrono) reaches the store and answers 500; an uppercase `group` is refused while uppercase members are accepted [l2_answer.rs parse] (edge LOW measured)
+- [x] [Review][Patch] No route-level test of the loser's 409 — the adapter asserts `NotOpen`, the mapping is a unit test [l2_answer.rs tests] (auditor 8)
+- [x] [Review][Patch] `answered_questions`' test does not isolate its key: its "2" case differs in BOTH instant and outcome [page.rs answered_questions_are_counted…] (blind LOW)
+- [x] [Review][Patch] No test that the gesture's name comes BEFORE its answers [page.rs the_ambiguity_pane_renders…] (blind LOW)
+- [x] [Review][Patch] E1's comment claims a condition (*"only while a live gesture exists beside it"*) the code does not check [triage_view.rs] (blind LOW)
+- [x] [Review][Patch] Record: *"Keys: 23 added"* is 18 (455 → 472); T6 ticked for `axe-gate.mjs`, untouched; T7 names three TRIM arms and M4 mutated one without saying which; M5 and M14 missing from the ids without a word [this file] (blind; auditor)
+- [x] [Review][Patch] This file's header says `review` and *"still `ready-for-dev`"* in one paragraph; the Change Log's rows are out of order [this file :3, Change Log] (auditor 6)
+- [x] [Review][Patch] `sprint-status.yaml`'s `last_updated` edit cut the head off a comment block [sprint-status.yaml:83] (blind LOW; auditor 5)
+- [x] [Review][Patch] `CLAUDE.md`'s kbd sentence mangled by the insertion (*"sixty-six before it, — ⚠️"*) [CLAUDE.md:176] (blind LOW)
+- [x] [Review][Patch] Two new register rows name no real owner (*"none"*, *"the story that raises the ceiling"*) [deferred-work.md] (auditor 10)
 - [x] [Review][Defer] The answered-questions line exists only on `/triage` — `/dashboard` and the gap card read 0 [page.rs triage_view] — deferred, already registered (the widened *"Only `/triage` reads"* row)
+
+✅ **All patches applied 2026-09-26** (commit `9f61bac` and its record), with the repair's own mutation pass below.
 
 Dismissed with the check: the keyboard gate's run-order dependency (a second run exits **2**, measured by the auditor — the harness contract); a form stitched from two groups and an instant earlier than anything stored answering 409 rather than 422 (indistinguishable from a page drawn before a change; the sentence still says *reload*).
 
@@ -668,9 +670,30 @@ assigned) — said here because the review found the gap unexplained.
 - M11 and M12 also red clippy (an askama constant condition; unused bindings), which the driver folds and
   reports; the test counts are the prediction's.
 
+### The repair's mutation pass (PR #220) — predictions written first
+
+Seven rows on the guards the repair added, each on a virgin store with `--baseline`.
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| R1 | the question filter → every open question | red:1 | 🔴 **red 2** — `an_answer_answers_its_own_question_and_no_other` AND `an_answer_does_not_wait_on_another_questions_rows` |
+| R2 | the naming read locks the whole table again | red:1 | ✅ red 1 — `an_answer_does_not_wait…` |
+| R3 | no placement no longer refused by the store | red:1 | ✅ red 1 — `a_question_with_no_placement_is_refused_by_the_store` |
+| R4 | the store's contradiction check neutered | red:1 | ✅ red 1 — `a_re_formed_group_writes_only_the_pairs_it_did_not_cover` |
+| R5 | the pane's `only_distinct` filter neutered | red:2 | ✅ red 2 |
+| R6 | earlier answers need BOTH ends again | red:1 | ✅ red 1 — `a_group_re_formed_around_an_answered_pair_names_the_earlier_answer` |
+| R7 | the leap-second refusal removed | red:1 | ✅ red 1 — `a_form_is_read_only_when_every_part_is_the_screens` |
+
+🔴 **R1 contradicts, and not rewritten**: without the filter the answer LOCKS every question's pairs, so
+the no-wait test waits on the held one too. I derived R1's carriers from what the filter decides (which
+pairs are WRITTEN) and missed what it also decides (which pairs are LOCKED) — **the seventh instance in
+this project of a carrier enumeration too narrow**, and the first where the missed reader is a lock.
+
 ### Completion notes
 
-- **Live count: 822 + 219 + 110** (base 802 + 219 + 110, measured on `75a9037`'s successor `3c2f676`, a
+- **Live count after the code review's repair: 825 + 219 + 110** (virgin store, `RUSTFLAGS="-D warnings"`;
+  ten gates; clippy `--all-targets`; axe **10 routes + 7 states**, 0 violation nodes; kbd 70/0).
+- **Live count at development: 822 + 219 + 110** (base 802 + 219 + 110, measured on `75a9037`'s successor `3c2f676`, a
   planning-only merge). `RUSTFLAGS="-D warnings" cargo test --workspace --locked` green on a VIRGIN store;
   ten `cargo xtask ci` gates; clippy `--all-targets`; fmt.
 - **Browser gates, run as `ci.yml` runs them** against this story's store: axe **10 routes + 6 states,
@@ -690,7 +713,8 @@ assigned) — said here because the review found the gap unexplained.
 - `crates/opencmdb-bin/templates/_action_bar.html`, `_triage.html`, `_identity_section.html`, `_diagnostic.html`
 - `crates/opencmdb-bin/locales/app.yml`, `crates/opencmdb-bin/assets/app.css`
 - `a11y/seed.sql`, `a11y/kbd-probe.mjs`
-- `docs/manuals/user-manual/user-manual.tex`, `CHANGELOG.md`
+- `docs/manuals/user-manual/user-manual.tex`, `docs/manuals/admin-manual/admin-manual.tex`, `CHANGELOG.md`,
+  `README.md`, `a11y/axe-gate.mjs` (the last three by PR #220's review)
 - `_bmad-output/implementation-artifacts/deferred-work.md`, `sprint-status.yaml`, this file
 - `CLAUDE.md`, `docs/project-context.md`
 
@@ -730,6 +754,7 @@ supersedes it by hand. The reach line (AC8) says HOW MANY questions were answere
 | 2026-09-25 | **Guy's arbitration**: all eight on the recommendation (§0.8); story 6.14c inserted. |
 | 2026-09-25 | Validated by two layers (§0.9); **Guy's second arbitration**, all four on the recommendation (§0.11); criteria rewritten; `ready-for-dev`. |
 | 2026-09-26 | Code review of planning PR #219 (three layers): 24 findings, **six decisions by Guy** (all (a)), 23 patches applied — locking reads (AC2, AC6), the instant's upper bound, the TRIM idiom written into the shape, the re-formed group, the per-answer count, the no-placement case decided, *Résoudre* kept on screen; stale sentences struck. Still `ready-for-dev`. |
+| 2026-09-26 | **Code-reviewed (PR #220)** by three isolated layers: 26 distinct findings, three decisions by Guy (the contradiction refused, only the question's pairs locked, `?answered=` into axe), 22 patches, 1 deferral; seven repair mutations, six conform, R1 contradicts. Stays `review` until the merge. |
 | 2026-09-26 | **Developed**: `0013`, `l2_answer.rs`, the pass's locking re-read, the route, the screen, the gates; fourteen mutation rows (12 conform, 2 contradict); `review`. |
 
 ## References
@@ -742,16 +767,20 @@ supersedes it by hand. The reach line (AC8) says HOW MANY questions were answere
 
 ## Record
 
-- live-count: bin=822 core=219 xtask=110
+- live-count: bin=825 core=219 xtask=110
 - base: 3c2f6768393fd59241839496237919c0f7fcd58a
 - registered: After *the same machine*, both addresses offer Add again and can be recorded twice.
 - registered: The `file-size` gate is blind to `l2_repo.rs` and `main.rs`, both grown by story 6.14b.
 - registered: `0012`'s header still says `match` is refused outright, and cannot be corrected where it stands.
+- registered: An answer can still wait on — and deadlock with — the pair that is its NEIGHBOUR in the unique key.
+- registered: Two states of the Ambigu pane are measured by no browser gate
 - file: CHANGELOG.md
 - file: CLAUDE.md
+- file: README.md
 - file: _bmad-output/implementation-artifacts/6-14b-the-operator-lifts-the-doubt.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: a11y/axe-gate.mjs
 - file: a11y/kbd-probe.mjs
 - file: a11y/seed.sql
 - file: crates/opencmdb-bin/assets/app.css
@@ -773,5 +802,6 @@ supersedes it by hand. The reach line (AC8) says HOW MANY questions were answere
 - file: crates/opencmdb-bin/templates/_diagnostic.html
 - file: crates/opencmdb-bin/templates/_identity_section.html
 - file: crates/opencmdb-bin/templates/_triage.html
+- file: docs/manuals/admin-manual/admin-manual.tex
 - file: docs/manuals/user-manual/user-manual.tex
 - file: docs/project-context.md
