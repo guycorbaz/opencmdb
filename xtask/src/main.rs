@@ -1275,7 +1275,7 @@ const SANCTIONED_SITES: [(&str, Option<&str>); 5] = [
 ///
 /// ⚠️ TRIPWIRE, not a barrier (story 5.12's precedent): it protects against a future story
 /// reading provenance into a divergence path BY ACCIDENT, never against a determined one.
-const SANCTIONED_READS: [(&str, Option<&str>); 3] = [
+const SANCTIONED_READS: [(&str, Option<&str>); 4] = [
     (
         "crates/opencmdb-bin/src/repo.rs",
         Some("read_declared_provenance_for_test"),
@@ -1291,6 +1291,14 @@ const SANCTIONED_READS: [(&str, Option<&str>); 3] = [
     (
         "crates/opencmdb-bin/src/repo.rs",
         Some("load_declared_provenance_for_display"),
+    ),
+    // Story 6.14c (Guy's arbitration B, 2026-09-26): a record documented before PR #163 carries no
+    // declared MAC, and its ORIGIN observation is the only exact way to its interface — the address path
+    // was measured merging two machines by DHCP. It feeds the inventory's DISPLAY of a grouping and never
+    // a divergence; sanctioned by path and name, on `load_declared_provenance_for_display`'s precedent.
+    (
+        "crates/opencmdb-bin/src/device_grouping.rs",
+        Some("load_record_origin_interfaces"),
     ),
 ];
 

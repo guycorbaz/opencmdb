@@ -563,7 +563,7 @@ fn parse(request: &AnswerRequest) -> Option<(BTreeSet<String>, Answer, Timestamp
 
 /// Tests for the answer: the adapter against a store, the route over a port.
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use axum::body::Body;
     use axum::http::{Request, header};
