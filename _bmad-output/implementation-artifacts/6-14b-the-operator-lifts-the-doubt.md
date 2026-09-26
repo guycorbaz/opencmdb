@@ -1,6 +1,6 @@
 # Story 6.14b: The operator lifts the doubt
 
-Status: **review** — developed 2026-09-26 (see *Dev Agent Record*). Before that: **ready-for-dev** — arbitrated (§0.8, §0.11) and validated (§0.9, two layers, one database each). The arbitration inserts
+Status: **done** — PR #220 squash-merged 2026-09-26 as `8d2a881`, CI green on the head `e7e7128` itself (run `36242637321`), code-reviewed by three isolated layers and repaired first. Before that: **review** — developed 2026-09-26 (see *Dev Agent Record*). Before that: **ready-for-dev** — arbitrated (§0.8, §0.11) and validated (§0.9, two layers, one database each). The arbitration inserts
 story 6.14c (A1). ~~a planning act recorded in `epics.md`~~ — ~~⚠️ *not yet: `epics.md` carries no 6.14c; the
 fact-check caught this line asserting it.*~~ ✅ Recorded by this story's planning PR (#219): `epics.md` carries 6.14c,
 and the glossary edit §0.9(G) owes. **Code-reviewed on that PR (2026-09-26)**, three isolated layers: six decisions
