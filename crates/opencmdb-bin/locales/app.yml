@@ -425,6 +425,14 @@ triage.ambiguous.earlier_same:
 triage.ambiguous.earlier_distinct:
   en: "Already answered: %{a} and %{b} are distinct machines."
   fr: "Déjà répondu : %{a} et %{b} sont des machines distinctes."
+triage.ambiguous.only_distinct:
+  # Guy, 2026-09-26 (PR #220's review): the group holds a pair already answered "distinct machines".
+  en: "Only Distinct machines is offered: some of these interfaces were already answered as distinct, so they cannot all be one."
+  fr: "Seule la réponse « Des machines distinctes » est proposée : certaines de ces interfaces ont déjà été déclarées distinctes, elles ne peuvent donc pas toutes n'en faire qu'une."
+triage.ambiguous.unknown_interface:
+  # An answered interface whose hardware address the store does not hold — never its raw id.
+  en: "an interface no longer seen"
+  fr: "une interface qui n'est plus vue"
 triage.ambiguous.earlier_note:
   en: "That answer stands; this question asks only about the candidates it has not covered."
   fr: "Cette réponse tient ; cette question ne porte que sur les candidats qu'elle ne couvrait pas."
@@ -446,6 +454,14 @@ triage.answer.refused.not_open:
 triage.answer.refused.busy:
   en: "The store did not answer in time. The answer may or may not have been kept: reload the page."
   fr: "La base n'a pas répondu à temps. La réponse a peut-être été conservée, ou non : rechargez la page."
+triage.answer.refused.contradicts:
+  # Guy, 2026-09-26 (PR #220's review): the group holds a pair already answered "distinct machines".
+  en: "Some of these interfaces were already answered as distinct machines, so they cannot all be one. Nothing was written: answer Distinct machines, or reload."
+  fr: "Certaines de ces interfaces ont déjà reçu la réponse « machines distinctes » : elles ne peuvent pas toutes n'en faire qu'une. Rien n'a été écrit : répondez « Des machines distinctes », ou rechargez."
+triage.answer.refused.contended:
+  # A deadlock or a lock-wait timeout ROLLS BACK — unlike the budget's timeout, it can say nothing was kept.
+  en: "The store was busy with a sweep and gave up. Nothing was written: answer again."
+  fr: "La base était occupée par un balayage et a abandonné. Rien n'a été écrit : répondez de nouveau."
 triage.answer.refused.store:
   en: "The answer could not be written. Nothing you added was touched; see the self-diagnostic if it persists."
   fr: "La réponse n'a pas pu être écrite. Rien de ce que vous avez ajouté n'a été touché ; consultez l'auto-diagnostic si cela persiste."

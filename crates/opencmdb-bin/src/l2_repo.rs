@@ -245,23 +245,31 @@ where
     .await
 }
 
-/// Every current OPERATOR row, as `(interface_low, interface_high, outcome, valid_from)` — the answers
-/// the operator gave (story 6.14b). Read for two things: a group that re-forms around an answered pair
-/// names the answer, and the reach section counts answered questions.
+/// Every current OPERATOR row, as `(interface_low, interface_high, outcome, valid_from, mac_low,
+/// mac_high)` — the answers the operator gave (story 6.14b). Read for three things: a group that
+/// re-forms around an answered pair names the answer, *the same machine* is not offered where it would
+/// contradict one, and the reach section counts answered questions.
+///
+/// 🔑 The hardware addresses come from `interface` itself (PR #220's review): an answered pair can have
+/// an interface that is in no open question, whose MAC the screen's sightings reader does not carry —
+/// the first version then printed its raw id.
 ///
 /// # Errors
 ///
 /// Any database error.
 pub(crate) async fn load_current_operator_answers<'e, E>(
     executor: E,
-) -> Result<Vec<(String, String, String, String)>, sqlx::Error>
+) -> Result<Vec<crate::ambiguity_view::OperatorAnswer>, sqlx::Error>
 where
     E: Executor<'e, Database = MySql>,
 {
     sqlx::query_as(
-        "SELECT interface_low, interface_high, outcome, \
-         DATE_FORMAT(valid_from, '%Y-%m-%d %H:%i:%s.%f') FROM l2_pair_decision \
-         WHERE is_current = 1 AND decided_by = 'OPERATOR' ORDER BY interface_low, interface_high",
+        "SELECT d.interface_low, d.interface_high, d.outcome, \
+         DATE_FORMAT(d.valid_from, '%Y-%m-%d %H:%i:%s.%f'), lo.mac_canon, hi.mac_canon \
+         FROM l2_pair_decision d \
+         JOIN interface lo ON lo.id = d.interface_low JOIN interface hi ON hi.id = d.interface_high \
+         WHERE d.is_current = 1 AND d.decided_by = 'OPERATOR' \
+         ORDER BY d.interface_low, d.interface_high",
     )
     .fetch_all(executor)
     .await

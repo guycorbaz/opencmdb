@@ -414,7 +414,8 @@ pub(crate) struct DetailPane {
     /// One sentence per verdict that argued, for an Ambigu row; empty otherwise.
     pub(crate) evidence: Vec<String>,
     /// For a `Nouveau` row whose address a candidate of an open question carries: the link to that
-    /// question (Guy's decision C — the row keeps *Ajouter*, and says it belongs to a question).
+    /// question. Since story 6.14b's E1 it stands INSTEAD of *Ajouter* while the question is open (story
+    /// 6.14's decision C kept *Ajouter* beside it; E1 superseded it).
     pub(crate) open_question: Option<String>,
     /// The sentence under this pane's bar when it is not the generic one. Empty everywhere since story
     /// 6.14b, whose Ambigu pane carries live answers and no planned control; kept as the seam a future
@@ -426,9 +427,12 @@ pub(crate) struct DetailPane {
     /// For an Ambigu pane whose group none of whose candidates is placed now: say why no answer is
     /// offered (story 6.14b, AC5, Guy 2026-09-26).
     pub(crate) no_placement: bool,
-    /// The operator's earlier answers inside this group, one sentence each (story 6.14b, Guy
+    /// The operator's earlier answers touching this group, one sentence each (story 6.14b, Guy
     /// 2026-09-26): a group that re-formed around an answered pair names that answer.
     pub(crate) earlier: Vec<String>,
+    /// Whether *the same machine* is withheld because the group holds a pair the operator already
+    /// answered distinct (Guy, 2026-09-26, PR #220's review); the pane says why.
+    pub(crate) only_distinct: bool,
 }
 
 /// Everything `/triage` renders: the queue, the selection, and the sort's state.
@@ -618,6 +622,7 @@ pub(crate) fn build_triage_offering(
                     question: None,
                     no_placement: false,
                     earlier: Vec::new(),
+                    only_distinct: false,
                     // No documenting gesture on this kind, so no subject to act on. ⚠️ NOT
                     // `SwitchedOff`: adopting one field of an existing record is FR13(b), Epic
                     // 7's, and telling the operator to set a switch would name a remedy that
@@ -672,6 +677,7 @@ pub(crate) fn build_triage_offering(
                     question: None,
                     no_placement: false,
                     earlier: Vec::new(),
+                    only_distinct: false,
                     // No documenting gesture on this kind, so no subject to act on.
                     subject: String::new(),
                     // 🔴 From the CAUSE, never from the translated label: the mock shows *Résoudre*
@@ -796,6 +802,7 @@ pub(crate) fn build_triage_offering(
                     question: None,
                     no_placement: false,
                     earlier: Vec::new(),
+                    only_distinct: false,
                     // The MOST RECENT sighting of this address, overwritten in place
                     // above when a later one arrives (Guy's arbitration, story 6.4).
                     subject: batch.id.to_string(),
@@ -833,9 +840,11 @@ pub(crate) fn build_triage_offering(
             pane.open_question = Some(row_href(group, sort_by_age));
             // 🔑 E1 (story 6.14b, Guy 2026-09-25, UX-DR43): while the question is OPEN, the link stands
             // INSTEAD of *Ajouter* — documenting `obelix` twice before answering is D12's *"the operator
-            // announces 300 hosts, the tool shows 340"*. It removes the documenting primary only while a
-            // live gesture exists beside it (the answers), which was story 6.14's own condition; once
-            // answered, either way, the address is in no open question and *Ajouter* returns by itself.
+            // announces 300 hosts, the tool shows 340"*. ⚠️ It is keyed on the address being in an OPEN
+            // question and on nothing else — the answers live on the question's own pane, not beside this
+            // control; story 6.14's condition (a live gesture exists) holds because every open question
+            // with a placed candidate offers one. Once answered, either way, the address is in no open
+            // question and *Ajouter* returns by itself.
             pane.gestures.retain(|gesture| {
                 !matches!(
                     gesture.nature,

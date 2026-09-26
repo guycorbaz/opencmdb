@@ -80,7 +80,7 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-09-26
+last_updated: 2026-09-26  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
                           # The first time in five weeks that what was built reached its user: the
                           # NAS had been on `0.1.0`, older than the identity engine, the write route
                           # and the ten screens, and nobody had checked.

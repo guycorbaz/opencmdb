@@ -258,6 +258,8 @@ pub(crate) struct Strings {
     pub(crate) ambiguous_no_placement: String,
     /// Under the operator's earlier answers inside a re-formed group: that they stand.
     pub(crate) ambiguous_earlier_note: String,
+    /// Why only *Distinct machines* is offered on a group holding a pair already answered distinct.
+    pub(crate) ambiguous_only_distinct: String,
 }
 
 /// A count and its noun, INFLECTED — `1 field`, `2 fields`, `1 champ`, `2 champs`.
@@ -343,6 +345,7 @@ pub(crate) fn strings() -> Strings {
         answer_what: t!("triage.answer.what").to_string(),
         ambiguous_no_placement: t!("triage.ambiguous.no_placement").to_string(),
         ambiguous_earlier_note: t!("triage.ambiguous.earlier_note").to_string(),
+        ambiguous_only_distinct: t!("triage.ambiguous.only_distinct").to_string(),
         identity_settled: t!("identity.settled").to_string(),
     }
 }
@@ -2464,7 +2467,7 @@ mod tests {
         // beside it claimed the opposite. Moving either number is a deliberate act.
         assert_eq!(
             (literals, checked),
-            (19, 180),
+            (19, 181),
             "the walk found {literals} `…Strings` literal(s) and {checked} field(s); if that is \
              deliberate, move these numbers after READING what the walk printed"
         );
@@ -5878,13 +5881,20 @@ mod tests {
                 action_bar("gesture.resolve", PrimaryState::Acts)[0].nature,
                 GestureRender::Planned(_)
             ),
-            "`Résoudre` stays planned even with the flag on — it has no route, and a live control \
-             would take the amber the spec reserves for documenting"
+            "`action_bar` never makes `Résoudre` live, even with the flag on — its answers are built by \
+             `resolve_bar` as `Gesture::Answer` (story 6.14b), and a `Live` control would take the amber \
+             the spec reserves for documenting"
         );
         // 🔴 Story 6.14b: the bar an Ambigu pane REALLY carries is `resolve_bar` — two ANSWERS, live, and
         // carried by their own variant, never `Live`, which is what the template paints amber.
-        let answers = crate::ambiguity_view::resolve_bar("obelix");
+        let answers = crate::ambiguity_view::resolve_bar("obelix", false);
         assert_eq!(answers.len(), 2, "two answers of one gesture");
+        let withheld = crate::ambiguity_view::resolve_bar("obelix", true);
+        assert_eq!(
+            withheld.iter().map(|g| g.label.clone()).collect::<Vec<_>>(),
+            vec![rust_i18n::t!("triage.answer.distinct").to_string()],
+            "where *the same machine* would contradict an earlier answer, only *distinct* is offered"
+        );
         assert!(
             answers
                 .iter()
@@ -6140,12 +6150,16 @@ mod tests {
         );
         let pane = pane_html(&html);
         let s = strings();
-        assert!(
-            pane.contains(&format!(
+        let name_at = pane
+            .find(&format!(
                 r#"<p class="gesture-name">{}</p>"#,
                 s.gesture_resolve
-            )),
-            "the binding term *Résoudre* heads the answers"
+            ))
+            .expect("the binding term *Résoudre* is on the pane");
+        let first_answer = pane.find("btn-answer").expect("an answer");
+        assert!(
+            name_at < first_answer,
+            "the binding term *Résoudre* HEADS the answers (PR #220's review: presence alone was checked)"
         );
         assert_eq!(
             pane.matches(r#"class="btn-gesture live btn-answer""#)
@@ -6226,36 +6240,115 @@ mod tests {
     }
 
     /// Story 6.14b (Guy, 2026-09-26): a group that re-forms around a pair the operator already answered
-    /// NAMES that answer, with both hardware addresses.
+    /// NAMES that answer, with both hardware addresses — and where the earlier answer is *distinct*
+    /// and both of its interfaces are in the group, *the same machine* is not offered, and the pane says
+    /// why (PR #220's review).
+    ///
+    /// 🔴 The first version of this test put an OPERATOR answer on the SAME pair as the open ENGINE
+    /// question — a state the product cannot make, one pair holding two current rows (the blind review
+    /// layer). Here the shape is the real one: a third interface `c` ambiguous with `a` and `b`, whose own
+    /// pair the operator already answered.
     #[test]
     fn a_group_re_formed_around_an_answered_pair_names_the_earlier_answer() {
+        let batch_c = batch_with_id(
+            "arp",
+            60,
+            vec![ipv4("192.0.2.10"), hostname("obelix.home.arpa")],
+            0xAC,
+        );
         let (mut question, obelix) = obelix_question(60);
-        question.answers = vec![(
-            "iface-a".into(),
-            "iface-b".into(),
-            "match".into(),
-            "1970-01-01 00:01:00.000000".into(),
-        )];
-        let html = triage_body(
+        question.pairs = vec![
+            ("iface-a".into(), "iface-c".into(), OBELIX_VERDICTS.into()),
+            ("iface-b".into(), "iface-c".into(), OBELIX_VERDICTS.into()),
+        ];
+        question.sightings.push((
+            "iface-c".into(),
+            "00:11:22:33:44:0a".into(),
+            Some(batch_c.id.to_string()),
+        ));
+        let observations: Vec<_> = obelix.into_iter().chain([batch_c]).collect();
+        let answered = |outcome: &str| {
+            let mut question = question.clone();
+            question.answers = vec![(
+                "iface-a".into(),
+                "iface-b".into(),
+                outcome.into(),
+                "1970-01-01 00:01:00.000000".into(),
+                "00:11:22:33:44:08".into(),
+                "00:11:22:33:44:09".into(),
+            )];
             build_triage_offering(
                 Vec::new(),
                 Vec::new(),
-                obelix,
+                observations.clone(),
                 at(1_000),
                 Some("ambigu:iface-a"),
                 false,
                 true,
                 &question,
-            ),
-            no_reach(),
-        );
+            )
+        };
+        let same = triage_body(answered("match"), no_reach());
         let expected = rust_i18n::t!(
             "triage.ambiguous.earlier_same",
             a = "00:11:22:33:44:08",
             b = "00:11:22:33:44:09"
         )
         .to_string();
-        assert!(pane_html(&html).contains(&expected), "{expected}");
+        assert!(pane_html(&same).contains(&expected), "{expected}");
+        assert_eq!(
+            pane_html(&same).matches("btn-answer").count(),
+            2,
+            "after *the same machine*, both answers stay consistent and both are offered"
+        );
+        let distinct = triage_body(answered("no_match"), no_reach());
+        let pane = pane_html(&distinct);
+        assert_eq!(
+            pane.matches("btn-answer").count(),
+            1,
+            "only *distinct* is offered"
+        );
+        assert!(pane.contains(r#""answer": "distinct""#));
+        assert!(
+            pane.contains(&strings().ambiguous_only_distinct),
+            "and the pane says why"
+        );
+        // 🔑 ONE end in the group is enough to name an earlier answer (PR #220's review): `a` was answered
+        // the same machine as `z`, an interface in no open question, and the pane still says so — with
+        // `z`'s address read from `interface`, never its raw id.
+        let mut one_end = question.clone();
+        one_end.answers = vec![(
+            "iface-a".into(),
+            "iface-z".into(),
+            "match".into(),
+            "1970-01-01 00:01:00.000000".into(),
+            "00:11:22:33:44:08".into(),
+            "00:11:22:33:44:ff".into(),
+        )];
+        let html = triage_body(
+            build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                observations.clone(),
+                at(1_000),
+                Some("ambigu:iface-a"),
+                false,
+                true,
+                &one_end,
+            ),
+            no_reach(),
+        );
+        let expected = rust_i18n::t!(
+            "triage.ambiguous.earlier_same",
+            a = "00:11:22:33:44:08",
+            b = "00:11:22:33:44:ff"
+        )
+        .to_string();
+        assert!(
+            pane_html(&html).contains(&expected),
+            "one end suffices: {expected}"
+        );
+        assert!(!pane_html(&html).contains("iface-z"), "never a raw id");
     }
 
     /// Story 6.14b's H1: the question sits directly BEFORE the first `Nouveau` row of its addresses, and
@@ -6320,6 +6413,8 @@ mod tests {
                 b.to_string(),
                 outcome.to_string(),
                 at.to_string(),
+                String::new(),
+                String::new(),
             )
         };
         let three_once = vec![
@@ -6333,6 +6428,23 @@ mod tests {
             row("b", "c", "no_match", "T2"),
         ];
         assert_eq!(crate::ambiguity_view::answered_questions(&twice), 2);
+        // 🔑 Each half of the key, isolated (PR #220's review): the case above differs in BOTH, so a count
+        // keyed on only one of them passed it.
+        let same_outcome = vec![row("a", "b", "match", "T1"), row("b", "c", "match", "T2")];
+        assert_eq!(
+            crate::ambiguity_view::answered_questions(&same_outcome),
+            2,
+            "two answers, one outcome, two instants"
+        );
+        let same_instant = vec![
+            row("a", "b", "match", "T1"),
+            row("b", "c", "no_match", "T1"),
+        ];
+        assert_eq!(
+            crate::ambiguity_view::answered_questions(&same_instant),
+            2,
+            "two answers, one instant, two outcomes"
+        );
         assert_eq!(crate::ambiguity_view::answered_questions(&[]), 0);
 
         let s = strings();

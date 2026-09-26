@@ -124,6 +124,11 @@
       </ul>
       <p class="muted">{{ s.ambiguous_earlier_note }}</p>
       {% endif %}
+      {#- Guy, 2026-09-26 (PR #220's review): *the same machine* is withheld where it would contradict an
+           earlier *distinct*, and the pane says so rather than leaving one answer unexplained. -#}
+      {% if pane.only_distinct %}
+      <p class="muted">{{ s.ambiguous_only_distinct }}</p>
+      {% endif %}
       {#- AC5 (Guy, 2026-09-26): no candidate is placed now, so there is no instant to answer against —
            no answer is offered, and the screen says why rather than showing an empty bar. -#}
       {% if pane.no_placement %}

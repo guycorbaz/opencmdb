@@ -47,10 +47,14 @@
 --
 -- ⚠️ RECOVERY. A store holding an OPERATOR row this migration refuses — `abstained`, or a rule id other
 -- than `operator` — fails here with `ERROR 4025` and boots `Dirty(13)`. Only tests ever wrote such rows
--- (two forged OPERATOR `abstained` rows by `UPDATE`, before this story gave them a real producer). The
--- recipe: delete them, then clear the failed record, and restart:
---     DELETE FROM l2_pair_decision WHERE decided_by = 'OPERATOR' AND outcome = 'abstained';
+-- (two forged OPERATOR `abstained` rows by `UPDATE`, before this story gave them a real producer). Before
+-- this migration NO screen could write an OPERATOR row at all, so every one is a test's forgery. The
+-- recipe: delete them all, then clear the failed record, and restart:
+--     DELETE FROM l2_pair_decision WHERE decided_by <> 'ENGINE';
 --     DELETE FROM _sqlx_migrations WHERE version = 13 AND success = 0;
+-- ⚠️ It read `… AND outcome = 'abstained'` until PR #220's review, which MEASURED it leaving a forged
+-- OPERATOR `no_match` with an `l2-` rule id in place and the store still `Dirty(13)` — the header above
+-- names that row too. `<> 'ENGINE'` also takes a padded `'OPERATOR '`.
 ALTER TABLE l2_pair_decision
   DROP CONSTRAINT IF EXISTS l2_pair_decision_outcome,
   ADD CONSTRAINT l2_pair_decision_outcome CHECK (

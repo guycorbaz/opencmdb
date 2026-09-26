@@ -47,11 +47,14 @@ pub(crate) struct AmbiguityInput {
     /// `(interface_id, mac_canon, observation_id)` — EVERY latest placed observation of each interface
     /// (several when tied at one instant), and `None` for an interface with no current placement.
     pub(crate) sightings: Vec<(String, String, Option<String>)>,
-    /// `(interface_low, interface_high, outcome, valid_from)` per current OPERATOR row — the answers
-    /// already given (story 6.14b): named on a group that re-forms around one, and counted on the
-    /// reach section.
-    pub(crate) answers: Vec<(String, String, String, String)>,
+    /// One [`OperatorAnswer`] per current OPERATOR row — the answers already given (story 6.14b): named
+    /// on a group that re-forms around one, refusing *the same machine* where it would contradict one,
+    /// and counted on the reach section.
+    pub(crate) answers: Vec<OperatorAnswer>,
 }
+
+/// One current OPERATOR row: `(interface_low, interface_high, outcome, valid_from, mac_low, mac_high)`.
+pub(crate) type OperatorAnswer = (String, String, String, String, String, String);
 
 /// `(interface_low, interface_high, verdicts)` — one pair as [`groups`] reads it.
 type Pair = (String, String, String);
@@ -69,10 +72,10 @@ type Pair = (String, String, String);
 /// answers on OVERLAPPING groups at the same instant with the same outcome would count one. That needs
 /// two questions sharing a member and a freshness, which one sweep cannot produce and two sweeps date
 /// apart.
-pub(crate) fn answered_questions(answers: &[(String, String, String, String)]) -> usize {
+pub(crate) fn answered_questions(answers: &[OperatorAnswer]) -> usize {
     // Keyed by `(valid_from, outcome)`: the rows ONE answer wrote.
     let mut by_answer: BTreeMap<(&str, &str), Vec<Pair>> = BTreeMap::new();
-    for (low, high, outcome, valid_from) in answers {
+    for (low, high, outcome, valid_from, ..) in answers {
         by_answer
             .entry((valid_from.as_str(), outcome.as_str()))
             .or_default()
@@ -277,28 +280,38 @@ pub(crate) fn ambiguity_rows(
             |at| relative_time(now, at),
         );
         // Story 6.14b (Guy, 2026-09-26): a group that re-formed around a pair the operator already
-        // answered NAMES that answer — the question now asks only about the candidates it did not cover.
-        let mac_of = |id: &str| {
-            sighting
-                .get(id)
-                .map(|(mac, _)| mac.to_string())
-                .filter(|mac| !mac.is_empty())
-                .unwrap_or_else(|| id.to_string())
+        // answered NAMES that answer. 🔑 ONE end in the group is enough (PR #220's review): after A–B, a
+        // group {A, D} says nothing otherwise, while A is already joined by an earlier answer. The MACs
+        // come from `interface` itself, never a raw id (the first version fell back to one).
+        let named = |mac: &str| {
+            if mac.is_empty() {
+                t!("triage.ambiguous.unknown_interface").to_string()
+            } else {
+                mac.to_string()
+            }
         };
         let earlier: Vec<String> = input
             .answers
             .iter()
             .filter(|(low, high, ..)| {
-                group.interfaces.contains(low) && group.interfaces.contains(high)
+                group.interfaces.contains(low) || group.interfaces.contains(high)
             })
-            .map(|(low, high, outcome, _)| {
+            .map(|(_, _, outcome, _, mac_low, mac_high)| {
                 let key = match Answer::of_outcome(outcome) {
                     Some(Answer::SameMachine) => "triage.ambiguous.earlier_same",
                     _ => "triage.ambiguous.earlier_distinct",
                 };
-                t!(key, a = mac_of(low), b = mac_of(high)).to_string()
+                t!(key, a = named(mac_low), b = named(mac_high)).to_string()
             })
             .collect();
+        // 🔴 Guy, 2026-09-26 (PR #220's review): *the same machine* is not offered on a group holding a
+        // pair the operator already answered DISTINCT — it would make those two one by transitivity. The
+        // route refuses it too (`AnswerRefused::Contradicts`); the pane says why.
+        let only_distinct = input.answers.iter().any(|(low, high, outcome, ..)| {
+            Answer::of_outcome(outcome) == Some(Answer::DistinctMachines)
+                && group.interfaces.contains(low)
+                && group.interfaces.contains(high)
+        });
         let kind = t!("state.ambiguous").to_string();
         // Never an empty token joined in: a candidate with no sighting has no address, and one whose
         // interface vanished has no MAC either — the review measured the first version rendering `" · "`.
@@ -338,7 +351,7 @@ pub(crate) fn ambiguity_rows(
             shown: at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
         });
         let gestures = if question.is_some() {
-            resolve_bar(&entity)
+            resolve_bar(&entity, only_distinct)
         } else {
             Vec::new()
         };
@@ -367,6 +380,7 @@ pub(crate) fn ambiguity_rows(
                 no_placement: question.is_none(),
                 question,
                 earlier,
+                only_distinct,
             },
         ));
     }
@@ -377,9 +391,13 @@ pub(crate) fn ambiguity_rows(
 /// gestures answer a GAP and not a doubt, so they are not offered here (story 6.14's decisions A and E).
 /// ⚠️ The gesture's NAME, *Résoudre*, is rendered by the pane above the two answers — the binding term
 /// stays on the screen (Guy, 2026-09-26) while each control carries its answer's label.
-pub(crate) fn resolve_bar(group: &str) -> Vec<GestureView> {
+///
+/// With `only_distinct`, *the same machine* is left off: the group holds a pair already answered
+/// distinct, and saying one machine now would contradict it (Guy, 2026-09-26).
+pub(crate) fn resolve_bar(group: &str, only_distinct: bool) -> Vec<GestureView> {
     Answer::ALL
         .into_iter()
+        .filter(|answer| !(only_distinct && *answer == Answer::SameMachine))
         .map(|answer| GestureView::answer(answer, group))
         .collect()
 }

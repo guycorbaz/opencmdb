@@ -4,7 +4,7 @@ Status: **review** — developed 2026-09-26 (see *Dev Agent Record*). Before tha
 story 6.14c (A1). ~~a planning act recorded in `epics.md`~~ — ~~⚠️ *not yet: `epics.md` carries no 6.14c; the
 fact-check caught this line asserting it.*~~ ✅ Recorded by this story's planning PR (#219): `epics.md` carries 6.14c,
 and the glossary edit §0.9(G) owes. **Code-reviewed on that PR (2026-09-26)**, three isolated layers: six decisions
-by Guy, 23 patches applied (see *Review Findings*); still `ready-for-dev`.
+by Guy, 23 patches applied (see *Review Findings*); it stayed `ready-for-dev` until its development.
 
 **Epic 6.** Inserted by Guy's act of 2026-09-25 at story 6.14's arbitration, and sequenced after `v0.6.0`,
 which is published and **runs on the NAS**. ~~so the precondition for writing this story is met.~~ ⚠️ *The epic
@@ -517,7 +517,8 @@ The planning act rides with this story file, as PR #213 did for 6.14:
       row in the auth route-table test).
 - [x] T5 `Gesture`'s new variant and render arm; `_action_bar.html`; the keys (§0.9(H)); E1, H1 and the reach
       line (AC1, AC7, AC8).
-- [x] T6 Seed, `axe-gate.mjs`, `kbd-probe.mjs` (AC9).
+- [x] T6 Seed, ~~`axe-gate.mjs`~~, `kbd-probe.mjs` (AC9). ⚠️ *`axe-gate.mjs` was NOT touched at development
+      while this was ticked (PR #220's review); its repair adds `?answered=same` to axe's states.*
 - [x] T7 Mutation pass: predictions first; carriers derived by grepping the mutated token; `--baseline`; one
       database per process. It includes the re-read and the adapter's read made plain (drop `FOR UPDATE`), and
       the TRIM idiom dropped from each OPERATOR arm.
@@ -558,6 +559,40 @@ opencmdb is used regularly.* They are provisional against use, not settled again
 - [x] [Review][Patch] The register row "One machine counts THREE times … follows from Guy's decision C" states a premise E1 revokes while the question is open [deferred-work.md:6547] (auditor 8)
 - [x] [Review][Defer] The neighbouring glossary row `triage` differs between the twins (`create / attach` in `prd.md`, `attach / create` in the UX spec) [prd.md, ux-design-specification.md] — deferred, pre-existing
 
+### Review Findings — code review of PR #220 (2026-09-26)
+
+Three isolated layers (blind: diff only; edge: own MariaDB on 13481, eleven mutations of its own;
+auditor: own MariaDB on 13482, re-ran the suite, both browser gates, M1 and M2). ~49 raw → 26 distinct;
+CI green on the head `1fce383` itself (run `36240311937`). No defect in the main write path.
+
+- [x] [Review][Decision] An answer can contradict an earlier OPERATOR answer — A–B answered *distinct*, then *the same machine* on the re-formed {A,B,D} writes A=D and B=D, so A=B by transitivity, while the pane says *"that answer stands"*; the test `a_re_formed_group_writes_only_the_pairs_it_did_not_cover` asserts this state as correct, and no register row names it (blind HIGH; edge 8; auditor 9) → **Guy, 2026-09-26: (a)** — a group holding a pair already answered *distinct* is not offered *the same machine*; the pane says why, the route refuses it with a keyed 409, and the test that asserted the contradictory state is inverted.
+- [x] [Review][Decision] The answer's `FOR UPDATE` locks the whole table and can make the SWEEP the deadlock victim — `EXPLAIN` gives `type=ALL, key=NULL`; measured: an answer on G1 blocks on G2's row held by a sweep, and a `1213` deadlock rolled back the light sweep entirely (AC6's promise broken) or, against a heavy sweep, made the answer the victim under a *"may or may not have been kept"* sentence that is false for a deadlock (edge MED measured; auditor 7; blind MED) → **Guy, 2026-09-26: (a)** — the group is recomputed by a PLAIN read, then only the question's pairs are locked, one by one in `(low, high)` order, through the unique key, and re-verified; a deadlock the answer loses gets its own sentence (nothing was written); the residual deadlock on the SAME pairs is registered.
+- [x] [Review][Decision] Three new visible states are measured by no axe pass — the `?answered=` confirmation, the no-placement pane and the earlier-answers list (blind HIGH; auditor 4) → **Guy, 2026-09-26: (a)** — `/triage?answered=same` joins axe's states; the no-placement and earlier-answers panes are registered, their render carried by Rust tests.
+- [ ] [Review][Patch] The question filter is carried by no test — `.filter(|_| true)` leaves 828 green while one click answers every open question; add an adapter test with two open questions [l2_answer.rs, record_operator_answer] (edge HIGH, measured)
+- [ ] [Review][Patch] The store-side no-placement refusal is carried by no test — `None => {}` leaves 828 green and skips the Forged bound too [l2_answer.rs, newest_placement match] (edge MED, measured)
+- [ ] [Review][Patch] README says the question *"you cannot answer yet"* [README.md:17] (auditor MED)
+- [ ] [Review][Patch] The admin manual says *"No screen writes an operator's row yet"*, omits `POST /triage/answer` from the no-switch write surfaces, and does not say OPERATOR rows are answers not to be deleted [admin-manual.tex:399-413, 512-522] (auditor MED)
+- [ ] [Review][Patch] Two docs credit the locking read with serialising two answers while M2 measured the UPDATE carrying it [l2_answer.rs module doc; two_concurrent_answers… doc] (blind MED; edge MED)
+- [ ] [Review][Patch] Doc comments still describe decision C and a planned *Résoudre* [triage_view.rs DetailPane.open_question; page.rs the_resolve_gesture_cannot_go_live… message] (blind MED)
+- [ ] [Review][Patch] The earlier-answer render test builds a state the product cannot make — one pair current as ENGINE and OPERATOR at once [page.rs a_group_re_formed_around_an_answered_pair_names_the_earlier_answer] (blind MED)
+- [ ] [Review][Patch] The manual and changelog promise E1 prevents a double record, and do not say that pressing Add on both addresses after *the same machine* IS that double record [user-manual.tex; CHANGELOG.md] (blind MED)
+- [ ] [Review][Patch] An earlier answer is named only when BOTH its interfaces are in the re-formed group; a group {A,D} after A–B says nothing [ambiguity_view.rs earlier filter] (auditor 9; edge 8)
+- [ ] [Review][Patch] The earlier-answer sentence can print a raw interface id (`mac_of` falls back to the id) [ambiguity_view.rs] (blind LOW)
+- [ ] [Review][Patch] `0013`'s recovery recipe deletes only `abstained` while its header names rule ids other than `operator` too — measured still `ERROR 4025` after following it [0013 header] (blind LOW; edge LOW measured)
+- [ ] [Review][Patch] A leap-second `shown` (`…23:59:60.5Z`, accepted by chrono) reaches the store and answers 500; an uppercase `group` is refused while uppercase members are accepted [l2_answer.rs parse] (edge LOW measured)
+- [ ] [Review][Patch] No route-level test of the loser's 409 — the adapter asserts `NotOpen`, the mapping is a unit test [l2_answer.rs tests] (auditor 8)
+- [ ] [Review][Patch] `answered_questions`' test does not isolate its key: its "2" case differs in BOTH instant and outcome [page.rs answered_questions_are_counted…] (blind LOW)
+- [ ] [Review][Patch] No test that the gesture's name comes BEFORE its answers [page.rs the_ambiguity_pane_renders…] (blind LOW)
+- [ ] [Review][Patch] E1's comment claims a condition (*"only while a live gesture exists beside it"*) the code does not check [triage_view.rs] (blind LOW)
+- [ ] [Review][Patch] Record: *"Keys: 23 added"* is 18 (455 → 472); T6 ticked for `axe-gate.mjs`, untouched; T7 names three TRIM arms and M4 mutated one without saying which; M5 and M14 missing from the ids without a word [this file] (blind; auditor)
+- [ ] [Review][Patch] This file's header says `review` and *"still `ready-for-dev`"* in one paragraph; the Change Log's rows are out of order [this file :3, Change Log] (auditor 6)
+- [ ] [Review][Patch] `sprint-status.yaml`'s `last_updated` edit cut the head off a comment block [sprint-status.yaml:83] (blind LOW; auditor 5)
+- [ ] [Review][Patch] `CLAUDE.md`'s kbd sentence mangled by the insertion (*"sixty-six before it, — ⚠️"*) [CLAUDE.md:176] (blind LOW)
+- [ ] [Review][Patch] Two new register rows name no real owner (*"none"*, *"the story that raises the ceiling"*) [deferred-work.md] (auditor 10)
+- [x] [Review][Defer] The answered-questions line exists only on `/triage` — `/dashboard` and the gap card read 0 [page.rs triage_view] — deferred, already registered (the widened *"Only `/triage` reads"* row)
+
+Dismissed with the check: the keyboard gate's run-order dependency (a second run exits **2**, measured by the auditor — the harness contract); a form stitched from two groups and an instant earlier than anything stored answering 409 rather than 422 (indistinguishable from a page drawn before a change; the sentence still says *reload*).
+
 ## Dev Agent Record
 
 ### Implementation plan, and where it departs from the criteria
@@ -583,7 +618,9 @@ opencmdb is used regularly.* They are provisional against use, not settled again
 - **T5 the screen** — `Gesture::Answer { route, answer }` and `GestureRender::Answer { route, token,
   name }`; the compiler named the four sites (`GestureView::of`, `ipam_page.rs`, both templates). The
   answer labels live under `triage.answer.*`, NOT `gesture.*` (§0.9(H)). The *not built* note renders
-  only when a planned control is on the bar. Keys: 23 added, `gesture.not_built_resolve` removed.
+  only when a planned control is on the bar. Keys: ~~23 added~~ **18 added** at development (455 → 472
+  with one removed — counted off the diff by PR #220's review), `gesture.not_built_resolve` removed; the
+  review's repair adds four more.
 - **T6 browser gates** — the seed gains a SECOND question, already answered (`.202`/`.203`); the keyboard
   gate's Ambigu block now reads the two answers, the gesture's name, E1's link, PRESSES an answer, and
   reads the question gone and *Ajouter* back. `MIN_CHECKS` 66 → **70**, read off the run; the release
@@ -607,7 +644,7 @@ the unmutated `0013` and the mutated one would then fail its checksum). Driver: 
 | M2 | the adapter's read loses `FOR UPDATE` | green | ✅ green | **the finding**: two carriers — the close then finds no row and `NotFound` answers *no longer open* |
 | M2b | M2 AND `NotFound` no longer maps to 409 | red:2 | ✅ red 2 | `two_concurrent_answers…`, `every_refusal_is_keyed…` |
 | M3 | `NotFound` no longer maps to 409 | red:1 | ✅ red 1 | `every_refusal_is_keyed_and_a_lost_race_is_not_a_500` |
-| M4 | `0013`: TRIM idiom on `decided_by` dropped from the OPERATOR arm | red:1 | ✅ red 1 | `the_schema_admits_the_operators_answers_and_nothing_more` |
+| M4 | `0013`: TRIM idiom on `decided_by` dropped from `rule_xor_cause`'s OPERATOR arm (ONE of the three TRIM sites T7 names; the other two — `outcome`'s `decided_by`, `rule_xor_cause`'s `rule_id` — are asserted by the same test's padded rows and were NOT mutated) | red:1 | ✅ red 1 | `the_schema_admits_the_operators_answers_and_nothing_more` |
 | M6 | the upper bound (forged instant) neutered | red:1 | ✅ red 1 | `every_refusal_writes_nothing` |
 | M7 | the stale check neutered | red:1 | ✅ red 1 | `every_refusal_writes_nothing` |
 | M8 | the changed-group check neutered | red:2 | ✅ red 2 | `every_refusal_writes_nothing`, `a_group_that_shrank_under_the_page_is_refused` |
@@ -618,7 +655,9 @@ the unmutated `0013` and the mutated one would then fail its checksum). Driver: 
 | M13 | the answers painted amber | red:3 | 🔴 **red 2** | `the_ambiguity_pane_renders…`, `the_resolve_gesture_cannot_go_live…` |
 | M15 | *the same machine* writes `no_match` | red:5 | 🔴 **red 7** | the five predicted, plus `a_re_formed_group_writes_only_the_pairs_it_did_not_cover` and `page::…a_group_re_formed_around_an_answered_pair_names_the_earlier_answer` |
 
-**Fourteen rows: twelve conform, two contradict, and neither prediction is rewritten.**
+**Fourteen rows: twelve conform, two contradict, and neither prediction is rewritten.** ⚠️ The ids skip M5
+(the outcome-order mutation, dropped before the run as not expressible in one anchor) and M14 (never
+assigned) — said here because the review found the gap unexplained.
 - 🔴 **M13**: I counted `ac4_the_amber_is_reserved_for_the_documenting_gesture` as a carrier because it
   greps `btn-document`; it counts the token's READS IN THE SHEET, not its uses in templates. So on this
   pane the amber's reservation is carried by the two render tests alone — *a guard found by grepping its
@@ -690,8 +729,8 @@ supersedes it by hand. The reach line (AC8) says HOW MANY questions were answere
 | 2026-09-25 | Contexted. Eight decisions posed with recommendations (§0.5). |
 | 2026-09-25 | **Guy's arbitration**: all eight on the recommendation (§0.8); story 6.14c inserted. |
 | 2026-09-25 | Validated by two layers (§0.9); **Guy's second arbitration**, all four on the recommendation (§0.11); criteria rewritten; `ready-for-dev`. |
-| 2026-09-26 | **Developed**: `0013`, `l2_answer.rs`, the pass's locking re-read, the route, the screen, the gates; fourteen mutation rows (12 conform, 2 contradict); `review`. |
 | 2026-09-26 | Code review of planning PR #219 (three layers): 24 findings, **six decisions by Guy** (all (a)), 23 patches applied — locking reads (AC2, AC6), the instant's upper bound, the TRIM idiom written into the shape, the re-formed group, the per-answer count, the no-placement case decided, *Résoudre* kept on screen; stale sentences struck. Still `ready-for-dev`. |
+| 2026-09-26 | **Developed**: `0013`, `l2_answer.rs`, the pass's locking re-read, the route, the screen, the gates; fourteen mutation rows (12 conform, 2 contradict); `review`. |
 
 ## References
 

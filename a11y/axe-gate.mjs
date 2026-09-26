@@ -85,6 +85,9 @@ const STATE_SORT = "?sort=age";
 // reason: the alternative is pressing the gesture inside this gate, which would make an
 // accessibility pass WRITE to the store.
 const STATE_DOCUMENTED = "?documented=1";
+// Story 6.14b (Guy, 2026-09-26, PR #220's review): the confirmation an ANSWER leaves behind, for the same
+// reason — reachable only after a POST redirects, and pressing it here would make this gate write.
+const STATE_ANSWERED = "?answered=same";
 // ⚠️ **An empty queue is CI's permanent state unless something seeds it, and the gate is
 // green over it** — measured: with the store emptied, `/triage` carries 0 queue rows, 0
 // gesture controls and 0 panes, and the story's own defect replanted exits 0. Set
@@ -324,7 +327,7 @@ async function main() {
     );
   }
 
-  const states = [SEED + STATE_SORT, SEED + STATE_DOCUMENTED];
+  const states = [SEED + STATE_SORT, SEED + STATE_DOCUMENTED, SEED + STATE_ANSWERED];
   if (firstRow !== null) {
     states.push(firstRow);
   } else if (REQUIRE_QUEUE) {

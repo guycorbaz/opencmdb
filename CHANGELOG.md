@@ -24,7 +24,9 @@ page was drawn, the answer is refused and nothing is written: reload and look ag
 
 ⚠️ **What it does not do yet.** An answer cannot be changed or undone from the screen. The inventory
 still lists each added address on its own — *the same machine* is recorded, and the machine appears
-once only when the device grouping arrives.
+once only when the device grouping arrives; after *the same machine*, pressing **Add** on each of its
+addresses records it twice. Where some of the interfaces were already answered *distinct*, only
+**Distinct machines** is offered.
 
 ⚠️ **The route carries no opt-in.** `POST /triage/answer` is always mounted, behind the same Basic
 authentication and same-origin check as every write: it records an identity decision and never a

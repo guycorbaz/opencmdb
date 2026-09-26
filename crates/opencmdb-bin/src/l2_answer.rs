@@ -24,13 +24,20 @@
 //! - **No switch** (§0.8 F1): an answer writes an identity INPUT, never a declared value, so the
 //!   authorship hazard `OPENCMDB_DOCUMENT_ENABLED` guards is absent here.
 //!
-//! # 🔴 A LOCKING read, and why a plain one would be wrong
+//! # 🔴 What is locked, and why not more
 //!
-//! Under MariaDB's default REPEATABLE READ a plain `SELECT` inside a transaction reads a SNAPSHOT
-//! (measured by PR #219's review: a plain re-read returned the stale ENGINE row, `FOR UPDATE` the
-//! OPERATOR one). The adapter reads the question's rows `FOR UPDATE`, which reads the latest committed
-//! state AND holds the rows until commit — so a second answer to the same question, or a sweep closing
-//! one of its pairs, waits for this one and then finds the question gone.
+//! A PLAIN read names the question and recomputes its group; then ONLY the question's own pairs are
+//! locked, one by one in `(low, high)` order, through the unique key, and re-verified (Guy, 2026-09-26, PR
+//! #220's review). The first version read every open question `FOR UPDATE`: `EXPLAIN` gave `type=ALL`,
+//! and an answer on one question was MEASURED waiting on — and deadlocking with — a sweep holding
+//! another question's row, with the SWEEP rolled back as the victim. Under REPEATABLE READ a plain read
+//! returns a snapshot, which is why the pairs themselves are read `FOR UPDATE`: that reads the latest
+//! committed row and holds it until commit.
+//!
+//! ⚠️ **What serialises two answers to ONE question is the lock on its pairs AND the close that follows**
+//! — two carriers, measured by mutation M2 (dropping the lock left the second answer refused anyway, its
+//! close finding no row). And a sweep and an answer that lock the SAME pairs in opposite orders can still
+//! deadlock; that residual is registered, and an answer that loses one says *nothing was written*.
 //!
 //! # The state holds a PORT and no pool
 //!
@@ -141,6 +148,12 @@ pub(crate) enum AnswerRefused {
     NotOpen,
     /// The instant is later than anything the store shows for the group: forged or garbled. 422.
     Forged,
+    /// *The same machine* on a group holding a pair the operator already answered *distinct machines*
+    /// — it would make them one by transitivity (Guy, 2026-09-26, PR #220's review). 409.
+    Contradicts,
+    /// The store chose this answer as a deadlock victim, or gave up waiting on a lock: the transaction
+    /// was rolled back, so nothing was written — unlike the budget's timeout, which cannot say. 503.
+    Contended,
     /// The store failed.
     Store(RepositoryError),
 }
@@ -151,19 +164,24 @@ impl From<RepositoryError> for AnswerRefused {
             // 🔴 Both are a concurrent writer getting there first, and the operator's sentence is the
             // same: the question is no longer open. Never a 500 (PR #219's review, edge layer).
             RepositoryError::NotFound | RepositoryError::Constraint("unique") => Self::NotOpen,
+            RepositoryError::Contention => Self::Contended,
             other => Self::Store(other),
         }
     }
 }
 
-/// One current ENGINE question-pair, as the locking read returns it:
+/// One current ENGINE question-pair, as the PLAIN read that names the question returns it:
 /// `(interface_low, interface_high, id, verdicts, ruleset_version, valid_from)`.
 type QuestionRow = (String, String, String, String, u32, String);
 
+/// One pair's CURRENT row as the locking read returns it:
+/// `(id, decided_by, outcome, abstention_cause, verdicts, ruleset_version, valid_from)`.
+type LockedRow = (String, String, String, Option<String>, String, u32, String);
+
 /// Record an answer on the group `members`, as the operator was shown it at `shown`.
 ///
-/// Must run inside a transaction the caller commits: every row it reads it holds (`FOR UPDATE`), and
-/// every row it writes is the answer's.
+/// Must run inside a transaction the caller commits: the question's pairs it locks it holds until then,
+/// and every row it writes is the answer's.
 ///
 /// # Errors
 ///
@@ -175,12 +193,16 @@ pub(crate) async fn record_operator_answer(
     answer: Answer,
     shown: Timestamp,
 ) -> Result<Answered, AnswerRefused> {
-    // 🔴 LOCKING: the latest committed rows, held until commit (module doc).
+    // 🔑 A PLAIN read NAMES the question: every open ENGINE question, from which the group is recomputed
+    // by the reader the screen uses — never trusted from the form. It locks nothing (Guy, 2026-09-26, PR
+    // #220's review: a locking read here scanned the whole table, `type=ALL`, and an answer on one
+    // question waited on — and was MEASURED deadlocking with — a sweep holding another question's row,
+    // the sweep being the victim). The question's own pairs are locked below, one by one.
     let rows: Vec<QuestionRow> = sqlx::query_as(
         "SELECT interface_low, interface_high, id, verdicts, ruleset_version, \
          DATE_FORMAT(valid_from, '%Y-%m-%d %H:%i:%s.%f') \
          FROM l2_pair_decision WHERE is_current = 1 AND decided_by = 'ENGINE' \
-         AND outcome = 'abstained' AND abstention_cause = 'ambiguous' FOR UPDATE",
+         AND outcome = 'abstained' AND abstention_cause = 'ambiguous'",
     )
     .fetch_all(&mut *conn)
     .await
@@ -189,7 +211,6 @@ pub(crate) async fn record_operator_answer(
         .iter()
         .map(|(low, high, _, verdicts, _, _)| (low.clone(), high.clone(), verdicts.clone()))
         .collect();
-    // The group is RECOMPUTED here, by the reader the screen uses — never trusted from the form.
     let Some(group) = crate::ambiguity_view::groups(&pairs)
         .into_iter()
         .find(|group| group.interfaces.iter().any(|id| members.contains(id)))
@@ -199,6 +220,25 @@ pub(crate) async fn record_operator_answer(
     let now: BTreeSet<String> = group.interfaces.iter().cloned().collect();
     if &now != members {
         return Err(AnswerRefused::GroupChanged);
+    }
+
+    // 🔴 Guy, 2026-09-26 (PR #220's review): *the same machine* on a group holding a pair the operator
+    // already answered DISTINCT would make those two one by transitivity — refused, and the pane does
+    // not offer it.
+    if answer == Answer::SameMachine {
+        let distinct: Vec<(String, String)> = sqlx::query_as(
+            "SELECT interface_low, interface_high FROM l2_pair_decision \
+             WHERE is_current = 1 AND decided_by = 'OPERATOR' AND outcome = 'no_match'",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(classify)?;
+        if distinct
+            .iter()
+            .any(|(low, high)| members.contains(low) && members.contains(high))
+        {
+            return Err(AnswerRefused::Contradicts);
+        }
     }
 
     let shown_literal = datetime_literal(shown);
@@ -211,17 +251,45 @@ pub(crate) async fn record_operator_answer(
         Some(_) => {}
     }
 
-    let question: Vec<&QuestionRow> = rows
+    // The pairs that ARE the question — both ends in the group — in `(low, high)` order, the order every
+    // answer locks them in.
+    let mut question: Vec<&QuestionRow> = rows
         .iter()
         .filter(|(low, high, ..)| members.contains(low) && members.contains(high))
         .collect();
-    if question
-        .iter()
-        .any(|(.., valid_from)| *valid_from > shown_literal)
-    {
+    question.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+    // 🔑 LOCK the question's pairs and nothing else: a lookup by the unique key's prefix, `FOR UPDATE`,
+    // which reads the LATEST committed row (under REPEATABLE READ a plain read would return the snapshot
+    // taken above). A row that is no longer the one the question was named on means someone got there
+    // first: an operator (not open), or a sweep that re-judged the pair (the question changed).
+    let mut locked: Vec<(&QuestionRow, LockedRow)> = Vec::with_capacity(question.len());
+    for row in &question {
+        let current: Option<LockedRow> = sqlx::query_as(
+            "SELECT id, decided_by, outcome, abstention_cause, verdicts, ruleset_version, \
+             DATE_FORMAT(valid_from, '%Y-%m-%d %H:%i:%s.%f') FROM l2_pair_decision \
+             WHERE interface_low = ? AND interface_high = ? AND is_current = 1 FOR UPDATE",
+        )
+        .bind(&row.0)
+        .bind(&row.1)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(classify)?;
+        match current {
+            Some(current) if current.0 == row.2 => locked.push((row, current)),
+            Some(current)
+                if current.1 == "ENGINE"
+                    && current.2 == "abstained"
+                    && current.3.as_deref() == Some("ambiguous") =>
+            {
+                return Err(AnswerRefused::Stale);
+            }
+            _ => return Err(AnswerRefused::NotOpen),
+        }
+    }
+    if locked.iter().any(|(_, current)| current.6 > shown_literal) {
         return Err(AnswerRefused::Stale);
     }
-    for (low, high, id, verdicts, ruleset_version, _) in &question {
+    for ((low, high, ..), (id, _, _, _, verdicts, ruleset_version, _)) in &locked {
         crate::l2_repo::close_l2_decision(&mut *conn, id, shown).await?;
         sqlx::query(
             "INSERT INTO l2_pair_decision \
@@ -244,7 +312,7 @@ pub(crate) async fn record_operator_answer(
     }
     Ok(Answered {
         answer,
-        pairs: question.len(),
+        pairs: locked.len(),
     })
 }
 
@@ -434,22 +502,23 @@ pub(crate) fn refusal(refused: &AnswerRefused) -> Refusal {
         AnswerRefused::NotOpen => {
             Refusal::new(StatusCode::CONFLICT, "triage.answer.refused.not_open")
         }
+        AnswerRefused::Contradicts => {
+            Refusal::new(StatusCode::CONFLICT, "triage.answer.refused.contradicts")
+        }
+        AnswerRefused::Contended => Refusal::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "triage.answer.refused.contended",
+        ),
         AnswerRefused::Forged => Refusal::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "triage.answer.refused.malformed",
         ),
         AnswerRefused::Store(error) => {
             tracing::error!(%error, "an answer failed at the backend");
-            match error {
-                RepositoryError::Contention => Refusal::new(
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    "triage.answer.refused.busy",
-                ),
-                _ => Refusal::new(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "triage.answer.refused.store",
-                ),
-            }
+            Refusal::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "triage.answer.refused.store",
+            )
         }
     }
 }
@@ -471,13 +540,24 @@ fn parse(request: &AnswerRequest) -> Option<(BTreeSet<String>, Answer, Timestamp
         return None;
     }
     let smallest = members.iter().next()?;
-    if request.group.trim() != format!("ambigu:{smallest}") {
+    // Compared case-insensitively, as the members are (they are normalised by `Uuid::to_string`).
+    if !request
+        .group
+        .trim()
+        .eq_ignore_ascii_case(&format!("ambigu:{smallest}"))
+    {
         return None;
     }
     let answer = Answer::parse(request.answer.trim())?;
     let shown = chrono::DateTime::parse_from_rfc3339(request.shown.trim())
         .ok()?
         .with_timezone(&chrono::Utc);
+    // 🔴 chrono ACCEPTS a leap second (`…23:59:60.5Z`) and represents it with nanoseconds ≥ 10⁹; MariaDB
+    // refuses the rendered `:60` and the answer answered 500 (PR #220's review, edge layer, measured).
+    // The page never renders one, so it is a malformed form.
+    if shown.timestamp_subsec_nanos() >= 1_000_000_000 {
+        return None;
+    }
     Some((members, answer, shown))
 }
 
@@ -518,6 +598,24 @@ mod tests {
 
     #[test]
     fn a_form_is_read_only_when_every_part_is_the_screens() {
+        // PR #220's review: an uppercase group is the same group, and a leap second is no instant.
+        let upper = request(
+            &format!("AMBIGU:{}", A.to_uppercase()),
+            &format!("{},{B}", A.to_uppercase()),
+            "same",
+            "2026-09-26T10:00:00Z",
+        );
+        assert!(parse(&upper).is_some(), "case is not a different group");
+        let leap = request(
+            &format!("ambigu:{A}"),
+            &format!("{A},{B}"),
+            "same",
+            "2026-09-26T23:59:60.5Z",
+        );
+        assert!(
+            parse(&leap).is_none(),
+            "a leap second is refused as malformed, never a 500"
+        );
         let shown = "2026-09-26T10:00:00.123456Z";
         let good = request(&format!("ambigu:{A}"), &format!("{B},{A}"), "same", shown);
         let (members, answer, at) = parse(&good).expect("the screen's own form");
@@ -596,7 +694,7 @@ mod tests {
             (
                 AnswerRefused::from(RepositoryError::Contention),
                 503,
-                "triage.answer.refused.busy",
+                "triage.answer.refused.contended",
             ),
             (
                 AnswerRefused::from(RepositoryError::Backend("x".into())),
@@ -988,6 +1086,7 @@ mod tests {
             crate::triage_view::url_escape(&form.members),
             crate::triage_view::url_escape(&form.shown),
         );
+        let body_again = body.clone();
         let response = router(pool.clone())
             .oneshot(
                 Request::builder()
@@ -1002,6 +1101,22 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
+        // AC5, through the ROUTE (PR #220's review): the same answer posted again — a second tab, a
+        // double press — is the keyed 409 *no longer open*, never a 500.
+        let again = router(pool.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(ANSWER_PATH)
+                    .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                    .header(header::HOST, "nas:8080")
+                    .header(header::ORIGIN, "http://nas:8080")
+                    .body(Body::from(body_again))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(again.status(), StatusCode::CONFLICT);
 
         // AC7: the question is gone, and *Ajouter* is back on each address.
         let (view, _) = crate::page::triage_view(&pool, None, false, true)
@@ -1078,7 +1193,7 @@ mod tests {
 
     /// Story 6.14b (Guy, 2026-09-26): a group that RE-FORMS around an answered pair — A–B answered, then
     /// a third NIC D answering to the same name — asks only about D: the answer writes D's two pairs and
-    /// leaves A–B's earlier answer as it was.
+    /// leaves A–B's earlier answer as it was; and an answer that would CONTRADICT it is refused.
     #[tokio::test]
     async fn a_re_formed_group_writes_only_the_pairs_it_did_not_cover() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
@@ -1106,9 +1221,15 @@ mod tests {
         )
         .await;
         let abd: BTreeSet<String> = interfaces(&pool).await.into_iter().collect();
-        let answered = answer_on(&pool, &abd, Answer::SameMachine, at_micros(t + 1))
+        // 🔴 Guy's decision (2026-09-26, PR #220's review): *the same machine* on a group holding a pair
+        // the operator already called DISTINCT would make A=B by transitivity — it is refused.
+        assert_eq!(
+            answer_on(&pool, &abd, Answer::SameMachine, at_micros(t + 1)).await,
+            Err(AnswerRefused::Contradicts)
+        );
+        let answered = answer_on(&pool, &abd, Answer::DistinctMachines, at_micros(t + 1))
             .await
-            .expect("the re-formed question");
+            .expect("the re-formed question, answered consistently");
         assert_eq!(answered.pairs, 2, "D's two pairs, and not A–B again");
         let outcomes: Vec<(String, String)> = current(&pool)
             .await
@@ -1118,10 +1239,147 @@ mod tests {
         assert_eq!(outcomes.len(), 3);
         assert_eq!(
             outcomes.iter().filter(|(o, _)| o == "no_match").count(),
-            1,
-            "A–B's earlier answer stands: {outcomes:?}"
+            3,
+            "A–B's earlier answer stands and D is distinct from both: {outcomes:?}"
         );
         assert!(outcomes.iter().all(|(_, who)| who == "OPERATOR"));
+    }
+
+    /// 🔴 PR #220's review (edge layer, measured): with the question filter replaced by `|_| true` the
+    /// whole suite stayed green while one click answered EVERY open question. Two open questions here —
+    /// `obelix` and `asterix` — and answering one leaves the other exactly as the engine wrote it.
+    #[tokio::test]
+    async fn an_answer_answers_its_own_question_and_no_other() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        let t = 1_790_000_000_000_030;
+        sweep(
+            &pool,
+            vec![
+                sighting(1, 1, Some("obelix"), t),
+                sighting(2, 2, Some("obelix"), t),
+                sighting(3, 3, Some("asterix"), t),
+                sighting(4, 4, Some("asterix"), t),
+            ],
+        )
+        .await;
+        let questions = current(&pool).await;
+        assert_eq!(
+            questions.len(),
+            2,
+            "premise: two open questions {questions:?}"
+        );
+        let first: BTreeSet<String> = [questions[0].0.clone(), questions[0].1.clone()].into();
+        let answered = answer_on(&pool, &first, Answer::DistinctMachines, at_micros(t))
+            .await
+            .expect("the first question");
+        assert_eq!(answered.pairs, 1);
+        let after = current(&pool).await;
+        let other = after
+            .iter()
+            .find(|r| r.0 == questions[1].0 && r.1 == questions[1].1)
+            .expect("the other question");
+        assert_eq!(
+            (other.2.as_str(), other.4.as_str()),
+            ("abstained", "ENGINE"),
+            "the other question is untouched"
+        );
+    }
+
+    /// 🔴 PR #220's review (edge layer, MEASURED a deadlock whose victim was the sweep): the answer's
+    /// locking read scanned the whole table (`type=ALL`), so an answer on one question waited on — and
+    /// could deadlock with — a sweep closing ANY other question's row. Guy's decision (2026-09-26): only
+    /// the question's own pairs are locked.
+    ///
+    /// ⚠️ **What this does NOT show, measured while writing it**: the answer can still wait on the pair
+    /// that is its NEIGHBOUR in the unique key `(interface_low, interface_high, is_current)`. The answer's
+    /// INSERT checks that key for duplicates, finds its own just-closed entry, and InnoDB then takes a
+    /// shared lock on the next entry — which a sweep may hold. With two questions minted in one sweep they
+    /// ARE neighbours, and the first version of this test waited on exactly that (the process list showed
+    /// the INSERT in `Update`, and `INNODB_LOCKS` read empty). So three questions: answering the FIRST in key
+    /// order does not wait on the THIRD, which the whole-table read did. The neighbour is registered.
+    #[tokio::test]
+    async fn an_answer_does_not_wait_on_another_questions_rows() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        let t = 1_790_000_000_000_040;
+        sweep(
+            &pool,
+            vec![
+                sighting(1, 1, Some("obelix"), t),
+                sighting(2, 2, Some("obelix"), t),
+                sighting(3, 3, Some("asterix"), t),
+                sighting(4, 4, Some("asterix"), t),
+                sighting(5, 5, Some("idefix"), t),
+                sighting(6, 6, Some("idefix"), t),
+            ],
+        )
+        .await;
+        // `current` is ordered by `(interface_low, interface_high)` — the unique key's order.
+        let questions = current(&pool).await;
+        assert_eq!(
+            questions.len(),
+            3,
+            "premise: three open questions {questions:?}"
+        );
+        // The holder does what a SWEEP does to the LAST question's row: closes it by primary key through
+        // `close_l2_decision`, and keeps its transaction open.
+        let last_id: String = sqlx::query_scalar(
+            "SELECT id FROM l2_pair_decision WHERE interface_low = ? AND interface_high = ? \
+             AND is_current = 1",
+        )
+        .bind(&questions[2].0)
+        .bind(&questions[2].1)
+        .fetch_one(&pool)
+        .await
+        .expect("the last question's row");
+        let mut holder = pool.acquire().await.expect("connection");
+        let mut held = sqlx::Connection::begin(&mut *holder).await.expect("tx");
+        crate::l2_repo::close_l2_decision(&mut *held, &last_id, at_micros(t + 5))
+            .await
+            .expect("a sweep closes the last question's row");
+        let first: BTreeSet<String> = [questions[0].0.clone(), questions[0].1.clone()].into();
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            answer_on(&pool, &first, Answer::SameMachine, at_micros(t)),
+        )
+        .await;
+        held.rollback().await.expect("release");
+        assert!(
+            matches!(outcome, Ok(Ok(_))),
+            "the answer must not wait on a question that is not its key neighbour: {outcome:?}"
+        );
+    }
+
+    /// PR #220's review (edge layer, measured): the store-side refusal of a group with no current
+    /// placement was carried by no test — `None => {}` left the suite green and skipped the forged-
+    /// instant bound too. The page offers no answer there (AC5); a POST that arrives anyway is refused.
+    #[tokio::test]
+    async fn a_question_with_no_placement_is_refused_by_the_store() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        let t = 1_790_000_000_000_050;
+        sweep(
+            &pool,
+            vec![
+                sighting(1, 1, Some("obelix"), t),
+                sighting(2, 2, Some("obelix"), t),
+            ],
+        )
+        .await;
+        let members: BTreeSet<String> = interfaces(&pool).await.into_iter().collect();
+        // Every placement closed: the interfaces are in the question and on the network nowhere now.
+        sqlx::query(
+            "UPDATE identity_link SET valid_to = valid_from, current_subject = NULL \
+             WHERE interface_id IS NOT NULL",
+        )
+        .execute(&pool)
+        .await
+        .expect("close the placements");
+        assert_eq!(
+            answer_on(&pool, &members, Answer::SameMachine, at_micros(t)).await,
+            Err(AnswerRefused::Stale)
+        );
     }
 
     /// AC5: stale, changed, not open and forged each refuse, and each writes nothing.
@@ -1220,7 +1478,8 @@ mod tests {
     }
 
     /// AC5: two answers to one question at once — exactly one current OPERATOR row per pair, and the
-    /// loser is the keyed 409, never a 500. The locking read is what serialises them.
+    /// loser is the keyed 409, never a 500. Two carriers serialise them — the lock on the pairs and the
+    /// close that follows — which mutation M2 measured by removing the first and staying green.
     #[tokio::test]
     async fn two_concurrent_answers_leave_one_and_the_loser_is_told_it_is_no_longer_open() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
