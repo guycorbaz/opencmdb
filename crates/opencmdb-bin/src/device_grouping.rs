@@ -574,7 +574,10 @@ mod tests {
             (
                 "r9".to_string(),
                 "ipv4".to_string(),
-                "192.0.2.90".to_string(),
+                // ⚠️ `.10` sorts BEFORE `.40` as a string, so only the cards' freshness can put gamma
+                // first — with `.90` the sort assertion below passed with no sort at all (found while
+                // deriving its mutation's carriers).
+                "192.0.2.10".to_string(),
             ),
             ("r9".to_string(), "mac".to_string(), "cc".to_string()),
         ];
