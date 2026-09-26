@@ -348,7 +348,7 @@ _Every active FR (FR52 removed) maps to at least one epic. Multi-epic FRs are sp
 - FR11: E3 — distinct linked records; never overwrite
 - FR12: E7 — triage inbox
 - FR13: E6 (minimal promote) / E7 — document (all/field)
-- FR14: E7 — create/attach/exclude/snooze/accept-gap
+- FR14: **E6c (create a record by hand)** / E7 — create from the inbox, attach, exclude, snooze, accept-gap
 - FR15: E7 — remember triage decisions
 - FR16: E3 (minimal) / E5 — abstention as first-class outcome
 - FR16b: E5 — abstention displayed/counted/grouped by cause
@@ -375,8 +375,8 @@ _Every active FR (FR52 removed) maps to at least one epic. Multi-epic FRs are sp
 - FR37: E6 (minimal) / E17 — observation history
 - FR38: E17 — observation retention
 - FR38b: E6 — ephemeral-interface dormant lifecycle
-- FR39: E3 (minimal) / E17 — search + full record view
-- FR40: E21 — edit declared attributes
+- FR39: E3 (minimal) / **E6c (the record of a real device opens)** / E17 — search + full record view
+- FR40: **E6c (minimal: name, role, location, notes — typed and corrected by the operator)** / E21 — the rest (owner, tags)
 - FR41: E21 — decommission/archive/delete
 - FR42: E21 — full dataset backup/restore
 - FR43: E20 — read-only JSON API
@@ -427,6 +427,11 @@ _**REORDERED at Epic 5's retrospective, 2026-08-12, by Guy's decision (option a)
 **FRs covered:** **none new** — it re-renders the surfaces of FR10, FR11, FR16, FR16b and builds the site where **FR13(a) lands in story 6.4**. **NFRs:** 25, 26.
 
 _**Why it is `6b` and not `7`:** renumbering seventeen epics to make room for one produces churn and nothing else. The house convention for an insertion is a letter suffix — stories 5.4b, 5.9b, 5.11b, 5.13b and 5.14b were all inserted that way._
+
+### Epic 6c: Décrire un appareil — INSERTED 2026-09-26
+🔑 **Inserted after story 6.14c and before 6.15, on Guy's instruction of 2026-09-26**, after using `v0.7.0` on the NAS: *"il n'y a pas beaucoup de fonctionnalités utilisable pour l'instant"*, and asked what he would do first, *"documenter un appareil"*. The operator can OPEN the record of a real machine, DESCRIBE it in their own words (name, role, location, notes) and CORRECT what they wrote, and CREATE a record by hand. **FRs covered:** FR39 (minimal: the record of a real device opens — issue #201), FR40 (minimal: name, role, notes, plus location), FR14 (in part: *create a new record*). Owner, tags and the rest of FR40 stay with Epic 21; attach/exclude/snooze/accept-gap stay with Epic 7. **NFRs:** 25, 26.
+
+_**Why it is pulled forward:** FR40 sat in Epic 21 of 23. This is the measured shape of risk R4 (`prd.md:766` forbids re-ordering by effort): the gesture the operator names first is planned second to last. The insertion is a planning act on the IPAM precedent (2026-09-10), and it does not rewrite `prd.md:766`, which stays Guy's._
 
 ### Epic 7: La boucle se ferme (v0.5)
 The rich triage inbox on a correct synchronous commit: review unreconciled discoveries; document (all/field); accept-gap (gap stays open, mandatory note, wakes on observed change); exclude; snooze; create; attach. This is the MVP "you could stop here" line — the product now reconciles, not just observes.
@@ -2411,6 +2416,102 @@ So that the work that has been invisible for two epics becomes a thing I can run
 **And** the docs-current-before-push rule is discharged in the same push: the **User Manual** and **Administrator Manual** (⚠️ *which carry NO screenshots at all — corrected at the retrospective. Their staleness is a SENTENCE: `user-manual.tex:151` said "A dark theme is the default". A story hunting images would have found none, concluded the manuals were fine, and shipped it*), `README.md`, the `gh-pages` landing site, `docker/README.dockerhub.md`, `docs/project-context.md` and `CLAUDE.md`. ⚠️ **A release whose manual describes the previous interface is not ready**, and this is the first release where that risk is real: `v0.1.1` shipped one page.
 
 ---
+
+## Epic 6c: Décrire un appareil
+
+**Goal:** the operator can open the record of a real machine, describe it in their own words, correct what they wrote, and create a record by hand. **FRs:** FR39 (minimal), FR40 (minimal), FR14 (create by hand). **NFRs:** 25 (WCAG 2.1 AA), 26 (EN + FR).
+
+_**Created 2026-09-26 by Guy's planning act**, after the first day of use of `v0.7.0` on the NAS. **The sequence is: 6.14c → EPIC 6c → 6.15 … 6.19.** Three stories._
+
+_**Guy's decisions of 2026-09-26, which are this epic's premises and not open questions:**_
+
+_**(1) Four fields and no more:** **name**, **role**, **location**, **notes**. Owner and tags stay with Epic 21. `location` is not in FR40's list; it is an addition, by decision._
+
+_**(2) 🔑 Everything the operator TYPED can be corrected** (Guy's words: *"si une entrée est introduite manuellement, elle doit pouvoir être corrigée"*) — the four fields, and any value typed when a record is created by hand (story 6c.3), an address included. **What the network put there through *Ajouter* is NOT correctable in this epic**: an ADOPTED value (`origin = 'adopted'`) is what reconciliation compares against the observed side, and correcting it is Epic 7's *document by field*. The line is the value's ORIGIN, never the field's name._
+
+_**(3) A correction keeps the history.** The earlier value is closed, not overwritten, and stays readable. 🔴 **No `UPDATE` of `declared_attribute`**: story 6.5's `entity-id-immutable` gate refuses every `UPDATE` of that table on purpose, and this epic does not relax it. How a typed value is superseded — a sibling table with a current/closed coupling on story 6.12's `l2_pair_decision` precedent, or another shape — is measured at 6c.2's contexting, and the gate stays whole._
+
+_**(4) `role` is a CLOSED list**, stored as a token (`VARCHAR` + `CHECK` on `ascii_bin`, never a MariaDB `ENUM` — story 6.5), rendered through a key in both locales, and filterable in the inventory. Its values are the binding table's (the DESCRIPTION axis, added by this same act)._
+
+_**(5) The inventory shows the operator's NAME first and the observed DNS name second.** With no name typed, the row is unchanged._
+
+_**Constraints this decomposition respects, so no story rediscovers them:**_
+
+_**(a) The four fields are never compared.** No connector observes a name, a role, a location or notes, so they never enter `gap::project`'s comparison and never open a gap. A test says so; it is not left to the absence of a mapping._
+
+_**(b) The write cost is front-loaded** (Epic 14's constraint (1)): the first new write route carries validation, keyed refusal bodies in both locales, the Origin check (story 6.2), the `authorship` gate's sanction (story 5.12) and both browser gates. **Whether these routes sit behind a switch** is posed at 6c.2's contexting; the IPAM routes carry none (Guy, 2026-09-11), because `OPENCMDB_DOCUMENT_ENABLED` guards an adoption hazard a description does not have._
+
+_**(c) The record's address.** `/devices/{id}` serves only example records today, by slug. A real record needs a real id — the device row's (story 6.14c: the smallest record id of a device) — and the example records must keep theirs. Measured at 6c.1's contexting, not assumed._
+
+_**(d) The glossary comes first.** The DESCRIPTION axis is added to `prd.md` and `ux-design-specification.md` by this act, so no story names a field ahead of the table (Epic 14's constraint (5))._
+
+### Story 6c.1: The record of a real device opens
+
+As the operator,
+I want to open the record of a machine the product shows me,
+So that I can see what is declared and what is observed about it in one place.
+
+**Acceptance Criteria:**
+
+**Given** a device in the inventory built from the store
+**When** the operator follows its row
+**Then** its record opens at an address that names it, showing its declared values with their provenance and its observed values with their freshness — the two sides never merged (FR11). Closes issue #201.
+
+**Given** a device grouped by an operator's answer (story 6.14c)
+**When** its record opens
+**Then** every record and interface of the group is listed, and nothing says one was merged into another.
+
+**Given** the example records
+**When** this story lands
+**Then** they still open at their own addresses and still carry their marker, and a real id and an example slug can never collide.
+
+### Story 6c.2: Describe a device, and correct the description
+
+As the operator,
+I want to give a machine a name, a role, a location and notes, and to correct them,
+So that the inventory says what my machines are in my own words.
+
+**Acceptance Criteria:**
+
+**Given** a real device's record
+**When** the operator types a name, chooses a role from the closed list, types a location or notes, and saves
+**Then** each value is written with a human author and the record shows it at once.
+
+**Given** a value the operator typed
+**When** they correct it
+**Then** the new value is current, the earlier one is closed and still readable, and **no `UPDATE` of `declared_attribute` exists** — the `entity-id-immutable` gate is unchanged and green.
+
+**Given** a value adopted from the network through *Ajouter*
+**When** the record renders
+**Then** it offers no correction for it, and says that this belongs to documenting by field (Epic 7).
+
+**Given** the inventory
+**When** a device carries a typed name
+**Then** its row shows that name first and the observed DNS name second; the role filters the inventory.
+
+**Given** the four fields
+**When** reconciliation runs
+**Then** none of them is compared and none opens a gap — asserted, not left to the absence of a mapping.
+
+### Story 6c.3: Create a record by hand
+
+As the operator,
+I want to create the record of a machine the network has not shown me,
+So that a machine that does not answer a sweep still has its place in the inventory.
+
+**Acceptance Criteria:**
+
+**Given** the inventory
+**When** the operator creates a record by hand with a name and, optionally, the four fields and an address
+**Then** the record exists, appears in the inventory, and every value in it is typed and therefore correctable (decision (2)).
+
+**Given** a hand-made record carrying an address
+**When** reconciliation runs
+**Then** what `/triage` shows for it is MEASURED at contexting and stated before implementation — an address typed by hand IS compared, unlike the four fields.
+
+**Given** a hand-made record whose address the network later shows
+**When** the next sweep lands
+**Then** the product does not create a second record for it silently; what it does is decided at contexting with Guy.
 
 ## Epic 14: IPAM
 

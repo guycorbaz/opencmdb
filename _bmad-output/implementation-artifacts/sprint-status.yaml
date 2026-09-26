@@ -5430,6 +5430,17 @@ development_status:
     # ~/travail/Projets actuels/opencmdb/ under that tree's own CLAUDE.md, and it corrects what
     # this retrospective surfaced. Do not flip the epic on a story count.
 
+  # ── Epic 6c: Décrire un appareil — INSERTED 2026-09-26 ────────────────────
+  # Guy's planning act after the first day of v0.7.0 on the NAS: the operator opens a real record,
+  # describes it (name, role, location, notes), corrects what they typed, and creates a record by
+  # hand. Sequenced 6.14c -> EPIC 6c -> 6.15. Everything typed is correctable; adopted values are
+  # Epic 7's. Premises and constraints: epics.md, "Epic 6c".
+  epic-6c: backlog
+  6c-1-real-device-record-opens: backlog
+  6c-2-describe-a-device: backlog
+  6c-3-create-a-record-by-hand: backlog
+  epic-6c-retrospective: required
+
   # ── Epic 7: La boucle se ferme (v0.5) ────────────────────────────────────
   epic-7: backlog
   epic-7-retrospective: required

@@ -1423,6 +1423,27 @@ the other two stay out of the interface.
 term minted before its screen exists is minted by accident.
 
 
+#### The DESCRIPTION axis (binding — added 2026-09-26 by Guy's planning act, Epic 6c)
+
+_The axes above say what the operator DOES, what an object IS and what an address is MEANT FOR. None says
+what the operator knows about a machine that the network cannot tell. These four fields are TYPED, never
+observed, so they are never compared and never open a gap. Everything the operator typed can be corrected;
+a correction keeps the earlier value readable._
+
+| Concept | EN (docs, API, code — **and a UI locale**) | FR (UI) | Meaning |
+|---|---|---|---|
+| What the operator calls the machine | **name** | **nom** | Typed by the operator. Shown before the observed DNS name, which is NOT this word — that one is `hostname`, observed |
+| What the machine is for | **role** | **rôle** | One value of a CLOSED list, below. Filters the inventory |
+| Where the machine is | **location** | **emplacement** | Free text. Not in FR40's list; added by decision |
+| What else the operator wants to say | **notes** | **notes** | Free text |
+
+**The `role` values:** `server` / *serveur* · `storage` / *stockage* · `network` / *réseau* · `workstation` /
+*poste de travail* · `peripheral` / *périphérique* · `security` / *sécurité* · `other` / *autre*.
+
+⚠️ **`application` is NOT a role**, although the example dataset uses it as one: `application` is Epic 15's
+noun (FR27), and one word carrying two meanings on two screens is the synonym problem this table exists to
+prevent. The example dataset keeps its own keys until 6c.2 retires or aligns them.
+
 ⚠️ **A suffix is a rendering detail, not a term** (Guy, 2026-08-19). The mock renders *"Écart · 1
 champ"*, *"Écart · 2 champs"* and *"Écart · présence"*: **the term is `écart`** and what follows the
 separator qualifies it. A glossary check matches the term before the separator.
