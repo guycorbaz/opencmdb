@@ -1,6 +1,6 @@
 # Story 6.14c: A machine the operator called one is shown as one
 
-Status: **review** — developed 2026-09-26 (see *Dev Agent Record*). Before that: **ready-for-dev** — contexted, arbitrated (§0.8), validated by two layers (§0.9, one of them building a
+Status: **done** — PR #224 squash-merged 2026-09-26 as `9b344c7`, CI green on the head `088024f` itself (run `36250540400`), code-reviewed by three isolated layers and repaired first. Before that: **review** — developed 2026-09-26 (see *Dev Agent Record*). Before that: **ready-for-dev** — contexted, arbitrated (§0.8), validated by two layers (§0.9, one of them building a
 prototype on its own database), and re-arbitrated on the validation's findings (§0.10, 2026-09-26). Not
 `ready-for-dev`: its criteria are written UNDER the recommendations and move with the arbitration.
 
