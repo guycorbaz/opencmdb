@@ -466,11 +466,15 @@ triage.answer.refused.store:
   en: "The answer could not be written. Nothing you added was touched; see the self-diagnostic if it persists."
   fr: "La réponse n'a pas pu être écrite. Rien de ce que vous avez ajouté n'a été touché ; consultez l'auto-diagnostic si cela persiste."
 inventory.title:
-  en: "Your records"
-  fr: "Vos fiches"
+  # Story 6.14c (Guy's D, 2026-09-26): a row is a DEVICE now — the records the operator's answers join —
+  # and the screen's own noun names it; no new term.
+  en: "Your devices"
+  fr: "Vos appareils"
 inventory.lede:
-  en: "What you have added. A row here is a record kept from a sighting; an address nobody has claimed is a question, and questions are in the triage."
-  fr: "Ce que vous avez ajouté. Une ligne est une fiche retenue d'un constat ; une adresse que personne ne revendique est une question, et les questions sont dans le triage."
+  # 🔴 PR #224's review: the French read « déclarées » — the binding word for the DOCUMENTED side — for
+  # "answered", and both languages said the operator answered about RECORDS where they answer about cards.
+  en: "What you have added, one row per device: the records of network cards you said are one machine share a row, and so do records of one card. Only your answers join two cards; a record without a hardware address stands alone. An address nobody has claimed is a question, and questions are in the triage."
+  fr: "Ce que vous avez ajouté, une ligne par appareil : les fiches des cartes réseau dont vous avez répondu qu'elles sont une seule machine partagent une ligne, comme les fiches d'une même carte. Seules vos réponses réunissent deux cartes ; une fiche sans adresse matérielle reste seule. Une adresse que personne ne revendique est une question, et les questions sont dans le triage."
 inventory.none_before:
   en: "Nothing added yet. A record comes from the"
   fr: "Rien d'ajouté pour l'instant. Une fiche vient de la"
@@ -485,8 +489,8 @@ inventory.none_after:
 # and a record page would repeat it"* — written for the next author and never for the person who
 # pressed the button. This is that paragraph, said where the operator is.
 inventory.no_authoring:
-  en: "These records hold what the network showed. You cannot yet add a field it did not show — a name, a role, an owner — and there is nothing more to open: the row is everything the store knows."
-  fr: "Ces fiches contiennent ce que le réseau a montré. Vous ne pouvez pas encore ajouter un champ qu'il n'a pas montré — un nom, un rôle, un responsable — et il n'y a rien de plus à ouvrir : la ligne est tout ce que le magasin sait."
+  en: "These records hold what the network showed. You cannot yet add a field it did not show — a name, a role, an owner — and there is nothing more to open: a row shows everything the store knows about its records."
+  fr: "Ces fiches contiennent ce que le réseau a montré. Vous ne pouvez pas encore ajouter un champ qu'il n'a pas montré — un nom, un rôle, un responsable — et il n'y a rien de plus à ouvrir : une ligne montre tout ce que le magasin sait de ses fiches."
 inventory.col_name:
   en: "Name"
   fr: "Nom"
@@ -529,6 +533,16 @@ inventory.n_entities_one:
 inventory.n_entities_other:
   en: "%{n} records"
   fr: "%{n} fiches"
+inventory.n_devices_one:
+  en: "%{n} device"
+  fr: "%{n} appareil"
+inventory.n_devices_other:
+  en: "%{n} devices"
+  fr: "%{n} appareils"
+inventory.total:
+  # Story 6.14c (Guy's D): the rows are devices, the records are what the operator wrote — both named.
+  en: "%{devices} · %{records}"
+  fr: "%{devices} · %{records}"
 meta.no_source:
   en: "No source"
   fr: "Aucune source"

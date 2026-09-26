@@ -6572,7 +6572,10 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   ENGINE-ambiguous pairs (§0.11(1a)), refusing to override `l2-virtual-mac-prefix`'s Disqualifying `no_match`; a
   union-find over those `match` rows then joins the two interfaces that verdict separates. Unreachable with
   today's rules (the virtual-MAC reading disqualifies on either key, hostname agreement is an equivalence);
-  reachable from stale rows or a non-transitive rule. **Owner: story 6.14c.**
+  reachable from stale rows or a non-transitive rule. ~~**Owner: story 6.14c.**~~ ⚠️ _Story 6.14c decided it
+  (Guy's E1): the grouping reads the operator's `match` rows ONLY, so a chain groups by the answers alone,
+  pinned by `a_chain_of_answers_groups_by_the_answers_alone`. **Owner now: story 6.8**, whose non-transitive
+  rule is what makes the chain reachable._
 
 ## Story 6.14b — the operator lifts the doubt
 
@@ -6581,7 +6584,10 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   way, each address of the answered group offers *Add* again, and adding both creates two declared
   entities for what the operator just called one machine — D12's over-count, which E1 exists to prevent
   and which 6.14c's device grouping is what closes. On `obelix` it changes nothing: both addresses were
-  documented before the question existed. **Owner: story 6.14c.**
+  documented before the question existed. **Owner: story 6.14c.** ⚠️ _NARROWED by story 6.14c: the
+  over-count is gone from the INVENTORY (the two records share one device row), but the second write is
+  still possible and `/triage` still compares each record on its own. **Owner now: Epic 7**, whose triage
+  gestures decide what *Add* does on an address of a machine already recorded._
 - **The `file-size` gate is blind to `l2_repo.rs` and `main.rs`, both grown by story 6.14b.** It stops at
   the first `#[cfg(test)]` at any nesting: in `l2_repo.rs` that is a test-only type alias at line **84**,
   where the trailing test module opens at **587**; in `main.rs` line **45**, against **1110**. So the gate
@@ -6603,9 +6609,38 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   answer waited on the neighbour a sweep had closed, the INSERT in `Update` state and `INNODB_LOCKS`
   empty. A sweep that then needs the answer's rows deadlocks, and the victim can be the sweep (rolled back
   entirely, L1 included — AC6's cost) or the answer (503, *nothing was written*). Rare — it needs a sweep
-  open on a neighbouring pair while the operator presses — and not closed here. **Owner: story 6.14c**,
-  whose device writer adds a third writer to the same table.
+  open on a neighbouring pair while the operator presses — and not closed here. ~~**Owner: story 6.14c**,
+  whose device writer adds a third writer to the same table.~~ ⚠️ _Story 6.14c stores no device (Guy's A1),
+  so it adds no writer and the premise is gone; **owner now: the story that first produces an L2
+  `Decisive`**, whose `match` would make the engine a writer of the same rows._
 - **Two states of the Ambigu pane are measured by no browser gate: a group with no current placement, and
   a group naming an earlier answer.** Their render is carried by Rust tests; seeding them would add
   questions the keyboard gate's "first Ambigu row" would then have to tell apart (Guy, 2026-09-26, PR
   #220's review). `?answered=` joined axe's states. **Owner: Epic 6's RETROSPECTIVE.**
+
+## Story 6.14c — a machine the operator called one is shown as one
+
+- **The device is COMPUTED, not stored — a divergence from story 6.12 and D15.** Guy's arbitration A1
+  (2026-09-26), taken against 6.12's user story (*"a device is a record rather than a computation repeated
+  at each page load"*) and D15 case A (a stored, SCD2-closable membership): the inventory groups at read
+  time from the operator's current `match` rows, which stay the source. A computed device has no stable id
+  — its first record's id changes when a record is added. **Owner: the first consumer that needs a stable
+  device id — Epic 15 (FR26, `software.device_id`)**, which stores it built from the `match` rows.
+- **A record added before `v0.5.0` holds no hardware address and reaches no network card.** Its origin
+  sighting carried no MAC, so it declares none, and Guy's path (the MAC — the origin path was removed at the
+  code review, having served no record the product writes) reaches nothing: the record stays a device of its
+  own even after *the same machine* — measured by
+  `a_record_from_a_mac_less_sighting_stands_alone_even_after_an_answer`. ⚠️ Not only before `v0.5.0`: a
+  record documented behind a Docker bridge, and the record of the host running opencmdb, carry no MAC
+  either (PR #224's review). The address path would have joined them and was refused for merging two
+  machines by DHCP. **Owner: Epic 6's RETROSPECTIVE**, which
+  decides whether such records deserve a path of their own (e.g. re-documenting from a newer sighting).
+- **Two records declaring one MAC in two `l2_domain`s are one device.** Each attaches to the FIRST interface
+  carrying its MAC (Guy's C: a record never bridges interfaces), so both land on the same one — D21's
+  cloned-MAC case would read as one device. ⚠️ It read *"unreachable with the shipped connector"*, which is
+  false: the registered interface-mint race gives ONE MAC two interfaces in ONE domain (PR #224's review).
+  And AC3's two-domain case is carried by a hand-built pure test only, not the fixture connector.
+  **Owner: the story that gives the connector a real `l2_domain`, or the one that closes the mint race.**
+- **`/triage` still reconciles each record on its own.** `obelix` documented twice keeps two per-record gap
+  rows under ONE `/devices` row — a unit difference between two screens. **Owner: Epic 7**, whose triage
+  works at field level.

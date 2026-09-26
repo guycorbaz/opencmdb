@@ -574,6 +574,9 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .open-question a { color: var(--text); text-decoration: underline; }
 .identity .pair.ambiguous { margin-top: 4px; }
 .identity .pair.answered { margin-top: 4px; }
+/* Story 6.14c: a device of several records says how many, under its name — the *Declared* column keeps
+   counting fields, one unit per column (PR #224's review). */
+.records { display: block; font-size: 12px; }
 .photo .meta { margin: 4px 0 0; font-size: 11px; overflow-wrap: anywhere; }
 
 /* A grid child that may hold long values needs this or it refuses to shrink. */

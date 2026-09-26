@@ -31,7 +31,7 @@
 //! an entity carries an owner, a criticality or a group — Epic 6's and Epic 15's — the record
 //! earns its own page and `Screen::Device` stops being an example.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use askama::Template;
 
@@ -51,8 +51,11 @@ pub(crate) struct InventoryRow {
     pub(crate) name: String,
     /// The address the entity is recognised by — the perimeter key, so never empty.
     pub(crate) ipv4: String,
-    /// How many fields are declared for it, already rendered with its noun.
+    /// How many fields are declared for it, already rendered with its noun — for a device of several
+    /// records, the DISTINCT fields across them (Guy, PR #224's review: one unit per column).
     pub(crate) fields: String,
+    /// *N records* when the row is a device of several, rendered under the name; empty for a lone record.
+    pub(crate) records: String,
     /// How the declaration was made — adopted from a sighting, or entered by hand.
     pub(crate) origin: String,
     /// When it was documented, in the operator's language.
@@ -164,8 +167,133 @@ pub(crate) fn build_inventory(
     declared: Vec<(String, String, String)>,
     provenance: &[DeclaredProvenance],
     observations: &[ObservedBatch],
+    grouping: &crate::device_grouping::GroupingInput,
     now: chrono::DateTime<chrono::Utc>,
 ) -> InventoryView {
+    let records = record_rows(declared, provenance, observations, now);
+    let total_records = records.len();
+    let keys: Vec<crate::device_grouping::Record<'_>> = records
+        .iter()
+        .map(|r| (r.row.id.as_str(), r.mac.as_deref()))
+        .collect();
+    let devices = crate::device_grouping::group(&keys, grouping);
+    let by_id: BTreeMap<&str, &RecordRow> =
+        records.iter().map(|r| (r.row.id.as_str(), r)).collect();
+
+    // 🔑 ONE ROW PER DEVICE (story 6.14c, Guy's C1 and D). A device is the records the operator's answers
+    // join, or that reach one interface; everything else stands alone, exactly as before.
+    let mut rows: Vec<InventoryRow> = devices
+        .into_iter()
+        .map(|(ids, interfaces_seen)| {
+            let members: Vec<&RecordRow> = ids
+                .iter()
+                .filter_map(|id| by_id.get(id.as_str()).copied())
+                .collect();
+            let distinct = |values: Vec<&str>| {
+                let mut out: Vec<String> = Vec::new();
+                for v in values.into_iter().filter(|v| !v.is_empty()) {
+                    if !out.iter().any(|o| o == v) {
+                        out.push(v.to_string());
+                    }
+                }
+                out.join(", ")
+            };
+            let names = distinct(members.iter().map(|m| m.row.name.as_str()).collect());
+            let addresses = distinct(members.iter().map(|m| m.row.ipv4.as_str()).collect());
+            // Origin and date from the most recently WRITTEN record.
+            let newest_write = members
+                .iter()
+                .max_by_key(|m| m.written)
+                .copied()
+                .expect("a device has a record");
+            // 🔴 LAST SEEN from the device's INTERFACES, never from a record's address (§0.9(G)): the
+            // validation measured a laptop's row showing the phone that later held its address. A device
+            // none of whose records reached an interface keeps the address rule it had before.
+            let sighting = interfaces_seen.and_then(|at| {
+                chrono::NaiveDateTime::parse_from_str(&at, "%Y-%m-%d %H:%M:%S%.f")
+                    .ok()
+                    .map(|n| n.and_utc())
+            });
+            let (seen, age_seconds) = match sighting {
+                Some(at) => (
+                    crate::page::relative_time(now, at),
+                    (now - at).num_seconds().max(0),
+                ),
+                None => {
+                    let freshest = members
+                        .iter()
+                        .min_by_key(|m| m.row.age_seconds)
+                        .copied()
+                        .expect("a device has a record");
+                    (freshest.row.seen.clone(), freshest.row.age_seconds)
+                }
+            };
+            let keys: BTreeSet<&str> = members
+                .iter()
+                .flat_map(|m| m.keys.iter().map(String::as_str))
+                .collect();
+            InventoryRow {
+                // 🔑 The SMALLEST record id, never the first: the first moved with its records'
+                // freshness, so the row's anchor changed on any sweep (PR #224's review, measured).
+                id: members
+                    .iter()
+                    .map(|m| m.row.id.clone())
+                    .min()
+                    .expect("a device has a record"),
+                name: names,
+                ipv4: addresses,
+                fields: crate::page::counted_fields("inventory.n_fields", keys.len()),
+                records: if members.len() > 1 {
+                    crate::page::counted_fields("inventory.n_entities", members.len())
+                } else {
+                    String::new()
+                },
+                origin: newest_write.row.origin.clone(),
+                documented: newest_write.row.documented.clone(),
+                seen,
+                age_seconds,
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        a.age_seconds
+            .cmp(&b.age_seconds)
+            .then_with(|| a.ipv4.cmp(&b.ipv4))
+    });
+    // 🔑 BOTH units, each named (Guy's D, 2026-09-26): the rows are devices, the records are what the
+    // operator wrote — one number alone would leave the other unexplained (story 5.14b's two-unit trap).
+    let total = if rows.is_empty() {
+        String::new()
+    } else {
+        rust_i18n::t!(
+            "inventory.total",
+            devices = crate::page::counted_fields("inventory.n_devices", rows.len()),
+            records = crate::page::counted_fields("inventory.n_entities", total_records)
+        )
+        .to_string()
+    };
+    InventoryView { rows, total }
+}
+
+/// One record's row before grouping, with what grouping needs: its declared MAC and when it was written.
+struct RecordRow {
+    /// The row as a lone record would show it.
+    row: InventoryRow,
+    /// Its declared `mac`, if any — how it reaches its interface first (Guy's B).
+    mac: Option<String>,
+    /// Its most recent declared write, for the device's origin and date.
+    written: Option<chrono::DateTime<chrono::Utc>>,
+    /// The keys it declares, for a device's distinct-field count.
+    keys: Vec<String>,
+}
+
+/// PURE: one row per RECORD, as the inventory showed before story 6.14c — the input to the grouping.
+fn record_rows(
+    declared: Vec<(String, String, String)>,
+    provenance: &[DeclaredProvenance],
+    observations: &[ObservedBatch],
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<RecordRow> {
     // Group the declared attributes by entity, preserving the store's order within each.
     let mut entities: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
     for (entity_id, key, value) in declared {
@@ -202,7 +330,7 @@ pub(crate) fn build_inventory(
         }
     }
 
-    let mut rows: Vec<InventoryRow> = Vec::new();
+    let mut rows: Vec<RecordRow> = Vec::new();
     for (entity_id, attrs) in entities {
         let value_of = |key: &str| {
             attrs
@@ -233,56 +361,58 @@ pub(crate) fn build_inventory(
             .max_by_key(|p| (p.updated_at, p.attr_key.clone()));
 
         let newest_sighting = freshest.get(&ipv4).copied();
+        let mac = attrs
+            .iter()
+            .find(|(k, _)| k == "mac")
+            .map(|(_, v)| v.clone());
+        let written = newest_write.map(|p| p.updated_at);
 
-        rows.push(InventoryRow {
-            id: entity_id,
-            name: value_of("hostname"),
-            ipv4,
-            fields: crate::page::counted_fields("inventory.n_fields", attrs.len()),
-            // ⚠️ **Words, never an empty cell** — the rule the name and last-seen columns already
-            // follow in this same table, and the review found these two breaking it: with no
-            // provenance row they rendered `<td class="muted"></td>`, which reads as a value the
-            // product failed to render rather than as a fact it does not hold.
-            origin: newest_write.map_or_else(
-                || rust_i18n::t!("inventory.origin_unknown").to_string(),
-                |p| {
-                    rust_i18n::t!(match p.origin.as_str() {
-                        "adopted" => "inventory.origin_adopted",
-                        _ => "inventory.origin_manual",
-                    })
-                    .to_string()
-                },
-            ),
-            documented: newest_write.map_or_else(
-                || rust_i18n::t!("meta.never_seen").to_string(),
-                |p| crate::page::relative_time(now, p.updated_at),
-            ),
-            seen: newest_sighting.map_or_else(
-                || rust_i18n::t!("meta.never_seen").to_string(),
-                |b| crate::page::relative_time(now, b.observed_at),
-            ),
-            age_seconds: newest_sighting
-                .map_or(i64::MAX, |b| (now - b.observed_at).num_seconds().max(0)),
+        rows.push(RecordRow {
+            mac,
+            written,
+            keys: attrs.iter().map(|(k, _)| k.clone()).collect(),
+            row: InventoryRow {
+                id: entity_id,
+                name: value_of("hostname"),
+                ipv4,
+                fields: crate::page::counted_fields("inventory.n_fields", attrs.len()),
+                records: String::new(),
+                // ⚠️ **Words, never an empty cell** — the rule the name and last-seen columns already
+                // follow in this same table, and the review found these two breaking it: with no
+                // provenance row they rendered `<td class="muted"></td>`, which reads as a value the
+                // product failed to render rather than as a fact it does not hold.
+                origin: newest_write.map_or_else(
+                    || rust_i18n::t!("inventory.origin_unknown").to_string(),
+                    |p| {
+                        rust_i18n::t!(match p.origin.as_str() {
+                            "adopted" => "inventory.origin_adopted",
+                            _ => "inventory.origin_manual",
+                        })
+                        .to_string()
+                    },
+                ),
+                documented: newest_write.map_or_else(
+                    || rust_i18n::t!("meta.never_seen").to_string(),
+                    |p| crate::page::relative_time(now, p.updated_at),
+                ),
+                seen: newest_sighting.map_or_else(
+                    || rust_i18n::t!("meta.never_seen").to_string(),
+                    |b| crate::page::relative_time(now, b.observed_at),
+                ),
+                age_seconds: newest_sighting
+                    .map_or(i64::MAX, |b| (now - b.observed_at).num_seconds().max(0)),
+            },
         });
     }
 
-    // Freshest first, then by address so the order is total and does not depend on the store's.
-    // Freshest first, then by address. ⚠️ Two entities may declare the SAME address (registered
-    // for the queue by story 6b.4 and inherited here), in which case both keys are equal and the
-    // tie falls to `sort_by`'s stability over the entity-id order of the `BTreeMap` above —
-    // deterministic, but by a mechanism worth naming rather than calling the order *total*.
-    // ⚠️ The address compares as a STRING, so `192.0.2.9` follows `192.0.2.10`. Cosmetic, and only
-    // within one freshness.
+    // Freshest first, then by address — the order records reach the grouping in, so a device's names
+    // and addresses are listed freshest first. ⚠️ The address compares as a STRING, so `192.0.2.9`
+    // follows `192.0.2.10`: cosmetic, and only within one freshness.
     rows.sort_by(|a, b| {
-        a.age_seconds
-            .cmp(&b.age_seconds)
-            .then_with(|| a.ipv4.cmp(&b.ipv4))
+        a.row
+            .age_seconds
+            .cmp(&b.row.age_seconds)
+            .then_with(|| a.row.ipv4.cmp(&b.row.ipv4))
     });
-
-    let total = if rows.is_empty() {
-        String::new()
-    } else {
-        crate::page::counted_fields("inventory.n_entities", rows.len())
-    };
-    InventoryView { rows, total }
+    rows
 }

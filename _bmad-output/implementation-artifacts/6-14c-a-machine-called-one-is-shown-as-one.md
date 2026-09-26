@@ -1,6 +1,6 @@
 # Story 6.14c: A machine the operator called one is shown as one
 
-Status: **ready-for-dev** — contexted, arbitrated (§0.8), validated by two layers (§0.9, one of them building a
+Status: **review** — developed 2026-09-26 (see *Dev Agent Record*). Before that: **ready-for-dev** — contexted, arbitrated (§0.8), validated by two layers (§0.9, one of them building a
 prototype on its own database), and re-arbitrated on the validation's findings (§0.10, 2026-09-26). Not
 `ready-for-dev`: its criteria are written UNDER the recommendations and move with the arbitration.
 
@@ -219,7 +219,8 @@ grouping is computed at read time from the operator's current `match` rows; the 
 user story, D15 case A and `software.device_id` is REGISTERED, owner **the first consumer needing a stable
 device id — Epic 15 (FR26)**; the day a device is stored, it is built from the `match` rows, which stay the
 source.
-**(B) MAC, else the record's ORIGIN observation.** The declared `mac` → `interface.mac_canon`; without one,
+**(B) MAC, else the record's ORIGIN observation.** ⚠️ *Narrowed by Guy at the code review (PR #224) to **MAC
+only**: the origin path served no record the product writes.* The declared `mac` → `interface.mac_canon`; without one,
 `declared_attribute.origin_obs_id` → that observation's current `match` link → its interface. The address
 path is DROPPED (§0.9(B)). The provenance read is SANCTIONED by name in the `authorship` gate — read-only,
 for display only, on story 6b.4's precedent for `origin`.
@@ -273,16 +274,128 @@ Sorted freshest first, as today.
 
 ## 1b. Tasks
 
-- [ ] T1 `inventory_view.rs`: record → interface (MAC, else origin observation), union-find over records'
+- [x] T1 `inventory_view.rs`: record → interface (MAC, else origin observation), union-find over records'
       interfaces and `match` rows, one row per device; indexed maps (AC1–AC3, AC6).
-- [ ] T2 The readers: interfaces by MAC, the origin observations' current placements, the `match` rows
+- [x] T2 The readers: interfaces by MAC, the origin observations' current placements, the `match` rows
       (filtered); `/devices` loads them within its budget (AC1, AC6).
-- [ ] T3 The `authorship` sanction for the `origin_obs_id` read, proved red without it (AC5).
-- [ ] T4 Copy and keys, both locales; the header's two plurals (AC4, AC8).
-- [ ] T5 Route-level tests with a store, the DHCP case, the *distinct* control, the timed scale test (AC1–AC7).
-- [ ] T6 Mutation pass: predictions first, carriers derived from the mutated VALUE's readers (the last two
+- [x] T3 The `authorship` sanction for the `origin_obs_id` read, proved red without it (AC5).
+- [x] T4 Copy and keys, both locales; the header's two plurals (AC4, AC8).
+- [x] T5 Route-level tests with a store, the DHCP case, the *distinct* control, the timed scale test (AC1–AC7).
+- [x] T6 Mutation pass: predictions first, carriers derived from the mutated VALUE's readers (the last two
       stories each missed one), `--baseline`, one database per run.
-- [ ] T7 Docs, register rows, twins, the Record (AC8, AC9).
+- [x] T7 Docs, register rows, twins, the Record (AC8, AC9).
+
+### Review Findings — code review of PR #224 (2026-09-26)
+
+Three isolated layers (blind: diff only; edge: own MariaDB, its own mutations and a 400 000-link scale
+probe; auditor: own MariaDB, re-ran the suite, gates, the record, re-proved the sanction red). ~20
+distinct. No write exists to be wrong; the defects are in what the grouping READS and what the page SAYS.
+
+- [x] [Review][Decision] **The origin path serves no real record** — the gesture declares a MAC whenever the origin observation carries one, and L1 places an observation exactly when it carries one, so a record without a MAC has an UNPLACED origin; the only store test reaching the branch built its state with a `DELETE` (blind HIGH; edge MED, measured: its filters mutated, 836 green) → **Guy, 2026-09-26: remove it — MAC only.** The branch and the `origin_obs_id` read go, `SANCTIONED_READS` returns to 3, and the DHCP test is rebuilt on a state the product makes. Arbitration B becomes *MAC only*.
+- [x] [Review][Decision] **The *Declared* column mixed two units** — *3 fields* on a lone record, *2 records* on a device (blind MED; edge LOW) → **Guy, 2026-09-26: fields in the column, records under the name** — the column counts the device's distinct declared fields, and *N records* is a small note under the name when there are several.
+- [x] [Review][Patch] The row's origin and date (most recent record) carried by no test — `max_by_key` → `min_by_key` left 836 green (auditor, measured)
+- [x] [Review][Patch] *Names joined* carried by no test — every fixture named both records `obelix` (auditor, measured)
+- [x] [Review][Patch] The device-level sort carried by no test — deleting it left 836 green (edge, measured)
+- [x] [Review][Patch] A grouped row's `data-entity-id` moved with its records' freshness — now the SMALLEST record id, stable (blind MED; edge LOW, measured)
+- [x] [Review][Patch] The documented limit was framed as *before v0.5.0* only — a record documented behind a Docker bridge, or of the host running opencmdb, has no MAC either and never groups (auditor MED)
+- [x] [Review][Patch] The French lede used « déclarées » — the binding word for the documented side — for *answered*; the English said the operator answered about RECORDS where they answer about cards (auditor MED; blind LOW)
+- [x] [Review][Patch] `README.md` still said nothing groups; `CLAUDE.md`'s *what it cannot do* still said `obelix` renders as two rows (auditor MED)
+- [x] [Review][Patch] The register row *two records declaring one MAC in two domains* said *unreachable with the shipped connector* — the interface-mint race reaches it in ONE domain (auditor MED)
+- [x] [Review][Patch] The inherited chain row still named this story as owner (auditor MED)
+- [x] [Review][Patch] The CHANGELOG's *"see the next section"* points at the previous one, and lost *the second write is still possible* (blind LOW; auditor LOW)
+- [x] [Review][Patch] *Last seen* changed meaning for LONE rows reaching a card too, and no document said so (blind LOW)
+- [x] [Review][Patch] The record: N1's explanation was wrong (`the_mac_wins` is green under N1); N4 missing without a word; the *Developed* Change Log row sat outside its table; AC6's test named *linear* asserts a bound; the chain test's name claims an engine `no_match` its input cannot carry; `GroupingInput`'s doc mixed two date dialects (blind; auditor)
+- [x] [Review][Defer] AC3's *"a test on the fixture connector's two domains"* is carried by a hand-built pure test only (auditor) — deferred, registered with the two-domain row
+
+## Dev Agent Record
+
+### Implementation notes
+
+- **`device_grouping.rs` (new)**: `load_grouping` reads the interfaces (id, MAC, last seen), each adopted
+  record's ORIGIN interface(s), and the current OPERATOR rows filtered to `match`; `group` is pure —
+  record → ONE interface (MAC, else origin; the smallest id when several: never a bridge), union-find over
+  interfaces joined by answers only, devices in the order of their first record.
+- **`inventory_view::build_inventory`** takes the grouping: record rows as before (`record_rows`), then one
+  row per device — names and addresses distinct and joined, *N records* in the cell when several, last seen
+  from the device's INTERFACES (the record's address only when none was reached), origin and date from the
+  most recently written record. Header: `inventory.total` = *« N appareils · M fiches »*.
+- **The one provenance read**, `load_record_origin_interfaces`, is sanctioned by path AND name in the
+  `authorship` gate (`SANCTIONED_READS` 3 → 4) — **measured red first**: `a read of declared_attribute names
+  origin_obs_id — FR13` at `device_grouping.rs:87`.
+- **Copy**: `inventory.title` *Your devices / Vos appareils*, `lede` and `no_authoring` rewritten; three keys
+  added (`n_devices` ×2, `total`). The user manual gains *One device, one row*; the CHANGELOG's *Unreleased*
+  section, *One device, one row*.
+- ⚠️ **AC6 is timed on the PURE build, not on the route**: the 50.7 s the validation measured lived in the
+  synchronous build; the reads are linear. 300 records × 20 000 observations × 300 interfaces builds well
+  under the 1 s bound. Said rather than presented as the route timing the criterion names.
+- ⚠️ **Two guards were found vacuous BEFORE the pass and tightened**: the grouped row's *2 records* was
+  asserted on the PAGE, which the header also satisfied — now on the cell; and *last seen from the
+  interfaces* was asserted by nothing — `a_devices_last_sighting_is_its_interfaces_not_its_address` added.
+
+### Mutation pass (T6) — predictions written first
+
+Every run on a virgin store with `--baseline`.
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| N1 | the MAC path answers by origin instead | red:7 | 🔴 **red 5** — the two store tests stay green |
+| N2 | the origin path removed | red:1 | ✅ red 1 (+ clippy) |
+| N3 | the `match` filter removed | red:1 | ✅ red 1 — the *distinct* control |
+| N5 | last seen no longer from interfaces | red:1 | ✅ red 1 |
+| N6 | the header's record count counts rows | red:1 | ✅ red 1 (+ clippy) |
+| N7 | a grouped row's cell no longer says *N records* | red:1 | ✅ red 1 |
+| N8 | answers join nothing | red:4 | ✅ red 4 |
+
+🔴 **N1 contradicts, and in the OTHER direction from the last two stories**: I predicted MORE carriers than
+exist. A record written by the documenting gesture ALWAYS has an origin observation, placed on the same
+card its declared MAC names — so for such a record the origin path alone reaches the card. ~~the pure
+`the_mac_wins…` test is what distinguishes them~~ ⚠️ *false (PR #224's blind layer): `the_mac_wins…` stays
+green under N1 too — the five reds are the five listed by the driver.* Not rewritten. ⚠️ **And the finding
+went further than the table said**: if the origin reaches the card whenever the MAC does, and a record with
+no MAC has an unplaced origin, the origin path serves NO record — which the code review measured, and which
+Guy then removed (see *Review Findings*). The ids skip **N4** (the "never a bridge" rule, dropped before the
+run as not expressible in one anchor) — said here because the review found the gap unexplained.
+
+### The repair's mutation pass (PR #224) — predictions written first
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| P1 | names: only the first record's | red:1 | 🔴 **green** — the assertion was `contains("gamma") && contains("gamma-new")`, and `gamma-new` contains `gamma`: ONE name passed it. Made an equality; **P1b** re-run: ✅ red 1 |
+| P2 | origin and date from the OLDEST write | red:1 | ✅ red 1 |
+| P3 | the device sort ignores freshness | red:1 | 🔴 **red 2** — also `page::the_inventory_is_ordered_freshest_first…`, a test from before this story |
+| P4 | the row id is the LARGEST record id | red:1 | ✅ red 1 |
+| P5 | the records note never renders | red:1 | ✅ red 1 |
+| P6 | *Declared* counts records | red:1 | 🔴 **red 2** — also `page::the_inventory_shows_what_was_documented…`, from before this story (+ clippy) |
+
+🔴 **Three contradictions, two of one kind**: P3 and P6 each found a carrier I did not predict, in `page.rs`
+tests that predate the story — I derived carriers among the tests this story wrote, not among every test
+reading the value. The eighth and ninth instances of an enumeration too narrow, and the first where the
+missed readers were OLDER than the change. And P1 is a guard satisfied by the wrong thing — an unbounded
+needle, the class story 6.12 named.
+
+### Completion notes
+
+- **Live count after the code review's repair: 837 + 219 + 110.** Before it: **836 + 219 + 110** on a virgin store with `RUSTFLAGS="-D warnings"` (base 825 + 219 + 110);
+  ten gates; clippy `--all-targets`; axe **10 routes + 7 states**, 0 violation nodes; kbd 70/0.
+- **What the operator gains**: `obelix`, answered *the same machine*, is ONE row of `/devices` — both
+  addresses, *2 fiches* — and the header counts devices and records. **What they do not**: a record added
+  before `v0.5.0` holds no MAC and was placed on no card, so it stays alone even after an answer
+  (`a_record_from_a_mac_less_sighting_stands_alone_even_after_an_answer`); `/triage` still compares each
+  record on its own.
+
+### File List
+
+- `crates/opencmdb-bin/src/device_grouping.rs` (new)
+- `crates/opencmdb-bin/src/inventory_view.rs`, `page.rs`, `main.rs`, `l2_answer.rs` (test module made
+  `pub(crate)` so its fixtures serve this story's tests)
+- `crates/opencmdb-bin/locales/app.yml`
+- ~~`xtask/src/main.rs` (the `authorship` sanction)~~ — added at development, REMOVED by the review's repair
+  with the origin path; the file is back to `master`
+- `crates/opencmdb-bin/templates/_inventory.html`, `crates/opencmdb-bin/assets/app.css`, `README.md` (the
+  review's repair)
+- `docs/manuals/user-manual/user-manual.tex`, `CHANGELOG.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`, `sprint-status.yaml`, this file
+- `CLAUDE.md`, `docs/project-context.md`
 
 ## 2. What this story must NOT do
 
@@ -297,6 +410,8 @@ Sorted freshest first, as today.
 |---|---|
 | 2026-09-26 | **Guy's arbitration**: all six on the recommendation (§0.8). |
 | 2026-09-26 | Validated by two layers (§0.9): A1 had been posed on an interpretation, the address path MEASURED merging two machines by DHCP, AC1/AC3 contradicted; **Guy's second arbitration** (§0.10), all four on the recommendation; criteria rewritten; `ready-for-dev`. |
+| 2026-09-26 | **Developed**: `device_grouping.rs`, the grouped inventory, the `authorship` sanction, copy and docs; seven mutation rows (6 conform, N1 contradicts by over-predicting); `review`. |
+| 2026-09-26 | **Code-reviewed (PR #224)** by three isolated layers: ~20 findings, two decisions by Guy (the origin path REMOVED — it served no record the product writes; one unit per column); repaired; six repair mutation rows, three contradicting (P1 a vacuous guard, P3/P6 carriers older than the story). Stays `review` until the merge. |
 | 2026-09-26 | Contexted. Six decisions posed with recommendations (§0.5); the central one (A) argues that a device table would be a cache of the operator's answers. Awaiting Guy's arbitration, then the mandatory validation. |
 
 ## References
@@ -306,3 +421,28 @@ Sorted freshest first, as today.
 `page.rs` `devices` · `l2_repo::load_current_operator_answers` · `ambiguity_view::groups` ·
 `gap/mod.rs:110` · `repo.rs:769` · `deferred-work.md` (6.14b's section, and *"A chain's `match` rows join
 across an ENGINE `no_match`"*).
+
+## Record
+
+- live-count: bin=837 core=219 xtask=110
+- base: 386b3183ddb65914c29fd9e61dc9357bfca8690f
+- registered: The device is COMPUTED, not stored — a divergence from story 6.12 and D15.
+- registered: A record added before `v0.5.0` holds no hardware address and reaches no network card.
+- registered: Two records declaring one MAC in two `l2_domain`s are one device.
+- registered: `/triage` still reconciles each record on its own.
+- file: CHANGELOG.md
+- file: CLAUDE.md
+- file: README.md
+- file: _bmad-output/implementation-artifacts/6-14c-a-machine-called-one-is-shown-as-one.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: crates/opencmdb-bin/assets/app.css
+- file: crates/opencmdb-bin/locales/app.yml
+- file: crates/opencmdb-bin/src/device_grouping.rs
+- file: crates/opencmdb-bin/src/inventory_view.rs
+- file: crates/opencmdb-bin/src/l2_answer.rs
+- file: crates/opencmdb-bin/src/main.rs
+- file: crates/opencmdb-bin/src/page.rs
+- file: crates/opencmdb-bin/templates/_inventory.html
+- file: docs/manuals/user-manual/user-manual.tex
+- file: docs/project-context.md

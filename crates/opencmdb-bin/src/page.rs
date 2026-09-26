@@ -952,10 +952,14 @@ pub async fn devices(
         let observations = load_observation_facts(&state.pool)
             .await
             .map_err(server_error)?;
-        Ok((declared, provenance, observations))
+        // Story 6.14c: which records are one device — read inside the same budget.
+        let grouping = crate::device_grouping::load_grouping(&state.pool)
+            .await
+            .map_err(server_error)?;
+        Ok((declared, provenance, observations, grouping))
     })
     .await;
-    let (declared, provenance, observations) = match store {
+    let (declared, provenance, observations, grouping) = match store {
         Ok(rows) => rows,
         Err(response) => return response,
     };
@@ -964,6 +968,7 @@ pub async fn devices(
             declared,
             &provenance,
             &observations,
+            &grouping,
             now_utc(),
         ),
         s: crate::inventory_view::inventory_strings(),
@@ -3958,6 +3963,7 @@ mod tests {
                 declared,
                 provenance,
                 observations,
+                &crate::device_grouping::GroupingInput::default(),
                 at(10_000),
             ),
             s: crate::inventory_view::inventory_strings(),
@@ -4094,6 +4100,7 @@ mod tests {
                 prov("stale", "hostname", "manual", 9_500),
             ],
             &observations,
+            &crate::device_grouping::GroupingInput::default(),
             at(10_000),
         );
         let order: Vec<&str> = view.rows.iter().map(|r| r.ipv4.as_str()).collect();
@@ -4134,11 +4141,17 @@ mod tests {
         let declared = vec![declared_row("e1", "ipv4", "192.0.2.10")];
         let observations = [batch("arp", 100, vec![ipv4("192.0.2.10")])];
         let build = |now| {
-            crate::inventory_view::build_inventory(declared.clone(), &[], &observations, now)
-                .rows
-                .into_iter()
-                .map(|r| r.seen)
-                .collect::<Vec<_>>()
+            crate::inventory_view::build_inventory(
+                declared.clone(),
+                &[],
+                &observations,
+                &crate::device_grouping::GroupingInput::default(),
+                now,
+            )
+            .rows
+            .into_iter()
+            .map(|r| r.seen)
+            .collect::<Vec<_>>()
         };
         assert_eq!(
             build(at(10_000)),

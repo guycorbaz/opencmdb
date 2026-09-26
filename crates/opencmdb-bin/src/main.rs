@@ -15,6 +15,7 @@ mod arp_ping;
 mod auth;
 mod dashboard_view;
 mod dburl;
+mod device_grouping;
 mod diagnostic;
 mod document;
 mod example_data;
