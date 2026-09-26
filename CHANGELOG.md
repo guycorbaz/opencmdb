@@ -8,7 +8,16 @@ schema will move.
 
 ---
 
-## Unreleased
+## 0.7.0 — you answer the question, and the machine is one row
+
+🔑 **The question `0.6.0` showed you now takes an answer, and the answer changes the inventory.** A machine
+with two network cards answering to one name is ONE *Ambiguous* question on the triage screen; answer
+**The same machine** and it becomes ONE row of *Devices*, both addresses on it — or **Distinct machines**,
+and it stays two. The answer is kept as yours: the engine never asks it again and never overwrites it.
+
+⚠️ **What it does not do yet**: an answer cannot be changed or undone from the screen, and a record without
+a hardware address — added before `v0.5.0`, behind a Docker bridge, or the host running opencmdb — stays a
+row of its own whatever you answer. Migration `0013` applies at boot and is additive.
 
 ### Dependencies (issue #221)
 
