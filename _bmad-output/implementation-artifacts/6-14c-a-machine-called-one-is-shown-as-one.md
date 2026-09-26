@@ -219,7 +219,8 @@ grouping is computed at read time from the operator's current `match` rows; the 
 user story, D15 case A and `software.device_id` is REGISTERED, owner **the first consumer needing a stable
 device id — Epic 15 (FR26)**; the day a device is stored, it is built from the `match` rows, which stay the
 source.
-**(B) MAC, else the record's ORIGIN observation.** The declared `mac` → `interface.mac_canon`; without one,
+**(B) MAC, else the record's ORIGIN observation.** ⚠️ *Narrowed by Guy at the code review (PR #224) to **MAC
+only**: the origin path served no record the product writes.* The declared `mac` → `interface.mac_canon`; without one,
 `declared_attribute.origin_obs_id` → that observation's current `match` link → its interface. The address
 path is DROPPED (§0.9(B)). The provenance read is SANCTIONED by name in the `authorship` gate — read-only,
 for display only, on story 6b.4's precedent for `origin`.
@@ -347,14 +348,34 @@ Every run on a virgin store with `--baseline`.
 
 🔴 **N1 contradicts, and in the OTHER direction from the last two stories**: I predicted MORE carriers than
 exist. A record written by the documenting gesture ALWAYS has an origin observation, placed on the same
-card its declared MAC names — so for such a record the origin path alone reaches the card, and the MAC path
-changes the outcome only when the two disagree (a multi-MAC observation, whose record keeps ONE MAC). The two
-store tests therefore cannot tell the paths apart; the pure `the_mac_wins…` test is what distinguishes them.
-Not rewritten.
+card its declared MAC names — so for such a record the origin path alone reaches the card. ~~the pure
+`the_mac_wins…` test is what distinguishes them~~ ⚠️ *false (PR #224's blind layer): `the_mac_wins…` stays
+green under N1 too — the five reds are the five listed by the driver.* Not rewritten. ⚠️ **And the finding
+went further than the table said**: if the origin reaches the card whenever the MAC does, and a record with
+no MAC has an unplaced origin, the origin path serves NO record — which the code review measured, and which
+Guy then removed (see *Review Findings*). The ids skip **N4** (the "never a bridge" rule, dropped before the
+run as not expressible in one anchor) — said here because the review found the gap unexplained.
+
+### The repair's mutation pass (PR #224) — predictions written first
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| P1 | names: only the first record's | red:1 | 🔴 **green** — the assertion was `contains("gamma") && contains("gamma-new")`, and `gamma-new` contains `gamma`: ONE name passed it. Made an equality; **P1b** re-run: ✅ red 1 |
+| P2 | origin and date from the OLDEST write | red:1 | ✅ red 1 |
+| P3 | the device sort ignores freshness | red:1 | 🔴 **red 2** — also `page::the_inventory_is_ordered_freshest_first…`, a test from before this story |
+| P4 | the row id is the LARGEST record id | red:1 | ✅ red 1 |
+| P5 | the records note never renders | red:1 | ✅ red 1 |
+| P6 | *Declared* counts records | red:1 | 🔴 **red 2** — also `page::the_inventory_shows_what_was_documented…`, from before this story (+ clippy) |
+
+🔴 **Three contradictions, two of one kind**: P3 and P6 each found a carrier I did not predict, in `page.rs`
+tests that predate the story — I derived carriers among the tests this story wrote, not among every test
+reading the value. The eighth and ninth instances of an enumeration too narrow, and the first where the
+missed readers were OLDER than the change. And P1 is a guard satisfied by the wrong thing — an unbounded
+needle, the class story 6.12 named.
 
 ### Completion notes
 
-- **Live count: 836 + 219 + 110** on a virgin store with `RUSTFLAGS="-D warnings"` (base 825 + 219 + 110);
+- **Live count after the code review's repair: 837 + 219 + 110.** Before it: **836 + 219 + 110** on a virgin store with `RUSTFLAGS="-D warnings"` (base 825 + 219 + 110);
   ten gates; clippy `--all-targets`; axe **10 routes + 7 states**, 0 violation nodes; kbd 70/0.
 - **What the operator gains**: `obelix`, answered *the same machine*, is ONE row of `/devices` — both
   addresses, *2 fiches* — and the header counts devices and records. **What they do not**: a record added
@@ -368,7 +389,10 @@ Not rewritten.
 - `crates/opencmdb-bin/src/inventory_view.rs`, `page.rs`, `main.rs`, `l2_answer.rs` (test module made
   `pub(crate)` so its fixtures serve this story's tests)
 - `crates/opencmdb-bin/locales/app.yml`
-- `xtask/src/main.rs` (the `authorship` sanction)
+- ~~`xtask/src/main.rs` (the `authorship` sanction)~~ — added at development, REMOVED by the review's repair
+  with the origin path; the file is back to `master`
+- `crates/opencmdb-bin/templates/_inventory.html`, `crates/opencmdb-bin/assets/app.css`, `README.md` (the
+  review's repair)
 - `docs/manuals/user-manual/user-manual.tex`, `CHANGELOG.md`
 - `_bmad-output/implementation-artifacts/deferred-work.md`, `sprint-status.yaml`, this file
 - `CLAUDE.md`, `docs/project-context.md`
@@ -386,6 +410,8 @@ Not rewritten.
 |---|---|
 | 2026-09-26 | **Guy's arbitration**: all six on the recommendation (§0.8). |
 | 2026-09-26 | Validated by two layers (§0.9): A1 had been posed on an interpretation, the address path MEASURED merging two machines by DHCP, AC1/AC3 contradicted; **Guy's second arbitration** (§0.10), all four on the recommendation; criteria rewritten; `ready-for-dev`. |
+| 2026-09-26 | **Developed**: `device_grouping.rs`, the grouped inventory, the `authorship` sanction, copy and docs; seven mutation rows (6 conform, N1 contradicts by over-predicting); `review`. |
+| 2026-09-26 | **Code-reviewed (PR #224)** by three isolated layers: ~20 findings, two decisions by Guy (the origin path REMOVED — it served no record the product writes; one unit per column); repaired; six repair mutation rows, three contradicting (P1 a vacuous guard, P3/P6 carriers older than the story). Stays `review` until the merge. |
 | 2026-09-26 | Contexted. Six decisions posed with recommendations (§0.5); the central one (A) argues that a device table would be a cache of the operator's answers. Awaiting Guy's arbitration, then the mandatory validation. |
 
 ## References
@@ -395,11 +421,10 @@ Not rewritten.
 `page.rs` `devices` · `l2_repo::load_current_operator_answers` · `ambiguity_view::groups` ·
 `gap/mod.rs:110` · `repo.rs:769` · `deferred-work.md` (6.14b's section, and *"A chain's `match` rows join
 across an ENGINE `no_match`"*).
-| 2026-09-26 | **Developed**: `device_grouping.rs`, the grouped inventory, the `authorship` sanction, copy and docs; seven mutation rows (6 conform, N1 contradicts by over-predicting); `review`. |
 
 ## Record
 
-- live-count: bin=836 core=219 xtask=110
+- live-count: bin=837 core=219 xtask=110
 - base: 386b3183ddb65914c29fd9e61dc9357bfca8690f
 - registered: The device is COMPUTED, not stored — a divergence from story 6.12 and D15.
 - registered: A record added before `v0.5.0` holds no hardware address and reaches no network card.
@@ -407,15 +432,17 @@ across an ENGINE `no_match`"*).
 - registered: `/triage` still reconciles each record on its own.
 - file: CHANGELOG.md
 - file: CLAUDE.md
+- file: README.md
 - file: _bmad-output/implementation-artifacts/6-14c-a-machine-called-one-is-shown-as-one.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: crates/opencmdb-bin/assets/app.css
 - file: crates/opencmdb-bin/locales/app.yml
 - file: crates/opencmdb-bin/src/device_grouping.rs
 - file: crates/opencmdb-bin/src/inventory_view.rs
 - file: crates/opencmdb-bin/src/l2_answer.rs
 - file: crates/opencmdb-bin/src/main.rs
 - file: crates/opencmdb-bin/src/page.rs
+- file: crates/opencmdb-bin/templates/_inventory.html
 - file: docs/manuals/user-manual/user-manual.tex
 - file: docs/project-context.md
-- file: xtask/src/main.rs
