@@ -604,11 +604,10 @@ mod tests {
             crate::inventory_view::build_inventory(declared, &provenance, &observations, &g, now);
         assert_eq!(view.rows.len(), 2);
         let gamma = &view.rows[0];
-        assert!(
-            gamma.name.contains("gamma") && gamma.name.contains("gamma-new"),
-            "both names, joined: {}",
-            gamma.name
-        );
+        // 🔴 EQUALITY, never `contains`: `gamma-new` contains `gamma`, so a row holding ONE name passed the
+        // first form of this assertion (mutation P1 came back GREEN). Freshest record first: r1 (`.40`)
+        // sorts before r2 (`.41`) at equal freshness.
+        assert_eq!(gamma.name, "gamma-new, gamma", "both names, joined");
         assert_eq!(
             gamma.origin,
             rust_i18n::t!("inventory.origin_manual").to_string()
