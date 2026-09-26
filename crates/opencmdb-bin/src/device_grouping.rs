@@ -392,7 +392,12 @@ mod tests {
                     html.contains("192.0.2.10, 192.0.2.11")
                         || html.contains("192.0.2.11, 192.0.2.10")
                 );
-                assert!(html.contains(&crate::page::counted_fields("inventory.n_entities", 2)));
+                // 🔑 The CELL, not the page: the header carries *2 records* too, so a bare `contains`
+                // was satisfied by the header whatever the row said (found before the mutation pass).
+                assert!(html.contains(&format!(
+                    "<td>{}</td>",
+                    crate::page::counted_fields("inventory.n_entities", 2)
+                )));
             }
         }
     }
@@ -542,6 +547,44 @@ mod tests {
         assert!(
             elapsed < std::time::Duration::from_secs(1),
             "the build took {elapsed:?} — it must stay linear"
+        );
+    }
+
+    /// §0.9(G): a device's LAST SEEN comes from its INTERFACES, never from its records' address — the
+    /// validation measured a laptop's row showing the phone that later held its address.
+    #[test]
+    fn a_devices_last_sighting_is_its_interfaces_not_its_address() {
+        use crate::repo::ObservedBatch;
+        use opencmdb_core::observation::{ConnectorId, Fact};
+        let now = chrono::DateTime::from_timestamp(2_000_000_000, 0).expect("in range");
+        let declared = vec![
+            (
+                "r1".to_string(),
+                "ipv4".to_string(),
+                "192.0.2.20".to_string(),
+            ),
+            ("r1".to_string(), "mac".to_string(), "aa".to_string()),
+        ];
+        // The ADDRESS was seen a minute ago (another machine holds it now) …
+        let observations = vec![ObservedBatch {
+            id: ObsId::from_uuid(uuid::Uuid::from_u128(1)),
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()).to_string(),
+            observed_at: now - chrono::Duration::minutes(1),
+            facts: vec![Fact::IpV4 {
+                addr: "192.0.2.20".parse().expect("address"),
+            }],
+        }];
+        // … while the record's own card was last seen ten days ago.
+        let card = (now - chrono::Duration::days(10))
+            .format("%Y-%m-%d %H:%M:%S%.6f")
+            .to_string();
+        let grouping = input(&[("i1", "aa", card.as_str())], &[], &[]);
+        let view =
+            crate::inventory_view::build_inventory(declared, &[], &observations, &grouping, now);
+        assert_eq!(
+            view.rows[0].seen,
+            crate::page::relative_time(now, now - chrono::Duration::days(10)),
+            "the card's sighting, not the address's"
         );
     }
 

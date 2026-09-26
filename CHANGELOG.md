@@ -10,6 +10,18 @@ schema will move.
 
 ## Unreleased
 
+### One device, one row (story 6.14c)
+
+🔑 **The *Devices* screen lists devices, not records.** Records you answered **The same machine** share
+one row — all their addresses, and how many records it holds — and so do records of one network card
+documented at two addresses. The header counts both: *devices · records*. **Only your answers join two
+network cards**: an address a DHCP server hands to another machine later is not a proof, and never
+merges two rows.
+
+⚠️ **A record added before `v0.5.0` holds no hardware address**, and its sighting was placed on no card:
+it stays a row of its own even after you answer *the same machine*. Nothing is stored for the grouping —
+it is computed from your answers each time the page is drawn — and nothing you wrote is changed.
+
 ### You can answer the question (story 6.14b)
 
 🔑 **An *Ambiguous* line now takes an answer.** Its pane carries **Resolve** as two buttons, **The same
@@ -23,10 +35,8 @@ section counts the questions answered.
 page was drawn, the answer is refused and nothing is written: reload and look again.
 
 ⚠️ **What it does not do yet.** An answer cannot be changed or undone from the screen. The inventory
-still lists each added address on its own — *the same machine* is recorded, and the machine appears
-once only when the device grouping arrives; after *the same machine*, pressing **Add** on each of its
-addresses records it twice. Where some of the interfaces were already answered *distinct*, only
-**Distinct machines** is offered.
+showed each added address on its own — see the next section, which groups them. Where some of the
+interfaces were already answered *distinct*, only **Distinct machines** is offered.
 
 ⚠️ **The route carries no opt-in.** `POST /triage/answer` is always mounted, behind the same Basic
 authentication and same-origin check as every write: it records an identity decision and never a
