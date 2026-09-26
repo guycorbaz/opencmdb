@@ -6572,7 +6572,10 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   ENGINE-ambiguous pairs (§0.11(1a)), refusing to override `l2-virtual-mac-prefix`'s Disqualifying `no_match`; a
   union-find over those `match` rows then joins the two interfaces that verdict separates. Unreachable with
   today's rules (the virtual-MAC reading disqualifies on either key, hostname agreement is an equivalence);
-  reachable from stale rows or a non-transitive rule. **Owner: story 6.14c.**
+  reachable from stale rows or a non-transitive rule. ~~**Owner: story 6.14c.**~~ ⚠️ _Story 6.14c decided it
+  (Guy's E1): the grouping reads the operator's `match` rows ONLY, so a chain groups by the answers alone,
+  pinned by `a_chain_of_answers_groups_by_the_answers_alone`. **Owner now: story 6.8**, whose non-transitive
+  rule is what makes the chain reachable._
 
 ## Story 6.14b — the operator lifts the doubt
 
@@ -6624,15 +6627,20 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   — its first record's id changes when a record is added. **Owner: the first consumer that needs a stable
   device id — Epic 15 (FR26, `software.device_id`)**, which stores it built from the `match` rows.
 - **A record added before `v0.5.0` holds no hardware address and reaches no network card.** Its origin
-  sighting carried no MAC, so the L1 pass placed it on no interface; neither of Guy's paths (MAC, origin)
-  reaches one, and the record stays a device of its own even after *the same machine* — measured by
-  `a_record_from_a_mac_less_sighting_stands_alone_even_after_an_answer`. The address path would have
-  joined it and was refused for merging two machines by DHCP. **Owner: Epic 6's RETROSPECTIVE**, which
+  sighting carried no MAC, so it declares none, and Guy's path (the MAC — the origin path was removed at the
+  code review, having served no record the product writes) reaches nothing: the record stays a device of its
+  own even after *the same machine* — measured by
+  `a_record_from_a_mac_less_sighting_stands_alone_even_after_an_answer`. ⚠️ Not only before `v0.5.0`: a
+  record documented behind a Docker bridge, and the record of the host running opencmdb, carry no MAC
+  either (PR #224's review). The address path would have joined them and was refused for merging two
+  machines by DHCP. **Owner: Epic 6's RETROSPECTIVE**, which
   decides whether such records deserve a path of their own (e.g. re-documenting from a newer sighting).
 - **Two records declaring one MAC in two `l2_domain`s are one device.** Each attaches to the FIRST interface
   carrying its MAC (Guy's C: a record never bridges interfaces), so both land on the same one — D21's
-  cloned-MAC case would read as one device. Unreachable with the shipped connector (`l2_domain` is nil);
-  reachable with the fixture connector. **Owner: the story that gives the connector a real `l2_domain`.**
+  cloned-MAC case would read as one device. ⚠️ It read *"unreachable with the shipped connector"*, which is
+  false: the registered interface-mint race gives ONE MAC two interfaces in ONE domain (PR #224's review).
+  And AC3's two-domain case is carried by a hand-built pure test only, not the fixture connector.
+  **Owner: the story that gives the connector a real `l2_domain`, or the one that closes the mint race.**
 - **`/triage` still reconciles each record on its own.** `obelix` documented twice keeps two per-record gap
   rows under ONE `/devices` row — a unit difference between two screens. **Owner: Epic 7**, whose triage
   works at field level.

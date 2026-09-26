@@ -1,6 +1,7 @@
 //! Which records are ONE device — story 6.14c: a machine the operator called one is shown as one.
 //!
-//! # What groups, and what never does — Guy's arbitrations of 2026-09-26 (story 6.14c §0.8, §0.10)
+//! # What groups, and what never does — Guy's arbitrations of 2026-09-26 (story 6.14c §0.8, §0.10, and
+//! the code review of PR #224)
 //!
 //! - **COMPUTED, never stored (A).** The grouping is derived at read time from the operator's current
 //!   OPERATOR `match` rows in `l2_pair_decision` — the answers story 6.14b writes, which the engine
@@ -9,44 +10,39 @@
 //!   from D15 case A, which assume a stored membership; Guy took it knowing both, and the divergence is
 //!   registered to the first consumer needing a stable device id (Epic 15, FR26). The `match` rows stay
 //!   the source whatever is stored later.
-//! - **A record reaches its interface EXACTLY (B).** By its declared `mac`, compared with
-//!   `interface.mac_canon` in Rust (D10 — the two columns carry different collations); without one, by its
-//!   ORIGIN observation (`declared_attribute.origin_obs_id`) and that observation's current `match` link.
-//!   🔴 **Never by its address**: the validation MEASURED the address path merging a laptop and a phone
-//!   that held one address a DHCP lease apart — the product refuses a merge without proof, and the
-//!   inventory would have drawn one from a reused address.
+//! - **A record reaches its interface by its declared MAC, and by nothing else (B).** The declared `mac`
+//!   is compared with `interface.mac_canon` in Rust (D10 — the two columns carry different collations; both
+//!   are written from `MacAddr`'s `Display`, lowercase with colons). 🔴 **Never by its address**: the
+//!   validation MEASURED the address path merging a laptop and a phone a DHCP lease apart. 🔴 **And no
+//!   longer by its ORIGIN observation** (Guy, at the code review): the gesture declares a MAC whenever the
+//!   origin observation carries one, and the L1 pass places an observation exactly when it carries one — so
+//!   a record without a MAC has an origin placed on NO interface, and the origin path served no record the
+//!   product can write, at the cost of a provenance read (FR13) the `authorship` gate had to sanction.
 //! - **Only an answer joins two interfaces (C).** Records reaching ONE interface are one device — that is
-//!   L1 identity. A record reaching SEVERAL interfaces (a MAC seen in two `l2_domain`s, or the registered
+//!   L1 identity. A record whose MAC names SEVERAL interfaces (two `l2_domain`s, or the registered
 //!   interface-mint race) never joins them: it is attached to the FIRST, by interface id.
-//!
-//! # 🔴 The one provenance read in this module
-//!
-//! `origin_obs_id` is a provenance column (FR13): the `authorship` gate forbids reading it anywhere a
-//! divergence is computed. [`load_record_origin_interfaces`] reads it to DISPLAY a grouping and nothing
-//! else, and the gate sanctions it by path AND function name — story 6b.4's precedent for `origin`.
+//! - ⚠️ **A record with no MAC reaches no interface and is a device of its own, whatever the operator
+//!   answered** — a record added before `v0.5.0`, one documented behind a Docker bridge (where the scanner
+//!   reads no hardware address), and the host running opencmdb (which keeps no neighbour entry for itself).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use sqlx::MySqlPool;
 
-use crate::repo::OPEN_END;
-
 /// What the grouping reads from the store.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct GroupingInput {
-    /// `(interface_id, mac_canon, last_seen_at)` for every interface, `last_seen_at` rendered
-    /// `%Y-%m-%d %H:%M:%S.%f`.
+    /// `(interface_id, mac_canon, last_seen_at)` for every interface. `last_seen_at` is rendered by
+    /// MariaDB's `DATE_FORMAT(…, '%Y-%m-%d %H:%i:%s.%f')` — six fractional digits, fixed width, so the
+    /// string order IS the time order — and parsed back with chrono's `%Y-%m-%d %H:%M:%S%.f`.
     pub(crate) interfaces: Vec<(String, String, String)>,
-    /// `(entity_id, interface_id)` — the interface(s) each record's ORIGIN observation is currently
-    /// placed on.
-    pub(crate) origins: Vec<(String, String)>,
     /// `(interface_low, interface_high)` — the current OPERATOR `match` rows ONLY. ⚠️ The reader they come
     /// from returns `no_match` rows too; feeding those to the union-find joined two machines the operator
     /// called distinct, and the validation's mutation of exactly that stayed green.
     pub(crate) matches: Vec<(String, String)>,
 }
 
-/// Read what the grouping needs, in three statements.
+/// Read what the grouping needs, in two statements.
 ///
 /// # Errors
 ///
@@ -57,7 +53,6 @@ pub(crate) async fn load_grouping(pool: &MySqlPool) -> Result<GroupingInput, sql
     )
     .fetch_all(pool)
     .await?;
-    let origins = load_record_origin_interfaces(pool).await?;
     let matches = crate::l2_repo::load_current_operator_answers(pool)
         .await?
         .into_iter()
@@ -66,32 +61,8 @@ pub(crate) async fn load_grouping(pool: &MySqlPool) -> Result<GroupingInput, sql
         .collect();
     Ok(GroupingInput {
         interfaces,
-        origins,
         matches,
     })
-}
-
-/// For every ADOPTED record, the interface(s) its origin observation is currently placed on.
-///
-/// 🔴 **The one provenance read**, sanctioned by the `authorship` gate by path and by THIS name: it
-/// feeds the inventory's display of a grouping, and never a divergence (FR13). One row per record and
-/// placement — an origin observation carrying two MACs is placed on two interfaces.
-///
-/// # Errors
-///
-/// Any database error.
-pub(crate) async fn load_record_origin_interfaces(
-    pool: &MySqlPool,
-) -> Result<Vec<(String, String)>, sqlx::Error> {
-    sqlx::query_as(
-        "SELECT DISTINCT d.entity_id, l.interface_id FROM declared_attribute d \
-         JOIN identity_link l ON l.observation_id = d.origin_obs_id \
-         WHERE d.origin_obs_id IS NOT NULL AND l.outcome = 'match' AND l.valid_to = ? \
-         AND l.interface_id IS NOT NULL",
-    )
-    .bind(OPEN_END)
-    .fetch_all(pool)
-    .await
 }
 
 /// One record as the grouping sees it: its id and its declared `mac`, if any.
@@ -103,10 +74,10 @@ pub(crate) type Devices = Vec<(Vec<String>, Option<String>)>;
 
 /// PURE: the devices the records form.
 ///
-/// Each record reaches at most ONE interface — its declared MAC's, else its origin observation's; when
-/// several match, the smallest id (C: a record never bridges interfaces). The interfaces are joined by
-/// the operator's `match` rows; records on one component are one device. Devices come in the order of
-/// their first record; a record reaching nothing is a device of its own.
+/// Each record reaches at most ONE interface — the smallest id among those carrying its declared MAC (C:
+/// a record never bridges interfaces). The interfaces are joined by the operator's `match` rows; records on
+/// one component are one device. Devices come in the order of their first record; a record reaching
+/// nothing is a device of its own.
 pub(crate) fn group(records: &[Record<'_>], input: &GroupingInput) -> Devices {
     let mut by_mac: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
@@ -114,19 +85,9 @@ pub(crate) fn group(records: &[Record<'_>], input: &GroupingInput) -> Devices {
         by_mac.entry(mac.as_str()).or_default().insert(id.as_str());
         seen.insert(id.as_str(), last_seen.as_str());
     }
-    let mut by_origin: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-    for (entity, interface) in &input.origins {
-        by_origin
-            .entry(entity.as_str())
-            .or_default()
-            .insert(interface.as_str());
-    }
-    let reached = |(id, mac): &Record<'_>| -> Option<&str> {
-        let candidates = match mac {
-            Some(mac) => by_mac.get(mac),
-            None => by_origin.get(id),
-        };
-        candidates.and_then(|set| set.iter().next().copied())
+    let reached = |(_, mac): &Record<'_>| -> Option<&str> {
+        mac.and_then(|mac| by_mac.get(mac))
+            .and_then(|set| set.iter().next().copied())
     };
 
     // Union-find over interfaces, joined by the operator's answers ONLY.
@@ -192,19 +153,11 @@ pub(crate) fn group(records: &[Record<'_>], input: &GroupingInput) -> Devices {
 mod tests {
     use super::*;
 
-    fn input(
-        interfaces: &[(&str, &str, &str)],
-        origins: &[(&str, &str)],
-        matches: &[(&str, &str)],
-    ) -> GroupingInput {
+    fn input(interfaces: &[(&str, &str, &str)], matches: &[(&str, &str)]) -> GroupingInput {
         GroupingInput {
             interfaces: interfaces
                 .iter()
                 .map(|(a, b, c)| (a.to_string(), b.to_string(), c.to_string()))
-                .collect(),
-            origins: origins
-                .iter()
-                .map(|(a, b)| (a.to_string(), b.to_string()))
                 .collect(),
             matches: matches
                 .iter()
@@ -217,15 +170,11 @@ mod tests {
     const T2: &str = "2026-09-26 11:00:00.000000";
 
     /// `obelix`: two records, two interfaces, answered *the same machine* — one device, seen at the newer
-    /// of its two interfaces. By MAC for one record and by origin for the other, so both paths count.
+    /// of its two interfaces.
     #[test]
     fn two_records_joined_by_an_answer_are_one_device() {
-        let g = input(
-            &[("i1", "aa", T1), ("i2", "bb", T2)],
-            &[("r2", "i2")],
-            &[("i1", "i2")],
-        );
-        let devices = group(&[("r1", Some("aa")), ("r2", None)], &g);
+        let g = input(&[("i1", "aa", T1), ("i2", "bb", T2)], &[("i1", "i2")]);
+        let devices = group(&[("r1", Some("aa")), ("r2", Some("bb"))], &g);
         assert_eq!(
             devices,
             vec![(
@@ -238,7 +187,7 @@ mod tests {
     /// No answer, or none of these: two devices. Records on ONE interface are one device (L1).
     #[test]
     fn without_an_answer_only_one_interface_groups() {
-        let g = input(&[("i1", "aa", T1), ("i2", "bb", T1)], &[], &[]);
+        let g = input(&[("i1", "aa", T1), ("i2", "bb", T1)], &[]);
         assert_eq!(
             group(&[("r1", Some("aa")), ("r2", Some("bb"))], &g).len(),
             2
@@ -247,27 +196,29 @@ mod tests {
         assert_eq!(same_nic.len(), 1, "one NIC documented twice is one device");
     }
 
-    /// A record reaching two interfaces never joins them (C): it attaches to the first, and a record on
-    /// the second stays apart.
+    /// A record whose MAC names two interfaces never joins them (C): it attaches to the FIRST, so an
+    /// answered group holding the SECOND does not reach it.
     #[test]
     fn a_record_on_two_interfaces_does_not_bridge_them() {
-        let g = input(&[("i1", "aa", T1), ("i2", "aa", T1)], &[("r2", "i2")], &[]);
-        let devices = group(&[("r1", Some("aa")), ("r2", None)], &g);
-        assert_eq!(devices.len(), 2, "{devices:?}");
-    }
-
-    /// The MAC wins over the origin when both are there, and a record reaching nothing stands alone
-    /// with no sighting.
-    #[test]
-    fn the_mac_wins_and_a_record_reaching_nothing_stands_alone() {
-        let g = input(&[("i1", "aa", T1), ("i2", "bb", T1)], &[("r1", "i2")], &[]);
-        let devices = group(&[("r1", Some("aa")), ("r2", Some("bb")), ("r3", None)], &g);
+        let g = input(
+            &[("i1", "aa", T1), ("i2", "aa", T1), ("i3", "cc", T1)],
+            &[("i2", "i3")],
+        );
+        let devices = group(&[("r1", Some("aa")), ("r3", Some("cc"))], &g);
         assert_eq!(
             devices.len(),
-            3,
-            "r1 goes by its MAC to i1, not by its origin to i2"
+            2,
+            "r1 sits on i1, apart from i2–i3: {devices:?}"
         );
-        assert_eq!(devices[2], (vec!["r3".to_string()], None));
+    }
+
+    /// A record with no MAC reaches nothing and stands alone, with no sighting of its own.
+    #[test]
+    fn a_record_without_a_mac_stands_alone() {
+        let g = input(&[("i1", "aa", T1)], &[]);
+        let devices = group(&[("r1", Some("aa")), ("r2", None)], &g);
+        assert_eq!(devices.len(), 2);
+        assert_eq!(devices[1], (vec!["r2".to_string()], None));
     }
 
     // ---- through the ROUTE, against a store ----
@@ -392,11 +343,17 @@ mod tests {
                     html.contains("192.0.2.10, 192.0.2.11")
                         || html.contains("192.0.2.11, 192.0.2.10")
                 );
-                // 🔑 The CELL, not the page: the header carries *2 records* too, so a bare `contains`
-                // was satisfied by the header whatever the row said (found before the mutation pass).
+                // 🔑 The NOTE under the name, not the page: the header carries *2 records* too, so a bare
+                // `contains` was satisfied by the header whatever the row said (found before the pass).
+                assert!(html.contains(&format!(
+                    r#"<span class="records muted">{}</span>"#,
+                    crate::page::counted_fields("inventory.n_entities", 2)
+                )));
+                // And the *Declared* column keeps counting FIELDS — the device's distinct ones (PR #224's
+                // review: *2 records* sat in that column and mixed two units).
                 assert!(html.contains(&format!(
                     "<td>{}</td>",
-                    crate::page::counted_fields("inventory.n_entities", 2)
+                    crate::page::counted_fields("inventory.n_fields", 3)
                 )));
             }
         }
@@ -426,26 +383,21 @@ mod tests {
         assert_eq!(devices_page(&pool).await.1, 1);
     }
 
-    /// AC2, B: 🔴 the DHCP case the validation MEASURED merging two machines by address. A laptop's record
-    /// that carries NO declared MAC reaches its interface by its ORIGIN observation; a phone later holding
-    /// the same address is another device. Two rows.
+    /// AC2, B: 🔴 the DHCP case the validation MEASURED merging two machines by address — on a state the
+    /// product MAKES (PR #224's review: the first version deleted a declared MAC by hand, a record no
+    /// writer produces). A laptop documented from a MAC-less sighting reaches no card; a phone later
+    /// holding the same address is documented with its MAC. Two rows: a shared address is not a proof.
     #[tokio::test]
     async fn a_reused_address_does_not_merge_two_machines() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = store().await else { return };
         let t = 1_790_000_000_000_300;
-        counted_sweep(
-            &pool,
-            vec![at_address(sighting(1, 1, Some("laptop"), t), "192.0.2.20")],
-        )
-        .await;
+        let mut laptop = at_address(sighting(1, 1, Some("laptop"), t), "192.0.2.20");
+        laptop
+            .facts
+            .retain(|f| !matches!(f, opencmdb_core::observation::Fact::Mac { .. }));
+        counted_sweep(&pool, vec![laptop]).await;
         document(&pool, 1).await;
-        // A record documented before PR #163 carried no MAC: modelled by removing it, which only a test
-        // may do — the adapter never deletes a declared value.
-        sqlx::query("DELETE FROM declared_attribute WHERE attr_key = 'mac'")
-            .execute(&pool)
-            .await
-            .expect("a pre-#163 record");
         counted_sweep(
             &pool,
             vec![at_address(
@@ -460,11 +412,10 @@ mod tests {
         assert!(!html.contains("laptop, phone") && !html.contains("phone, laptop"));
     }
 
-    /// ⚠️ **The limit B buys, pinned rather than hidden**: a record documented BEFORE PR #163 came from an
-    /// observation with no MAC — which the L1 pass places on no interface — so neither its MAC nor its
-    /// origin reaches one, and it stays a device of its own even after *the same machine*. The address
-    /// path would have joined it, and was refused because it merged two machines by DHCP (§0.9(B)).
-    /// If `obelix`'s records on the NAS predate 2026-09-10, `obelix` stays two rows; registered.
+    /// ⚠️ **The limit B buys, pinned rather than hidden**: a record documented from an observation with no
+    /// MAC — before `v0.5.0`, behind a Docker bridge, or the host running opencmdb — declares no MAC, so it
+    /// reaches no card and stays a device of its own even after *the same machine*. The address path would
+    /// have joined it, and was refused because it merged two machines by DHCP (§0.9(B)). Registered.
     #[tokio::test]
     async fn a_record_from_a_mac_less_sighting_stands_alone_even_after_an_answer() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
@@ -494,12 +445,14 @@ mod tests {
         );
     }
 
-    /// AC6: the build is linear — 300 records against 20 000 observations and 300 interfaces. 🔴 The
-    /// validation's naive address path measured **50.7 s** at 18 000 observations, in the synchronous
-    /// build `PAGE_STORE_BUDGET` does not wrap. ⚠️ Timed on the PURE build, where that cost lived; the reads
-    /// are linear and inside the budget.
+    /// AC6: the build stays within a bound at reference scale — 300 records against 20 000 observations and
+    /// 300 interfaces. 🔴 The validation's naive address path measured **50.7 s** at 18 000 observations, in
+    /// the synchronous build `PAGE_STORE_BUDGET` does not wrap. ⚠️ A BOUND, not a proof of linearity (PR
+    /// #224's review: one size measured nothing about growth), timed on the PURE build where that cost lived
+    /// — not on the route AC6 names. The reads: the review's edge layer measured the heaviest grouping
+    /// query at 22.8 ms over 400 000 current links.
     #[test]
-    fn the_build_stays_linear_at_reference_scale() {
+    fn the_build_stays_within_a_bound_at_reference_scale() {
         use crate::repo::ObservedBatch;
         use opencmdb_core::observation::{ConnectorId, Fact};
         let now = chrono::DateTime::from_timestamp(2_000_000_000, 0).expect("in range");
@@ -534,7 +487,6 @@ mod tests {
             .collect();
         let grouping = GroupingInput {
             interfaces,
-            origins: Vec::new(),
             matches: (0..150u32)
                 .map(|n| (format!("i{:04}", 2 * n), format!("i{:04}", 2 * n + 1)))
                 .collect(),
@@ -578,7 +530,7 @@ mod tests {
         let card = (now - chrono::Duration::days(10))
             .format("%Y-%m-%d %H:%M:%S%.6f")
             .to_string();
-        let grouping = input(&[("i1", "aa", card.as_str())], &[], &[]);
+        let grouping = input(&[("i1", "aa", card.as_str())], &[]);
         let view =
             crate::inventory_view::build_inventory(declared, &[], &observations, &grouping, now);
         assert_eq!(
@@ -588,14 +540,91 @@ mod tests {
         );
     }
 
-    /// E1 (Guy, 2026-09-26): a chain of answers groups — A=B and B=C make one device even if the engine
-    /// judged A–C distinct. ⚠️ Unreachable with today's rules; pinned so the day a rule makes it
-    /// reachable, this is what changes.
+    /// PR #224's review (auditor and edge layer, each MEASURED green under a mutation): what a device row
+    /// shows from its records — its names JOINED, its origin and date from the most recently WRITTEN
+    /// record, its id the SMALLEST record id — and the order of two devices by their CARDS' sightings.
     #[test]
-    fn a_chain_of_answers_groups_whatever_the_engine_said_about_its_ends() {
+    fn a_device_row_joins_names_takes_the_latest_write_and_sorts_by_its_cards() {
+        use crate::repo::{DeclaredProvenance, ObservedBatch};
+        let now = chrono::DateTime::from_timestamp(2_000_000_000, 0).expect("in range");
+        let ago = |minutes: i64| now - chrono::Duration::minutes(minutes);
+        let declared = vec![
+            (
+                "r2".to_string(),
+                "hostname".to_string(),
+                "gamma".to_string(),
+            ),
+            (
+                "r2".to_string(),
+                "ipv4".to_string(),
+                "192.0.2.41".to_string(),
+            ),
+            ("r2".to_string(), "mac".to_string(), "aa".to_string()),
+            (
+                "r1".to_string(),
+                "hostname".to_string(),
+                "gamma-new".to_string(),
+            ),
+            (
+                "r1".to_string(),
+                "ipv4".to_string(),
+                "192.0.2.40".to_string(),
+            ),
+            ("r1".to_string(), "mac".to_string(), "bb".to_string()),
+            (
+                "r9".to_string(),
+                "ipv4".to_string(),
+                "192.0.2.90".to_string(),
+            ),
+            ("r9".to_string(), "mac".to_string(), "cc".to_string()),
+        ];
+        let written = |entity: &str, origin: &str, minutes: i64| DeclaredProvenance {
+            entity_id: entity.to_string(),
+            attr_key: "ipv4".to_string(),
+            origin: origin.to_string(),
+            updated_at: ago(minutes),
+        };
+        // r1 written LATER (by hand), r2 earlier (adopted): the device's origin is r1's.
+        let provenance = vec![written("r2", "adopted", 60), written("r1", "manual", 5)];
+        // The ADDRESSES say r9 is freshest; the CARDS say the gamma device is.
+        let observations: Vec<ObservedBatch> = Vec::new();
+        let stamp = |minutes: i64| ago(minutes).format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+        let g = input(
+            &[
+                ("i1", "aa", stamp(2).as_str()),
+                ("i2", "bb", stamp(3).as_str()),
+                ("i9", "cc", stamp(500).as_str()),
+            ],
+            &[("i1", "i2")],
+        );
+        let view =
+            crate::inventory_view::build_inventory(declared, &provenance, &observations, &g, now);
+        assert_eq!(view.rows.len(), 2);
+        let gamma = &view.rows[0];
+        assert!(
+            gamma.name.contains("gamma") && gamma.name.contains("gamma-new"),
+            "both names, joined: {}",
+            gamma.name
+        );
+        assert_eq!(
+            gamma.origin,
+            rust_i18n::t!("inventory.origin_manual").to_string()
+        );
+        assert_eq!(gamma.documented, crate::page::relative_time(now, ago(5)));
+        assert_eq!(gamma.id, "r1", "the smallest record id, stable");
+        assert_eq!(
+            view.rows[1].id, "r9",
+            "sorted by the cards' sightings, freshest first"
+        );
+    }
+
+    /// E1 (Guy, 2026-09-26): a chain of answers groups — A=B and B=C make one device. ⚠️ The grouping reads
+    /// only the operator's `match` rows, so an ENGINE `no_match` on A–C cannot even reach it: that is what
+    /// E1 decided, and this pins it. Unreachable with today's rules.
+    #[test]
+    fn a_chain_of_answers_groups_by_the_answers_alone() {
         let g = input(
             &[("a", "aa", T1), ("b", "bb", T1), ("c", "cc", T1)],
-            &[],
             &[("a", "b"), ("b", "c")],
         );
         let devices = group(&[("r1", Some("aa")), ("r3", Some("cc"))], &g);

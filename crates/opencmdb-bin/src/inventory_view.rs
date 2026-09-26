@@ -31,7 +31,7 @@
 //! an entity carries an owner, a criticality or a group — Epic 6's and Epic 15's — the record
 //! earns its own page and `Screen::Device` stops being an example.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use askama::Template;
 
@@ -51,8 +51,11 @@ pub(crate) struct InventoryRow {
     pub(crate) name: String,
     /// The address the entity is recognised by — the perimeter key, so never empty.
     pub(crate) ipv4: String,
-    /// How many fields are declared for it, already rendered with its noun.
+    /// How many fields are declared for it, already rendered with its noun — for a device of several
+    /// records, the DISTINCT fields across them (Guy, PR #224's review: one unit per column).
     pub(crate) fields: String,
+    /// *N records* when the row is a device of several, rendered under the name; empty for a lone record.
+    pub(crate) records: String,
     /// How the declaration was made — adopted from a sighting, or entered by hand.
     pub(crate) origin: String,
     /// When it was documented, in the operator's language.
@@ -225,14 +228,25 @@ pub(crate) fn build_inventory(
                     (freshest.row.seen.clone(), freshest.row.age_seconds)
                 }
             };
+            let keys: BTreeSet<&str> = members
+                .iter()
+                .flat_map(|m| m.keys.iter().map(String::as_str))
+                .collect();
             InventoryRow {
-                id: members[0].row.id.clone(),
+                // 🔑 The SMALLEST record id, never the first: the first moved with its records'
+                // freshness, so the row's anchor changed on any sweep (PR #224's review, measured).
+                id: members
+                    .iter()
+                    .map(|m| m.row.id.clone())
+                    .min()
+                    .expect("a device has a record"),
                 name: names,
                 ipv4: addresses,
-                fields: if members.len() > 1 {
+                fields: crate::page::counted_fields("inventory.n_fields", keys.len()),
+                records: if members.len() > 1 {
                     crate::page::counted_fields("inventory.n_entities", members.len())
                 } else {
-                    members[0].row.fields.clone()
+                    String::new()
                 },
                 origin: newest_write.row.origin.clone(),
                 documented: newest_write.row.documented.clone(),
@@ -269,6 +283,8 @@ struct RecordRow {
     mac: Option<String>,
     /// Its most recent declared write, for the device's origin and date.
     written: Option<chrono::DateTime<chrono::Utc>>,
+    /// The keys it declares, for a device's distinct-field count.
+    keys: Vec<String>,
 }
 
 /// PURE: one row per RECORD, as the inventory showed before story 6.14c — the input to the grouping.
@@ -354,11 +370,13 @@ fn record_rows(
         rows.push(RecordRow {
             mac,
             written,
+            keys: attrs.iter().map(|(k, _)| k.clone()).collect(),
             row: InventoryRow {
                 id: entity_id,
                 name: value_of("hostname"),
                 ipv4,
                 fields: crate::page::counted_fields("inventory.n_fields", attrs.len()),
+                records: String::new(),
                 // ⚠️ **Words, never an empty cell** — the rule the name and last-seen columns already
                 // follow in this same table, and the review found these two breaking it: with no
                 // provenance row they rendered `<td class="muted"></td>`, which reads as a value the

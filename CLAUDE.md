@@ -19,8 +19,10 @@ record now appears in the inventory** (PR #151). The queue says a NAME rather th
 rather than softened; what remains is:
 
 - **It forms INTERFACES, not devices.** Two cards of one machine are two interfaces the engine can
-  see and cannot yet call one thing. `obelix` renders as two rows carrying one name — the grouping
-  problem, visible on a real network for the first time (#158).
+  see and cannot yet call one thing. `obelix` rendered as two rows carrying one name — the grouping
+  problem, visible on a real network for the first time (#158). ✅ *Since story 6.14c (on `master`, not yet
+  released) the operator ANSWERS the question and `/devices` then shows ONE row — computed from the answer,
+  never inferred, and only for records carrying a hardware address.*
 - **FOUR screens of ten are wholly labelled example content**, and two more carry an example
   section beside real content (re-measured off `Screen::nature` on 2026-09-11: **4 `Fed`, 2
   `Mixed`, 4 `Example`**). ⚠️ It read *"five … 3 Fed, 2 Mixed, 5 Example"* until story 14.2 fed

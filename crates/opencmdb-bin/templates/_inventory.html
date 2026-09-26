@@ -36,7 +36,7 @@
       <tr data-entity-id="{{ row.id }}">
         {#- A record with no documented name says so in words rather than showing an empty cell:
              an empty cell reads as a value the product failed to render. -#}
-        <td>{% if row.name.is_empty() %}<span class="muted">{{ s.unnamed }}</span>{% else %}{{ row.name }}{% endif %}</td>
+        <td>{% if row.name.is_empty() %}<span class="muted">{{ s.unnamed }}</span>{% else %}{{ row.name }}{% endif %}{% if !row.records.is_empty() %}<span class="records muted">{{ row.records }}</span>{% endif %}</td>
         <td class="mono">{{ row.ipv4 }}</td>
         <td>{{ row.fields }}</td>
         <td class="muted">{{ row.origin }}</td>

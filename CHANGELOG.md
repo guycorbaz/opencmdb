@@ -18,9 +18,13 @@ documented at two addresses. The header counts both: *devices · records*. **Onl
 network cards**: an address a DHCP server hands to another machine later is not a proof, and never
 merges two rows.
 
-⚠️ **A record added before `v0.5.0` holds no hardware address**, and its sighting was placed on no card:
-it stays a row of its own even after you answer *the same machine*. Nothing is stored for the grouping —
-it is computed from your answers each time the page is drawn — and nothing you wrote is changed.
+⚠️ **A record that holds no hardware address stays a row of its own** even after you answer *the same
+machine* — one added before `v0.5.0`, one added behind a Docker bridge (which reads none), and the record
+of the host running opencmdb. Pressing **Add** on each address of a machine you called one still writes two
+records: they share one row here, and the triage screen still compares each on its own. A row's *last
+seen* is now when the network last showed its **cards**, not its address — for a lone record too. Nothing
+is stored for the grouping — it is computed from your answers each time the page is drawn — and nothing you
+wrote is changed.
 
 ### You can answer the question (story 6.14b)
 
@@ -35,7 +39,7 @@ section counts the questions answered.
 page was drawn, the answer is refused and nothing is written: reload and look again.
 
 ⚠️ **What it does not do yet.** An answer cannot be changed or undone from the screen. The inventory
-showed each added address on its own — see the next section, which groups them. Where some of the
+showed each added address on its own — the section above, story 6.14c, groups them. Where some of the
 interfaces were already answered *distinct*, only **Distinct machines** is offered.
 
 ⚠️ **The route carries no opt-in.** `POST /triage/answer` is always mounted, behind the same Basic

@@ -471,8 +471,10 @@ inventory.title:
   en: "Your devices"
   fr: "Vos appareils"
 inventory.lede:
-  en: "What you have added, one row per device: the records you called one machine share a row, and so do records of one network card. Only your answers join two cards. An address nobody has claimed is a question, and questions are in the triage."
-  fr: "Ce que vous avez ajouté, une ligne par appareil : les fiches que vous avez déclarées être une seule machine partagent une ligne, comme les fiches d'une même carte réseau. Seules vos réponses réunissent deux cartes. Une adresse que personne ne revendique est une question, et les questions sont dans le triage."
+  # 🔴 PR #224's review: the French read « déclarées » — the binding word for the DOCUMENTED side — for
+  # "answered", and both languages said the operator answered about RECORDS where they answer about cards.
+  en: "What you have added, one row per device: the records of network cards you said are one machine share a row, and so do records of one card. Only your answers join two cards; a record without a hardware address stands alone. An address nobody has claimed is a question, and questions are in the triage."
+  fr: "Ce que vous avez ajouté, une ligne par appareil : les fiches des cartes réseau dont vous avez répondu qu'elles sont une seule machine partagent une ligne, comme les fiches d'une même carte. Seules vos réponses réunissent deux cartes ; une fiche sans adresse matérielle reste seule. Une adresse que personne ne revendique est une question, et les questions sont dans le triage."
 inventory.none_before:
   en: "Nothing added yet. A record comes from the"
   fr: "Rien d'ajouté pour l'instant. Une fiche vient de la"

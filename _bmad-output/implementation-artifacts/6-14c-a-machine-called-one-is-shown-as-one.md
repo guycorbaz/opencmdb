@@ -284,6 +284,28 @@ Sorted freshest first, as today.
       stories each missed one), `--baseline`, one database per run.
 - [x] T7 Docs, register rows, twins, the Record (AC8, AC9).
 
+### Review Findings — code review of PR #224 (2026-09-26)
+
+Three isolated layers (blind: diff only; edge: own MariaDB, its own mutations and a 400 000-link scale
+probe; auditor: own MariaDB, re-ran the suite, gates, the record, re-proved the sanction red). ~20
+distinct. No write exists to be wrong; the defects are in what the grouping READS and what the page SAYS.
+
+- [x] [Review][Decision] **The origin path serves no real record** — the gesture declares a MAC whenever the origin observation carries one, and L1 places an observation exactly when it carries one, so a record without a MAC has an UNPLACED origin; the only store test reaching the branch built its state with a `DELETE` (blind HIGH; edge MED, measured: its filters mutated, 836 green) → **Guy, 2026-09-26: remove it — MAC only.** The branch and the `origin_obs_id` read go, `SANCTIONED_READS` returns to 3, and the DHCP test is rebuilt on a state the product makes. Arbitration B becomes *MAC only*.
+- [x] [Review][Decision] **The *Declared* column mixed two units** — *3 fields* on a lone record, *2 records* on a device (blind MED; edge LOW) → **Guy, 2026-09-26: fields in the column, records under the name** — the column counts the device's distinct declared fields, and *N records* is a small note under the name when there are several.
+- [x] [Review][Patch] The row's origin and date (most recent record) carried by no test — `max_by_key` → `min_by_key` left 836 green (auditor, measured)
+- [x] [Review][Patch] *Names joined* carried by no test — every fixture named both records `obelix` (auditor, measured)
+- [x] [Review][Patch] The device-level sort carried by no test — deleting it left 836 green (edge, measured)
+- [x] [Review][Patch] A grouped row's `data-entity-id` moved with its records' freshness — now the SMALLEST record id, stable (blind MED; edge LOW, measured)
+- [x] [Review][Patch] The documented limit was framed as *before v0.5.0* only — a record documented behind a Docker bridge, or of the host running opencmdb, has no MAC either and never groups (auditor MED)
+- [x] [Review][Patch] The French lede used « déclarées » — the binding word for the documented side — for *answered*; the English said the operator answered about RECORDS where they answer about cards (auditor MED; blind LOW)
+- [x] [Review][Patch] `README.md` still said nothing groups; `CLAUDE.md`'s *what it cannot do* still said `obelix` renders as two rows (auditor MED)
+- [x] [Review][Patch] The register row *two records declaring one MAC in two domains* said *unreachable with the shipped connector* — the interface-mint race reaches it in ONE domain (auditor MED)
+- [x] [Review][Patch] The inherited chain row still named this story as owner (auditor MED)
+- [x] [Review][Patch] The CHANGELOG's *"see the next section"* points at the previous one, and lost *the second write is still possible* (blind LOW; auditor LOW)
+- [x] [Review][Patch] *Last seen* changed meaning for LONE rows reaching a card too, and no document said so (blind LOW)
+- [x] [Review][Patch] The record: N1's explanation was wrong (`the_mac_wins` is green under N1); N4 missing without a word; the *Developed* Change Log row sat outside its table; AC6's test named *linear* asserts a bound; the chain test's name claims an engine `no_match` its input cannot carry; `GroupingInput`'s doc mixed two date dialects (blind; auditor)
+- [x] [Review][Defer] AC3's *"a test on the fixture connector's two domains"* is carried by a hand-built pure test only (auditor) — deferred, registered with the two-domain row
+
 ## Dev Agent Record
 
 ### Implementation notes

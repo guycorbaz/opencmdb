@@ -138,9 +138,11 @@ network cards --- a shared name, a shared address or a shared history never does
 network hands to another machine later (DHCP) is not a proof that the two are one. The header counts
 both: \emph{devices} and \emph{records}.
 
-A record reaches its network card by the hardware address it holds. A record added before opencmdb
-read hardware addresses (before \texttt{v0.5.0}) holds none, and its sighting was placed on no card,
-so it stays a row of its own even after you answer \emph{the same machine}.
+A record reaches its network card by the hardware address it holds, and a row's \emph{last seen}
+is when the network last showed its cards. A record that holds no hardware address stays a row of its
+own even after you answer \emph{the same machine}: one added before opencmdb read hardware addresses
+(before \texttt{v0.5.0}), one added while opencmdb ran behind a Docker bridge (where it reads none),
+and the record of the machine running opencmdb itself (which keeps no neighbour entry for itself).
 
 \begin{planned}
 Limits of this version. An answer cannot yet be changed or undone from the screen, and the reach
