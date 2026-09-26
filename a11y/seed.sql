@@ -377,3 +377,52 @@ INSERT INTO l2_pair_decision
    '55555555-0000-0000-0000-0000000000e2', 'abstained', NULL, 'ambiguous',
    'l2-different-hostname=neutral;l2-hostname-agrees=supports;l2-virtual-mac-prefix=neutral',
    1, 'ENGINE', @t, '9999-12-31 23:59:59.999999', 1);
+
+-- ── Story 6.14b: a SECOND question, already ANSWERED by the operator ─────────────────────────
+--
+-- 🔑 So that the axe gate — which must never PRESS anything — measures the answered state: the reach
+-- section's *Questions you answered* line, and two `Nouveau` rows whose question is closed and which
+-- therefore offer *Ajouter* again (E1). The first question (.200/.201) stays OPEN, because the keyboard
+-- gate presses one of its answers. Story 14.4b's *"one pressed, one already taken"* precedent.
+--
+-- The rows are what the answer's adapter writes: the ENGINE question CLOSED at the instant shown, and an
+-- OPERATOR row opened at that instant, with `rule_id = 'operator'` and the ENGINE vector copied (§0.8 B).
+INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantage, facts, raw) VALUES
+  ('dddddddd-0000-0000-0000-0000000000e3', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.202"}},{"Mac":{"addr":[2,0,94,0,0,227],"locally_administered":true}},{"Hostname":{"name":"twin-printer.example","source":"Dns"}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000e4', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.203"}},{"Mac":{"addr":[2,0,94,0,0,228],"locally_administered":true}},{"Hostname":{"name":"twin-printer.example","source":"Dns"}}]', NULL);
+
+INSERT INTO address_sighting (addr, l2_domain, mac, first_seen_at, last_seen_at) VALUES
+  ('192.000.002.202', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:e3', @t, @t),
+  ('192.000.002.203', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:e4', @t, @t);
+
+INSERT INTO interface (id, l2_domain, mac_canon, first_seen_at, last_seen_at) VALUES
+  ('55555555-0000-0000-0000-0000000000e3', '00000000-0000-0000-0000-000000000000',
+   '02:00:5e:00:00:e3', @t, @t),
+  ('55555555-0000-0000-0000-0000000000e4', '00000000-0000-0000-0000-000000000000',
+   '02:00:5e:00:00:e4', @t, @t);
+
+INSERT INTO identity_link
+  (id, observation_id, interface_id, current_subject, outcome, rule_id, abstention_cause,
+   evidence, ruleset_version, decided_by, valid_from, valid_to) VALUES
+  ('11111111-0000-0000-0000-0000000000e3', 'dddddddd-0000-0000-0000-0000000000e3',
+   '55555555-0000-0000-0000-0000000000e3', '55555555-0000-0000-0000-0000000000e3',
+   'match', 'l1-exact-mac', NULL, '[]', 1, 'ENGINE', @t, '9999-12-31 23:59:59.999999'),
+  ('11111111-0000-0000-0000-0000000000e4', 'dddddddd-0000-0000-0000-0000000000e4',
+   '55555555-0000-0000-0000-0000000000e4', '55555555-0000-0000-0000-0000000000e4',
+   'match', 'l1-exact-mac', NULL, '[]', 1, 'ENGINE', @t, '9999-12-31 23:59:59.999999');
+
+INSERT INTO l2_pair_decision
+  (id, interface_low, interface_high, outcome, rule_id, abstention_cause, verdicts,
+   ruleset_version, decided_by, valid_from, valid_to, is_current) VALUES
+  ('66666666-0000-0000-0000-0000000000e3', '55555555-0000-0000-0000-0000000000e3',
+   '55555555-0000-0000-0000-0000000000e4', 'abstained', NULL, 'ambiguous',
+   'l2-different-hostname=neutral;l2-hostname-agrees=supports;l2-virtual-mac-prefix=neutral',
+   1, 'ENGINE', @t, @t, NULL),
+  ('66666666-0000-0000-0000-0000000000e4', '55555555-0000-0000-0000-0000000000e3',
+   '55555555-0000-0000-0000-0000000000e4', 'no_match', 'operator', NULL,
+   'l2-different-hostname=neutral;l2-hostname-agrees=supports;l2-virtual-mac-prefix=neutral',
+   1, 'OPERATOR', @t, '9999-12-31 23:59:59.999999', 1);

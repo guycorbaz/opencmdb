@@ -233,6 +233,8 @@ pub(crate) struct Strings {
     pub(crate) identity_settled: String,
     /// The L2 questions' reach line — its OWN unit, groups of interfaces (story 6.14, AC5).
     pub(crate) identity_ambiguous: String,
+    /// Story 6.14b: the label of the answered-questions line.
+    pub(crate) identity_answered: String,
     /// Under an Ambigu pane's candidates: they are shown AS SEEN NOW, not as the decision saw them
     /// (Guy's decision F — its cost said on the screen, story 6.14).
     pub(crate) ambiguous_seen_now: String,
@@ -244,9 +246,18 @@ pub(crate) struct Strings {
     /// Under an Ambigu pane: the QUESTION follows the network — it leaves the queue when the names stop
     /// matching and returns when they match again (Guy's decision F, story 6.14's review).
     pub(crate) ambiguous_follows_network: String,
-    /// Under a `Nouveau` pane's link to its question: *Ajouter* creates a record for this address ALONE
-    /// and does not answer the question (Guy's decision C, its cost said on the screen).
+    /// Under a `Nouveau` pane's link to its OPEN question: *Ajouter* returns once the question is answered
+    /// (story 6.14b's E1 — the link stands INSTEAD of *Ajouter* while the question is open).
     pub(crate) ambiguous_add_alone: String,
+    /// The gesture's name over an open question's two answers — the binding term `resolve`/*résoudre*
+    /// stays on the screen (story 6.14b, Guy 2026-09-26).
+    pub(crate) gesture_resolve: String,
+    /// Beside the two answers: what an answer does, and what it does not do yet (story 6.14b).
+    pub(crate) answer_what: String,
+    /// On an Ambigu pane none of whose candidates is placed now: why no answer is offered (AC5).
+    pub(crate) ambiguous_no_placement: String,
+    /// Under the operator's earlier answers inside a re-formed group: that they stand.
+    pub(crate) ambiguous_earlier_note: String,
 }
 
 /// A count and its noun, INFLECTED — `1 field`, `2 fields`, `1 champ`, `2 champs`.
@@ -322,11 +333,16 @@ pub(crate) fn strings() -> Strings {
         identity_nothing_seen: t!("identity.nothing_seen").to_string(),
         identity_all_placed: t!("identity.all_placed").to_string(),
         identity_ambiguous: t!("identity.ambiguous_groups").to_string(),
+        identity_answered: t!("identity.answered_questions").to_string(),
         ambiguous_seen_now: t!("triage.ambiguous.seen_now").to_string(),
         ambiguous_why: t!("triage.ambiguous.why").to_string(),
         ambiguous_open_question: t!("triage.ambiguous.open_question").to_string(),
         ambiguous_follows_network: t!("triage.ambiguous.follows_network").to_string(),
         ambiguous_add_alone: t!("triage.ambiguous.add_alone").to_string(),
+        gesture_resolve: t!("gesture.resolve").to_string(),
+        answer_what: t!("triage.answer.what").to_string(),
+        ambiguous_no_placement: t!("triage.ambiguous.no_placement").to_string(),
+        ambiguous_earlier_note: t!("triage.ambiguous.earlier_note").to_string(),
         identity_settled: t!("identity.settled").to_string(),
     }
 }
@@ -636,9 +652,13 @@ pub(crate) async fn triage_view(
         sightings: crate::l2_repo::load_ambiguous_interface_sightings(pool)
             .await
             .map_err(server_error)?,
+        answers: crate::l2_repo::load_current_operator_answers(pool)
+            .await
+            .map_err(server_error)?,
     };
     let mut identity = build_identity_view(reach);
     identity.ambiguous_groups = crate::ambiguity_view::groups(&ambiguity.pairs).len();
+    identity.answered_questions = crate::ambiguity_view::answered_questions(&ambiguity.answers);
     Ok((
         build_triage_offering(
             declared,
@@ -1058,6 +1078,7 @@ pub async fn triage(
                 triage,
                 identity,
                 documented: documented_confirmation(query.documented.as_deref()),
+                answered: answered_confirmation(query.answered.as_deref()),
                 s: strings(),
             };
             match body.render() {
@@ -1097,6 +1118,15 @@ fn documented_confirmation(raw: Option<&str>) -> String {
     counted_fields("triage.documented", count.min(MAX_DOCUMENTED))
 }
 
+/// The confirmation an answer leaves in the URL, or nothing — total over anything a URL can carry, like
+/// [`documented_confirmation`]: an unknown value is silence, never an error, and never a sentence about
+/// an answer that was not given.
+fn answered_confirmation(raw: Option<&str>) -> String {
+    raw.and_then(crate::l2_answer::Answer::parse)
+        .map(|answer| rust_i18n::t!(crate::l2_answer::done_key(answer)).to_string())
+        .unwrap_or_default()
+}
+
 /// The largest field count the confirmation will print — a bound on what a forged URL can claim,
 /// not on what the gesture can write. `gap::project` yields one entry per attribute key, and the
 /// declared vocabulary is a handful of them.
@@ -1125,6 +1155,10 @@ pub struct TriageQuery {
     /// `?documented=x` a **400 from axum's extractor**, which would turn a mistyped URL into an
     /// error page on the product's main screen.
     pub documented: Option<String>,
+    /// Which answer an L2 question just received — the confirmation `POST /triage/answer` carries
+    /// across its `HX-Redirect` (story 6.14b). `same` or `distinct`; anything else renders nothing, and
+    /// it is a `String` for the same reason as `documented`: a mistyped URL must not be a 400.
+    pub answered: Option<String>,
 }
 
 /// The triage screen's body: the mock's two panes, above story 5.14b's reach section.
@@ -1135,6 +1169,8 @@ struct TriageBody {
     identity: IdentityView,
     /// The confirmation of a documenting gesture that just landed, or empty.
     documented: String,
+    /// The confirmation of an answer that just landed, or empty (story 6.14b).
+    answered: String,
     s: Strings,
 }
 
@@ -2216,11 +2252,12 @@ mod tests {
         // (this file's own rule, quoted in three places): `>= 4` tolerated the silent loss of
         // every prose attribute but four. Raise this deliberately when you add one.
         assert_eq!(
-            checked, 7,
-            "the premise: SEVEN prose-attribute occurrences exist to inspect — a scan that \
+            checked, 8,
+            "the premise: EIGHT prose-attribute occurrences exist to inspect — a scan that \
              matched fewer has stopped seeing part of the surface it names. ⚠️ It read six until \
-             story 14.2's grid added one: this is a FLOOR on the scan's own reach, so it moves \
-             only when a template really gained an attribute, never to make a red go away"
+             story 14.2's grid added one, and seven until story 6.14b's answers added their \
+             `aria-label` (fed by `triage.answer.name`): this is a FLOOR on the scan's own reach, so \
+             it moves only when a template really gained an attribute, never to make a red go away"
         );
     }
 
@@ -2427,7 +2464,7 @@ mod tests {
         // beside it claimed the opposite. Moving either number is a deliberate act.
         assert_eq!(
             (literals, checked),
-            (19, 175),
+            (19, 180),
             "the walk found {literals} `…Strings` literal(s) and {checked} field(s); if that is \
              deliberate, move these numbers after READING what the walk printed"
         );
@@ -3558,6 +3595,7 @@ mod tests {
                     Some(b.id.to_string()),
                 ),
             ],
+            answers: Vec::new(),
         };
         (input, vec![a, b])
     }
@@ -4331,6 +4369,7 @@ mod tests {
             triage: view,
             identity: crate::identity_view::build_identity_view(Vec::new()),
             documented: String::new(),
+            answered: String::new(),
             s: strings(),
         }
         .render()
@@ -4759,6 +4798,7 @@ mod tests {
             triage: view,
             identity: no_reach(),
             documented: String::new(),
+            answered: String::new(),
             s: strings(),
         }
         .render()
@@ -4792,6 +4832,7 @@ mod tests {
             triage: view,
             identity: no_reach(),
             documented: String::new(),
+            answered: String::new(),
             s: strings(),
         }
         .render()
@@ -4936,6 +4977,7 @@ mod tests {
             triage: view,
             identity: no_reach(),
             documented: String::new(),
+            answered: String::new(),
             s: strings(),
         }
         .render()
@@ -5143,7 +5185,8 @@ mod tests {
         );
 
         // 🔴 Story 6.14: an AMBIGUITY is fed to this guard, so it MEETS an Ambigu pane. Guy's decision
-        // E: *Résoudre* ALONE, planned — not Epic 7's four gap gestures, which answer a gap.
+        // E: *Résoudre* alone — not Epic 7's four gap gestures, which answer a gap. Story 6.14b makes it
+        // act as its TWO answers, under the gesture's name.
         let (question, obelix) = obelix_question(60);
         let ambiguous = build_triage_offering(
             Vec::new(),
@@ -5157,11 +5200,32 @@ mod tests {
         )
         .selected
         .expect("the Ambigu row has a pane");
-        assert_eq!(ambiguous.gestures.len(), 1, "one control on an ambiguity");
-        assert_eq!(ambiguous.gestures[0].label, resolving);
+        assert_eq!(
+            ambiguous.gestures.len(),
+            2,
+            "*Résoudre*'s two answers on an ambiguity, and nothing else"
+        );
+        assert_eq!(
+            ambiguous
+                .gestures
+                .iter()
+                .map(|g| g.label.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                rust_i18n::t!("triage.answer.same").to_string(),
+                rust_i18n::t!("triage.answer.distinct").to_string(),
+            ]
+        );
         assert!(
-            matches!(ambiguous.gestures[0].nature, GestureRender::Planned(_)),
-            "*Résoudre* does not act yet — what an answer writes is story 6.14b's"
+            ambiguous
+                .gestures
+                .iter()
+                .all(|g| matches!(g.nature, GestureRender::Answer { .. })),
+            "both answers act (story 6.14b)"
+        );
+        assert!(
+            ambiguous.question.is_some(),
+            "and the pane carries the question they answer — the gesture's name is rendered over it"
         );
     }
 
@@ -5182,6 +5246,7 @@ mod tests {
                 triage: view,
                 identity: no_reach(),
                 documented: String::new(),
+                answered: String::new(),
                 s: strings(),
             }
             .render()
@@ -5347,15 +5412,11 @@ mod tests {
         live.sort();
         assert_eq!(
             live,
-            vec![
-                "nouveau:192.0.2.8".to_string(),
-                "nouveau:192.0.2.9".to_string(),
-                "nouveau:192.0.2.99".to_string(),
-            ],
+            vec!["nouveau:192.0.2.99".to_string()],
             "the documenting gesture belongs to the UNKNOWN case alone — every other kind names \
              an entity that already exists, where `POST /document-all` can only answer 409, and an \
-             AMBIGUITY is a doubt to lift, not an entity to create. ⚠️ `obelix`'s two addresses keep \
-             theirs: Guy's decision C (story 6.14)"
+             AMBIGUITY is a doubt to lift, not an entity to create. ⚠️ `obelix`'s two addresses do \
+             NOT offer it while their question is open: story 6.14b's E1 superseded decision C"
         );
     }
 
@@ -5517,6 +5578,7 @@ mod tests {
             triage,
             identity,
             documented: String::new(),
+            answered: String::new(),
             s: strings(),
         }
         .render()
@@ -5819,13 +5881,15 @@ mod tests {
             "`Résoudre` stays planned even with the flag on — it has no route, and a live control \
              would take the amber the spec reserves for documenting"
         );
-        // 🔴 Story 6.14: the bar an Ambigu pane REALLY carries is `resolve_bar`, not `action_bar` —
-        // so the guard asserts on the one production builds, and on a whole pane built with the flag on.
+        // 🔴 Story 6.14b: the bar an Ambigu pane REALLY carries is `resolve_bar` — two ANSWERS, live, and
+        // carried by their own variant, never `Live`, which is what the template paints amber.
+        let answers = crate::ambiguity_view::resolve_bar("obelix");
+        assert_eq!(answers.len(), 2, "two answers of one gesture");
         assert!(
-            crate::ambiguity_view::resolve_bar()
+            answers
                 .iter()
-                .all(|g| matches!(g.nature, GestureRender::Planned(_))),
-            "the Ambigu pane's *Résoudre* does not act — what an answer writes is story 6.14b's"
+                .all(|g| matches!(g.nature, GestureRender::Answer { .. })),
+            "the Ambigu pane's answers act, and through `Answer` — never `Live`, never amber"
         );
         let (question, obelix) = obelix_question(60);
         let pane = build_triage_offering(
@@ -5844,7 +5908,24 @@ mod tests {
             pane.gestures
                 .iter()
                 .all(|g| !matches!(g.nature, GestureRender::Live(_))),
-            "no live control on an ambiguity, even with the documenting route mounted"
+            "no documenting control on an ambiguity, even with the documenting route mounted"
+        );
+        let html = triage_body(
+            build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                obelix_question(60).1,
+                at(1_000),
+                Some("ambigu:iface-a"),
+                false,
+                true,
+                &obelix_question(60).0,
+            ),
+            build_identity_view(Vec::new()),
+        );
+        assert!(
+            !pane_html(&html).contains("btn-document"),
+            "the amber is the documenting gesture's alone — an answer does not wear it"
         );
     }
 
@@ -5854,6 +5935,7 @@ mod tests {
             triage: view,
             identity,
             documented: String::new(),
+            answered: String::new(),
             s: strings(),
         }
         .render()
@@ -5914,6 +5996,24 @@ mod tests {
             pane.contains(&rust_i18n::t!("triage.ambiguous.evidence.same_name").to_string()),
             "the verdict that argued is said in words"
         );
+        // 🔑 Story 6.14b: the interface ids DO travel in the answers' `hx-vals` — the posted form needs
+        // them, and the route recomputes the group from them — but never in anything a human reads. So
+        // the guard reads the pane with those attributes cut out, and asserts the ids are in them.
+        let mut readable = pane.to_string();
+        while let Some(start) = readable.find("hx-vals='") {
+            let end = readable[start + 9..]
+                .find('\'')
+                .expect("the attribute closes")
+                + start
+                + 10;
+            let vals = readable[start..end].to_string();
+            assert!(
+                vals.contains("iface-a") && vals.contains("iface-b"),
+                "the answer posts the members: {vals}"
+            );
+            readable.replace_range(start..end, "");
+        }
+        let pane = readable.as_str();
         for raw in ["l2-hostname-agrees", "supports", "iface-a", "iface-b"] {
             assert!(!pane.contains(raw), "no raw token or id on the pane: {raw}");
         }
@@ -5961,16 +6061,19 @@ mod tests {
         );
     }
 
-    /// AC4 — decision C: a `Nouveau` row whose address a candidate carries keeps *Ajouter* and links to
-    /// the open question; one that no candidate carries has no link.
+    /// Story 6.14b's E1 (Guy, 2026-09-25), which supersedes story 6.14's decision C: while the question is
+    /// OPEN, a `Nouveau` row whose address a candidate carries shows the link to it INSTEAD of *Ajouter*;
+    /// one that no candidate carries keeps *Ajouter* and has no link. Once the question is answered —
+    /// either way — the address is in no open question and *Ajouter* returns (AC7): that half is
+    /// measured against a store in `l2_answer`'s route-level test.
     #[test]
-    fn a_new_row_of_an_ambiguous_address_keeps_add_and_links_to_the_question() {
+    fn a_new_row_of_an_open_question_shows_the_link_instead_of_add() {
         let (question, obelix) = obelix_question(60);
         let observations: Vec<_> = obelix
             .into_iter()
             .chain([batch_with_id("arp", 70, vec![ipv4("192.0.2.77")], 0xC7)])
             .collect();
-        let pane_for = |sel: &str| {
+        let pane_for = |sel: &str, question: &crate::ambiguity_view::AmbiguityInput| {
             build_triage_offering(
                 Vec::new(),
                 Vec::new(),
@@ -5979,22 +6082,303 @@ mod tests {
                 Some(sel),
                 false,
                 true,
-                &question,
+                question,
             )
             .selected
             .expect("the pane")
         };
-        let obelix_row = pane_for("nouveau:192.0.2.8");
+        let obelix_row = pane_for("nouveau:192.0.2.8", &question);
         assert!(
-            matches!(obelix_row.gestures[0].nature, GestureRender::Live(_)),
-            "the address keeps *Ajouter* — the product's one live gesture is not taken away"
+            obelix_row
+                .gestures
+                .iter()
+                .all(|g| !matches!(g.nature, GestureRender::Live(_))),
+            "E1: while the question is open, the address does NOT offer *Ajouter*"
         );
         assert_eq!(
             obelix_row.open_question.as_deref(),
             Some("/triage?sel=ambigu:iface-a"),
-            "and it links to the question its address belongs to"
+            "it links to the question its address belongs to, instead"
         );
-        assert_eq!(pane_for("nouveau:192.0.2.77").open_question, None);
+        let stranger = pane_for("nouveau:192.0.2.77", &question);
+        assert_eq!(stranger.open_question, None);
+        assert!(
+            matches!(stranger.gestures[0].nature, GestureRender::Live(_)),
+            "an address in no question keeps *Ajouter*"
+        );
+        // The question answered: it is no longer read, so the same address offers *Ajouter* again.
+        let answered = pane_for(
+            "nouveau:192.0.2.8",
+            &crate::ambiguity_view::AmbiguityInput::default(),
+        );
+        assert!(
+            matches!(answered.gestures[0].nature, GestureRender::Live(_)),
+            "once the question has its answer, *Ajouter* returns"
+        );
+        assert_eq!(answered.open_question, None);
+    }
+
+    /// Story 6.14b, AC1: the Ambigu pane renders the gesture's NAME and its two answers as real buttons —
+    /// not amber, each with an accessible name that starts with its visible label and names the
+    /// question — posting the group, its members and the instant shown with its microseconds; and the
+    /// *not built* note does NOT render beside them (story 6.4's defect: a shipped sentence made false).
+    #[test]
+    fn the_ambiguity_pane_renders_resolves_two_live_answers_under_its_name() {
+        let (question, obelix) = obelix_question(60);
+        let html = triage_body(
+            build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                obelix,
+                at(1_000),
+                Some("ambigu:iface-a"),
+                false,
+                true,
+                &question,
+            ),
+            no_reach(),
+        );
+        let pane = pane_html(&html);
+        let s = strings();
+        assert!(
+            pane.contains(&format!(
+                r#"<p class="gesture-name">{}</p>"#,
+                s.gesture_resolve
+            )),
+            "the binding term *Résoudre* heads the answers"
+        );
+        assert_eq!(
+            pane.matches(r#"class="btn-gesture live btn-answer""#)
+                .count(),
+            2,
+            "two real buttons"
+        );
+        assert!(!pane.contains("btn-document"), "neither answer is amber");
+        for token in ["same", "distinct"] {
+            assert!(
+                pane.contains(&format!(r#""answer": "{token}""#)),
+                "the answer {token} is posted"
+            );
+        }
+        assert!(
+            pane.contains(r#""members": "iface-a,iface-b""#)
+                && pane.contains(r#""group": "ambigu:iface-a""#),
+            "the question's group and members are posted"
+        );
+        assert!(
+            pane.contains(r#""shown": "1970-01-01T00:01:00.000000Z""#),
+            "the instant shown carries its microseconds (§0.9(D))"
+        );
+        for answer in ["triage.answer.same", "triage.answer.distinct"] {
+            let label = rust_i18n::t!(answer).to_string();
+            let name = rust_i18n::t!(
+                "triage.answer.name",
+                answer = label.as_str(),
+                group = "192.0.2.8 · 192.0.2.9"
+            )
+            .to_string();
+            assert!(
+                pane.contains(&format!(r#"aria-label="{name}""#)),
+                "{answer}'s accessible name starts with its label and names the question: {name}"
+            );
+        }
+        assert!(
+            !pane.contains(r#"id="gesture-not-built""#),
+            "the *not built* note never renders beside live answers"
+        );
+        assert!(
+            pane.contains(&s.answer_what),
+            "what an answer does, and does not do yet, is said beside it"
+        );
+    }
+
+    /// Story 6.14b, AC5 — a decision, Guy's, 2026-09-26: a group none of whose candidates is placed now
+    /// offers NO answer and says why; the form never carries `UNIX_EPOCH`.
+    #[test]
+    fn a_question_with_no_current_placement_offers_no_answer_and_says_why() {
+        let (mut question, _) = obelix_question(60);
+        for sighting in &mut question.sightings {
+            sighting.2 = None;
+        }
+        let view = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            at(1_000),
+            Some("ambigu:iface-a"),
+            false,
+            true,
+            &question,
+        );
+        let pane = view.selected.as_ref().expect("the Ambigu pane");
+        assert!(pane.gestures.is_empty() && pane.question.is_none() && pane.no_placement);
+        let html = triage_body(view, no_reach());
+        let pane = pane_html(&html);
+        assert!(
+            pane.contains(&strings().ambiguous_no_placement),
+            "it says why"
+        );
+        assert!(!pane.contains("btn-answer"), "no answer control");
+        assert!(
+            !pane.contains("1970-01-01T00:00:00"),
+            "never the epoch as an instant"
+        );
+    }
+
+    /// Story 6.14b (Guy, 2026-09-26): a group that re-forms around a pair the operator already answered
+    /// NAMES that answer, with both hardware addresses.
+    #[test]
+    fn a_group_re_formed_around_an_answered_pair_names_the_earlier_answer() {
+        let (mut question, obelix) = obelix_question(60);
+        question.answers = vec![(
+            "iface-a".into(),
+            "iface-b".into(),
+            "match".into(),
+            "1970-01-01 00:01:00.000000".into(),
+        )];
+        let html = triage_body(
+            build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                obelix,
+                at(1_000),
+                Some("ambigu:iface-a"),
+                false,
+                true,
+                &question,
+            ),
+            no_reach(),
+        );
+        let expected = rust_i18n::t!(
+            "triage.ambiguous.earlier_same",
+            a = "00:11:22:33:44:08",
+            b = "00:11:22:33:44:09"
+        )
+        .to_string();
+        assert!(pane_html(&html).contains(&expected), "{expected}");
+    }
+
+    /// Story 6.14b's H1: the question sits directly BEFORE the first `Nouveau` row of its addresses, and
+    /// `?sort=age` re-sorts after placement.
+    #[test]
+    fn the_question_sits_before_its_addresses_rows() {
+        let (question, obelix) = obelix_question(60);
+        let observations: Vec<_> = [batch_with_id("arp", 30, vec![ipv4("192.0.2.77")], 0xC7)]
+            .into_iter()
+            .chain(obelix)
+            .collect();
+        let ids = |sort_by_age: bool| {
+            build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                observations.clone(),
+                at(1_000),
+                None,
+                sort_by_age,
+                true,
+                &question,
+            )
+            .rows
+            .into_iter()
+            .map(|r| r.id)
+            .collect::<Vec<_>>()
+        };
+        let queue = ids(false);
+        let question_at = queue
+            .iter()
+            .position(|id| id.starts_with("ambigu:"))
+            .expect("the question");
+        let first_address = queue
+            .iter()
+            .position(|id| id == "nouveau:192.0.2.8" || id == "nouveau:192.0.2.9")
+            .expect("an address of the question");
+        assert_eq!(
+            question_at + 1,
+            first_address,
+            "directly before its addresses: {queue:?}"
+        );
+        assert!(
+            queue.iter().position(|id| id == "nouveau:192.0.2.77") < Some(question_at),
+            "a row outside the question keeps its place: {queue:?}"
+        );
+        let by_age = ids(true);
+        assert_eq!(by_age.len(), queue.len());
+        assert_eq!(
+            by_age[0], "nouveau:192.0.2.77",
+            "age re-sorts after placement: {by_age:?}"
+        );
+    }
+
+    /// Story 6.14b, AC8: the reach section says how many questions the operator answered, in QUESTIONS,
+    /// on a line of its own; and a group of three answered once reads 1, while A–B then B–C reads 2
+    /// (PR #219's review: a plain union-find over the OPERATOR rows read 1).
+    #[test]
+    fn answered_questions_are_counted_per_answer_and_shown_on_their_own_line() {
+        let row = |a: &str, b: &str, outcome: &str, at: &str| {
+            (
+                a.to_string(),
+                b.to_string(),
+                outcome.to_string(),
+                at.to_string(),
+            )
+        };
+        let three_once = vec![
+            row("i1", "i2", "match", "T1"),
+            row("i1", "i3", "match", "T1"),
+            row("i2", "i3", "match", "T1"),
+        ];
+        assert_eq!(crate::ambiguity_view::answered_questions(&three_once), 1);
+        let twice = vec![
+            row("a", "b", "match", "T1"),
+            row("b", "c", "no_match", "T2"),
+        ];
+        assert_eq!(crate::ambiguity_view::answered_questions(&twice), 2);
+        assert_eq!(crate::ambiguity_view::answered_questions(&[]), 0);
+
+        let s = strings();
+        let render = |answered: usize| {
+            let mut identity = build_identity_view(vec![reach("match", None, 2)]);
+            identity.answered_questions = answered;
+            identity_section_of(&triage_body(
+                build_triage(Vec::new(), Vec::new(), Vec::new(), at(1_000), None, false),
+                identity,
+            ))
+        };
+        let shown = render(2);
+        assert!(
+            shown.contains(&format!(
+                r#"<p class="pair answered"><span class="muted">{}</span> <span class="count">2</span></p>"#,
+                s.identity_answered
+            )),
+            "{shown}"
+        );
+        assert!(
+            !render(0).contains(&s.identity_answered),
+            "nothing said when none"
+        );
+    }
+
+    /// Story 6.14b: the confirmation an answer carries across its redirect is total over any URL —
+    /// silence for anything but the two answers.
+    #[test]
+    fn the_answered_confirmation_is_total() {
+        assert_eq!(
+            answered_confirmation(Some("same")),
+            rust_i18n::t!("triage.answered.same").to_string()
+        );
+        assert_eq!(
+            answered_confirmation(Some("distinct")),
+            rust_i18n::t!("triage.answered.distinct").to_string()
+        );
+        for raw in [
+            None,
+            Some(""),
+            Some("merge"),
+            Some("Same"),
+            Some("<script>"),
+        ] {
+            assert!(answered_confirmation(raw).is_empty(), "{raw:?}");
+        }
     }
 
     /// AC5 — the reach section counts L2 questions in their OWN unit, on a line of their own, NEVER
@@ -6094,6 +6478,7 @@ mod tests {
                     triage: view,
                     identity: no_reach(),
                     documented: String::new(),
+                    answered: String::new(),
                     s: strings(),
                 }
                 .render()
@@ -6223,6 +6608,7 @@ mod tests {
                 ),
                 identity: no_reach(),
                 documented: String::new(),
+                answered: String::new(),
                 s: strings(),
             }
             .render()
@@ -6284,6 +6670,7 @@ mod tests {
             triage: view,
             identity: no_reach(),
             documented: String::new(),
+            answered: String::new(),
             s: strings(),
         }
         .render()

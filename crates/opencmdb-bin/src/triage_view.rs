@@ -138,9 +138,23 @@ pub(crate) enum Gesture {
         /// The environment variable that turns it on. A constant of the product.
         switch: &'static str,
     },
+    /// 🔑 **One of the two answers of `resolve`/*résoudre*** — story 6.14b, and the FOURTH variant this
+    /// type's `E0004` forced every `match` to answer.
+    ///
+    /// 🔴 **A variant of its own and NOT `Live`**, measured by the validation (§0.9(C)): `Live` carries
+    /// ONE subject through `hx-vals` and paints the reserved amber `btn-document`, so reusing it raised
+    /// no compile error, posted an empty subject, painted both answers amber and was read by both
+    /// browser gates as a documenting gesture. The amber stays the documenting gesture's alone.
+    Answer {
+        /// Where the answer posts. A constant of the product, never operator input.
+        route: &'static str,
+        /// Which of the two answers this control gives.
+        answer: crate::l2_answer::Answer,
+    },
 }
 
 /// One control of the action bar, resolved for rendering.
+#[derive(Debug)]
 pub(crate) struct GestureView {
     /// Its label, in the operator's language.
     pub(crate) label: String,
@@ -267,6 +281,17 @@ pub(crate) enum GestureRender {
     /// states are answered by different acts: one waits for a story, the other for one line of
     /// configuration the operator already controls.
     Disabled(String),
+    /// One answer of `resolve` (story 6.14b): where it posts, the answer's form token, and its
+    /// accessible name — the visible label first, then the question it answers, so two answers on two
+    /// panes never share one name.
+    Answer {
+        /// Where it posts.
+        route: &'static str,
+        /// `same` or `distinct`.
+        token: &'static str,
+        /// The accessible name.
+        name: String,
+    },
 }
 
 impl GestureView {
@@ -281,8 +306,37 @@ impl GestureView {
             Gesture::Disabled { switch } => GestureRender::Disabled(
                 rust_i18n::t!("gesture.not_enabled", switch = switch).to_string(),
             ),
+            Gesture::Answer { route, answer } => GestureRender::Answer {
+                route,
+                token: answer.token(),
+                name: label.clone(),
+            },
         };
         Self { label, nature }
+    }
+
+    /// One answer of `resolve` on the question `group` — its label from the answer's key, its
+    /// accessible name naming the question too.
+    pub(crate) fn answer(answer: crate::l2_answer::Answer, group: &str) -> Self {
+        let label = rust_i18n::t!(answer.label_key()).to_string();
+        let mut view = Self::of(
+            Gesture::Answer {
+                route: crate::l2_answer::ANSWER_PATH,
+                answer,
+            },
+            label.clone(),
+        );
+        if let GestureRender::Answer { name, .. } = &mut view.nature {
+            *name = rust_i18n::t!("triage.answer.name", answer = label, group = group).to_string();
+        }
+        view
+    }
+
+    /// Is this control one the product has not built? The generic *not built* sentence is rendered
+    /// only when one is on the bar — story 6.14b made a bar whose every control acts, and the note
+    /// beside live answers would be a shipped sentence made false (story 6.4's defect).
+    pub(crate) fn is_planned(&self) -> bool {
+        matches!(self.nature, GestureRender::Planned(_))
     }
 
     /// Is this control built but switched off? The template needs it to decide whether the
@@ -306,6 +360,24 @@ impl DetailPane {
     pub(crate) fn has_a_switched_off_gesture(&self) -> bool {
         self.gestures.iter().any(GestureView::is_disabled)
     }
+
+    /// Is any control on this pane's bar not built yet? The *not built* note is rendered only then.
+    pub(crate) fn has_a_planned_gesture(&self) -> bool {
+        self.gestures.iter().any(GestureView::is_planned)
+    }
+}
+
+/// What an Ambigu pane's answers post besides the answer itself (story 6.14b, AC2): the question's
+/// row id, its member interfaces, and the instant the page showed as its freshness.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QuestionForm {
+    /// `ambigu:{smallest member}` — the queue row's id.
+    pub(crate) group: String,
+    /// The member interface ids, comma-separated.
+    pub(crate) members: String,
+    /// The newest candidate freshness, RFC 3339 with microseconds — the instant the answer is dated
+    /// at and the stale-page guard (§0.8 C1).
+    pub(crate) shown: String,
 }
 
 /// The detail pane: the two photos, side by side, each with its own meta-line.
@@ -344,9 +416,19 @@ pub(crate) struct DetailPane {
     /// For a `Nouveau` row whose address a candidate of an open question carries: the link to that
     /// question (Guy's decision C — the row keeps *Ajouter*, and says it belongs to a question).
     pub(crate) open_question: Option<String>,
-    /// The sentence under this pane's bar when it is not the generic one — an Ambigu pane says what
-    /// *Résoudre* will do (story 6.14). Empty everywhere else, where `gesture.not_built` stands.
+    /// The sentence under this pane's bar when it is not the generic one. Empty everywhere since story
+    /// 6.14b, whose Ambigu pane carries live answers and no planned control; kept as the seam a future
+    /// pane-specific *not built* sentence uses rather than re-deriving it.
     pub(crate) not_built: String,
+    /// An open question's answer form (story 6.14b) — `None` on every other kind, and on a question
+    /// none of whose candidates is placed now, which offers no answer (AC5).
+    pub(crate) question: Option<QuestionForm>,
+    /// For an Ambigu pane whose group none of whose candidates is placed now: say why no answer is
+    /// offered (story 6.14b, AC5, Guy 2026-09-26).
+    pub(crate) no_placement: bool,
+    /// The operator's earlier answers inside this group, one sentence each (story 6.14b, Guy
+    /// 2026-09-26): a group that re-formed around an answered pair names that answer.
+    pub(crate) earlier: Vec<String>,
 }
 
 /// Everything `/triage` renders: the queue, the selection, and the sort's state.
@@ -533,6 +615,9 @@ pub(crate) fn build_triage_offering(
                     evidence: Vec::new(),
                     open_question: None,
                     not_built: String::new(),
+                    question: None,
+                    no_placement: false,
+                    earlier: Vec::new(),
                     // No documenting gesture on this kind, so no subject to act on. ⚠️ NOT
                     // `SwitchedOff`: adopting one field of an existing record is FR13(b), Epic
                     // 7's, and telling the operator to set a switch would name a remedy that
@@ -584,6 +669,9 @@ pub(crate) fn build_triage_offering(
                     evidence: Vec::new(),
                     open_question: None,
                     not_built: String::new(),
+                    question: None,
+                    no_placement: false,
+                    earlier: Vec::new(),
                     // No documenting gesture on this kind, so no subject to act on.
                     subject: String::new(),
                     // 🔴 From the CAUSE, never from the translated label: the mock shows *Résoudre*
@@ -705,6 +793,9 @@ pub(crate) fn build_triage_offering(
                     evidence: Vec::new(),
                     open_question: None,
                     not_built: String::new(),
+                    question: None,
+                    no_placement: false,
+                    earlier: Vec::new(),
                     // The MOST RECENT sighting of this address, overwritten in place
                     // above when a later one arrives (Guy's arbitration, story 6.4).
                     subject: batch.id.to_string(),
@@ -740,9 +831,35 @@ pub(crate) fn build_triage_offering(
             && let Some(group) = address_to_group.get(address)
         {
             pane.open_question = Some(row_href(group, sort_by_age));
+            // 🔑 E1 (story 6.14b, Guy 2026-09-25, UX-DR43): while the question is OPEN, the link stands
+            // INSTEAD of *Ajouter* — documenting `obelix` twice before answering is D12's *"the operator
+            // announces 300 hosts, the tool shows 340"*. It removes the documenting primary only while a
+            // live gesture exists beside it (the answers), which was story 6.14's own condition; once
+            // answered, either way, the address is in no open question and *Ajouter* returns by itself.
+            pane.gestures.retain(|gesture| {
+                !matches!(
+                    gesture.nature,
+                    GestureRender::Live(_) | GestureRender::Disabled(_)
+                )
+            });
         }
     }
-    rows.extend(ambiguous_rows);
+    // 🔑 H1 (story 6.14b): the question sits directly BEFORE the first `Nouveau` row of its addresses,
+    // so the eye meets it before its consequences; with no such row it keeps its place at the end.
+    // `?sort=age` re-sorts after this, below.
+    for row in ambiguous_rows {
+        let before = rows.iter().position(|queued| {
+            queued
+                .id
+                .strip_prefix("nouveau:")
+                .and_then(|address| address_to_group.get(address))
+                == Some(&row.id)
+        });
+        match before {
+            Some(index) => rows.insert(index, row),
+            None => rows.push(row),
+        }
+    }
     panes.extend(ambiguous_panes);
 
     // AC3: age sorting is available and OFF by default — oldest first when on.

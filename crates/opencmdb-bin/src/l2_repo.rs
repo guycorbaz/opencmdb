@@ -7,11 +7,18 @@
 //!
 //! # What a row says, and what it deliberately does not
 //!
-//! A row is a decision the L2 cascade reached about two interfaces: `NoMatch` (a rule excluded the
-//! pair — today only `l2-virtual-mac-prefix`) or `Abstained { Ambiguous }` (the pair looks alike and
-//! the engine will not guess — `obelix`'s shape). **It never says `Match`** — no L2 rule is `Decisive`
-//! — **and never `AbsenceOfProof`**, which is not persisted (Guy's arbitration, 2026-09-24). Both
-//! refusals are made here before a row is written and again by `0012`'s CHECKs.
+//! An ENGINE row is a decision the L2 cascade reached about two interfaces: `NoMatch` (a rule excluded
+//! the pair — today only `l2-virtual-mac-prefix`) or `Abstained { Ambiguous }` (the pair looks alike and
+//! the engine will not guess — `obelix`'s shape). **The engine never says `Match`** — no L2 rule is
+//! `Decisive` — **and never `AbsenceOfProof`**, which is not persisted (Guy's arbitration, 2026-09-24).
+//! Both refusals are made here before a row is written and again by the schema's CHECKs.
+//!
+//! 🔑 **An OPERATOR row can say `match`, since story 6.14b**: the operator's answer *the same machine*
+//! is an OPERATOR `match` with `rule_id = 'operator'`, and *distinct machines* an OPERATOR `no_match`
+//! (`0013` widened the two CHECKs for `OPERATOR` only). Those rows are written by `l2_answer`, never
+//! here. ⚠️ *"It never says `Match`"* stood above for the whole table until this story, and `0012`'s
+//! header still says so — an applied migration cannot be edited without breaking every store's
+//! checksum, so `0013`'s header carries the correction.
 //!
 //! **The evidence is the vector, not observation ids** (the same arbitration, F): a row stores each
 //! rule's verdict, which stays the same while the network does, and its subject is the pair. The
@@ -105,9 +112,10 @@ type CurrentPairRow = (
 pub(crate) struct CurrentL2Decision {
     /// The row id — a v7 UUID, a row identifier and not part of the decision.
     pub(crate) id: String,
-    /// `no_match` or `abstained`.
+    /// `no_match` or `abstained` for an ENGINE row; `match` or `no_match` for an OPERATOR one (story
+    /// 6.14b — the operator's two answers).
     pub(crate) outcome: String,
-    /// The rule that excluded the pair, for a `no_match`.
+    /// The rule that excluded the pair, for an ENGINE `no_match`; `operator` for an operator's answer.
     pub(crate) rule_id: Option<String>,
     /// `ambiguous`, for an abstention.
     pub(crate) abstention_cause: Option<String>,
@@ -232,6 +240,28 @@ where
         "SELECT interface_low, interface_high, verdicts FROM l2_pair_decision \
          WHERE is_current = 1 AND decided_by = 'ENGINE' AND outcome = 'abstained' \
          AND abstention_cause = 'ambiguous'",
+    )
+    .fetch_all(executor)
+    .await
+}
+
+/// Every current OPERATOR row, as `(interface_low, interface_high, outcome, valid_from)` — the answers
+/// the operator gave (story 6.14b). Read for two things: a group that re-forms around an answered pair
+/// names the answer, and the reach section counts answered questions.
+///
+/// # Errors
+///
+/// Any database error.
+pub(crate) async fn load_current_operator_answers<'e, E>(
+    executor: E,
+) -> Result<Vec<(String, String, String, String)>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    sqlx::query_as(
+        "SELECT interface_low, interface_high, outcome, \
+         DATE_FORMAT(valid_from, '%Y-%m-%d %H:%i:%s.%f') FROM l2_pair_decision \
+         WHERE is_current = 1 AND decided_by = 'OPERATOR' ORDER BY interface_low, interface_high",
     )
     .fetch_all(executor)
     .await
@@ -893,6 +923,157 @@ mod tests {
             .await,
             "l2_pair_decision_rule_xor_cause",
         );
+    }
+
+    /// A raw insert naming its author — `raw` writes ENGINE rows only, and story 6.14b's refusals are
+    /// about which author may write what.
+    async fn raw_by(
+        pool: &MySqlPool,
+        decided_by: &str,
+        (outcome, rule_id, cause): (&str, Option<&str>, Option<&str>),
+    ) -> Result<(), String> {
+        sqlx::query(
+            "INSERT INTO l2_pair_decision (id, interface_low, interface_high, outcome, rule_id, \
+             abstention_cause, verdicts, ruleset_version, decided_by, valid_from, valid_to, \
+             is_current) VALUES (UUID(), ?, ?, ?, ?, ?, 'r=neutral', 1, ?, \
+             '2026-01-01 00:00:00', ?, 1)",
+        )
+        .bind(LOW)
+        .bind(HIGH)
+        .bind(outcome)
+        .bind(rule_id)
+        .bind(cause)
+        .bind(decided_by)
+        .bind(OPEN_END)
+        .execute(pool)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    }
+
+    /// Story 6.14b, AC3: `0013` admits the operator's two answers and nothing more — each refusal
+    /// named by the constraint that makes it.
+    ///
+    /// 🔑 The padded rows are the reason the TRIM idiom exists: `ascii_bin` is PAD SPACE, so
+    /// `'OPERATOR '` passes `l2_pair_decision_decided_by` and `= 'OPERATOR'` alike, and would then read
+    /// as the ENGINE's in `is_operators`, which compares in Rust. The two re-added CHECKs sit at the END
+    /// of the table's list, so the one named is the first of those two that fails.
+    #[tokio::test]
+    async fn the_schema_admits_the_operators_answers_and_nothing_more() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        let clear = || async {
+            sqlx::query("DELETE FROM l2_pair_decision")
+                .execute(&pool)
+                .await
+                .expect("clear");
+        };
+        for outcome in ["match", "no_match"] {
+            clear().await;
+            raw_by(&pool, "OPERATOR", (outcome, Some("operator"), None))
+                .await
+                .unwrap_or_else(|e| panic!("an OPERATOR {outcome} is an answer: {e}"));
+        }
+        clear().await;
+        for (why, author, row, constraint) in [
+            (
+                "an ENGINE match: no L2 rule is Decisive",
+                "ENGINE",
+                ("match", Some("operator"), None),
+                "l2_pair_decision_outcome",
+            ),
+            (
+                "an OPERATOR abstention answers nothing",
+                "OPERATOR",
+                ("abstained", None, Some("ambiguous")),
+                "l2_pair_decision_rule_xor_cause",
+            ),
+            (
+                "an ENGINE row may not claim the operator's token",
+                "ENGINE",
+                ("no_match", Some("operator"), None),
+                "l2_pair_decision_rule_xor_cause",
+            ),
+            (
+                "an operator's answer names no rule but its own",
+                "OPERATOR",
+                ("no_match", Some("l2-virtual-mac-prefix"), None),
+                "l2_pair_decision_rule_xor_cause",
+            ),
+            (
+                "a padded OPERATOR match",
+                "OPERATOR ",
+                ("match", Some("operator"), None),
+                "l2_pair_decision_outcome",
+            ),
+            (
+                "a padded OPERATOR no_match",
+                "OPERATOR ",
+                ("no_match", Some("operator"), None),
+                "l2_pair_decision_rule_xor_cause",
+            ),
+            (
+                "a padded operator token",
+                "OPERATOR",
+                ("match", Some("operator "), None),
+                "l2_pair_decision_rule_xor_cause",
+            ),
+        ] {
+            let result = raw_by(&pool, author, row).await;
+            let error = result.expect_err(why);
+            let needle = format!("`{constraint}`");
+            assert!(error.contains(&needle), "{why}: {needle} in {error}");
+        }
+    }
+
+    /// Story 6.14b, AC3: `0013` applied a SECOND time to a populated store succeeds, and both widened
+    /// clauses are what `information_schema` shows afterwards.
+    ///
+    /// 🔴 Both obvious re-runnable spellings were measured silent by the validation — one keeps the old
+    /// body, the other deletes the constraint — so the test asserts the BODIES, not just the exit.
+    #[tokio::test]
+    async fn the_widening_is_re_runnable_on_a_populated_store() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        sqlx::query("DELETE FROM l2_pair_decision")
+            .execute(&pool)
+            .await
+            .expect("clear");
+        raw(
+            &pool,
+            LOW,
+            HIGH,
+            ("abstained", None, Some("ambiguous")),
+            OPEN_END,
+            Some(1),
+        )
+        .await
+        .expect("populated");
+        let migration = include_str!("../migrations/0013_operator_answers.sql");
+        sqlx::raw_sql(migration)
+            .execute(&pool)
+            .await
+            .expect("0013 a second time");
+        let clauses: Vec<(String, String)> = sqlx::query_as(
+            "SELECT CONSTRAINT_NAME, CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS \
+             WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'l2_pair_decision' \
+             AND CONSTRAINT_NAME IN ('l2_pair_decision_outcome', 'l2_pair_decision_rule_xor_cause') \
+             ORDER BY CONSTRAINT_NAME",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("read the constraints");
+        assert_eq!(clauses.len(), 2, "both constraints exist: {clauses:?}");
+        for (name, clause) in &clauses {
+            assert!(
+                clause.contains("OPERATOR") && clause.contains("trim"),
+                "{name} carries the widened body with its padding idiom: {clause}"
+            );
+        }
+        sqlx::query("DELETE FROM l2_pair_decision")
+            .execute(&pool)
+            .await
+            .expect("clear");
     }
 
     /// One CURRENT decision per pair; a CLOSED one does not occupy the slot.

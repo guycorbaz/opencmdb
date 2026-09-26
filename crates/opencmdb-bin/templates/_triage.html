@@ -38,6 +38,10 @@
   {% if !documented.is_empty() %}
   <p class="documented" role="status">{{ documented }}</p>
   {% endif %}
+  {#- Story 6.14b: the confirmation an answer carried across its redirect. -#}
+  {% if !answered.is_empty() %}
+  <p class="answered-note" role="status">{{ answered }}</p>
+  {% endif %}
 
   {% if triage.rows.is_empty() %}
     <p class="clear">{{ s.triage_empty }}</p>
@@ -111,6 +115,25 @@
       <ul class="evidence">
         {% for e in pane.evidence %}<li>{{ e }}</li>{% endfor %}
       </ul>
+      {% endif %}
+      {#- Story 6.14b (Guy, 2026-09-26): a group that re-formed around a pair already answered NAMES that
+           answer, so the operator is not asked twice about what they settled. -#}
+      {% if !pane.earlier.is_empty() %}
+      <ul class="earlier-answers">
+        {% for e in pane.earlier %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+      <p class="muted">{{ s.ambiguous_earlier_note }}</p>
+      {% endif %}
+      {#- AC5 (Guy, 2026-09-26): no candidate is placed now, so there is no instant to answer against —
+           no answer is offered, and the screen says why rather than showing an empty bar. -#}
+      {% if pane.no_placement %}
+      <p class="no-placement">{{ s.ambiguous_no_placement }}</p>
+      {% endif %}
+      {#- 🔑 The binding term stays on the screen (Guy, 2026-09-26): the gesture's NAME, *Résoudre*, heads
+           its two answers, and what an answer does — and does not do yet — is said beside them. -#}
+      {% if pane.question.is_some() %}
+      <p class="gesture-name">{{ s.gesture_resolve }}</p>
+      <p class="muted">{{ s.answer_what }}</p>
       {% endif %}
       {% else %}
       <div class="cols">

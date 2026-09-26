@@ -106,6 +106,11 @@ identity.ambiguous_groups:
   # Story 6.14, AC5: the L2 questions in THEIR unit — groups of interfaces — never summed with sightings.
   en: "Machines possibly counted more than once:"
   fr: "Machines peut-être comptées plus d'une fois :"
+identity.answered_questions:
+  # Story 6.14b, AC8 (Guy's G1 and 4a): the questions the OPERATOR answered, counted in QUESTIONS — never
+  # pairs, never sightings — so an answer does not vanish from the screen that asked it.
+  en: "Questions you answered:"
+  fr: "Questions auxquelles vous avez répondu :"
 identity.floor:
   en: "The floor is set by the data, not by the engine: no amount of correctness recovers a signal the source never sent."
   fr: "Le plancher est fixé par les données, pas par le moteur : aucune justesse ne récupère un signal que la source n'a jamais émis."
@@ -364,9 +369,12 @@ triage.ambiguous.follows_network:
   en: "This question follows the network: it leaves the queue if the names stop matching, and returns when they match again."
   fr: "Cette question suit le réseau : elle quitte la file si les noms cessent de correspondre, et revient quand ils correspondent de nouveau."
 triage.ambiguous.add_alone:
-  # Guy's decision C's cost, said where the gesture is (story 6.14's review).
-  en: "Add creates a record for this address alone — it does not answer the question."
-  fr: "Ajouter crée une fiche pour cette seule adresse — cela ne répond pas à la question."
+  # 🔴 Story 6.14b's E1 (Guy, 2026-09-25): while the question is OPEN, this address shows the link to it
+  # INSTEAD of Add. The sentence read "Add creates a record for this address alone — it does not answer
+  # the question" under story 6.14's decision C, which kept Add beside the link; it would now describe a
+  # control that is not there.
+  en: "Answer the question first: Add returns on this address once it is answered, either way."
+  fr: "Répondez d'abord à la question : Ajouter revient sur cette adresse une fois qu'elle a sa réponse, quelle qu'elle soit."
 triage.ambiguous.evidence.virtual_router:
   en: "One of them uses a virtual-router address, which never anchors a machine."
   fr: "L'une d'elles utilise une adresse de routeur virtuel, qui n'identifie jamais une machine."
@@ -386,6 +394,61 @@ triage.ambiguous.evidence.unfamiliar:
 triage.ambiguous.open_question:
   en: "This address belongs to an open question: are these interfaces one machine?"
   fr: "Cette adresse fait partie d'une question ouverte : ces interfaces sont-elles une seule machine ?"
+# Story 6.14b — the two answers of the one gesture `resolve`/résoudre. ⚠️ Under `triage.answer.*` and
+# NOT `gesture.*`: the glossary guard demands every glossary-backed `gesture.*` key carry the binding
+# table's exact words, and these are two LABELS of one gesture, not two gestures (§0.9(H)). Neither
+# says "merge" nor "attach": no data moves, and no device record exists to attach to.
+triage.answer.same:
+  en: "The same machine"
+  fr: "La même machine"
+triage.answer.distinct:
+  en: "Distinct machines"
+  fr: "Des machines distinctes"
+triage.answer.name:
+  # The accessible name of one answer: the visible label FIRST (WCAG 2.5.3, label in name), then the
+  # question it answers — two answers on two panes must not share one name.
+  en: "%{answer} — %{group}"
+  fr: "%{answer} — %{group}"
+triage.answer.what:
+  # Under the two answers: what pressing one does, and what it does not yet.
+  en: "Your answer is kept as yours: the engine will not ask this again, and will not overwrite it. It cannot yet be changed from this screen, and the inventory still lists each address you added on its own."
+  fr: "Votre réponse est conservée comme la vôtre : le moteur ne reposera pas cette question et ne l'écrasera pas. Elle ne peut pas encore être modifiée depuis cet écran, et l'inventaire liste encore séparément chaque adresse que vous avez ajoutée."
+triage.ambiguous.no_placement:
+  # Story 6.14b, AC5 — a decision, Guy's, 2026-09-26: a group none of whose candidates is placed now has
+  # no instant to answer against, so it offers no answer and says why.
+  en: "None of these interfaces answers on the network now, so there is nothing to answer against yet. The question stays; the answers return with the next sweep that sees them."
+  fr: "Aucune de ces interfaces ne répond sur le réseau en ce moment : il n'y a encore rien sur quoi répondre. La question reste ; les réponses reviennent au prochain balayage qui les voit."
+triage.ambiguous.earlier_same:
+  # Story 6.14b, Guy 2026-09-26: a group that re-forms around a pair already answered names that answer.
+  en: "Already answered: %{a} and %{b} are the same machine."
+  fr: "Déjà répondu : %{a} et %{b} sont la même machine."
+triage.ambiguous.earlier_distinct:
+  en: "Already answered: %{a} and %{b} are distinct machines."
+  fr: "Déjà répondu : %{a} et %{b} sont des machines distinctes."
+triage.ambiguous.earlier_note:
+  en: "That answer stands; this question asks only about the candidates it has not covered."
+  fr: "Cette réponse tient ; cette question ne porte que sur les candidats qu'elle ne couvrait pas."
+triage.answer.refused.cross_site:
+  en: "This answer came from another site and was refused. Nothing was written."
+  fr: "Cette réponse venait d'un autre site et a été refusée. Rien n'a été écrit."
+triage.answer.refused.malformed:
+  en: "This answer could not be read. Nothing was written: reload the page and answer from it."
+  fr: "Cette réponse n'a pas pu être lue. Rien n'a été écrit : rechargez la page et répondez depuis elle."
+triage.answer.refused.stale:
+  en: "The question changed since this page was drawn. Nothing was written: reload it and look again."
+  fr: "La question a changé depuis l'affichage de cette page. Rien n'a été écrit : rechargez-la et regardez de nouveau."
+triage.answer.refused.changed:
+  en: "The machines in this question changed since this page was drawn. Nothing was written: reload it and answer again."
+  fr: "Les machines de cette question ont changé depuis l'affichage de cette page. Rien n'a été écrit : rechargez-la et répondez de nouveau."
+triage.answer.refused.not_open:
+  en: "This question is no longer open: it was answered, or the network stopped asking it. Nothing was written: reload the page."
+  fr: "Cette question n'est plus ouverte : elle a reçu une réponse, ou le réseau a cessé de la poser. Rien n'a été écrit : rechargez la page."
+triage.answer.refused.busy:
+  en: "The store did not answer in time. The answer may or may not have been kept: reload the page."
+  fr: "La base n'a pas répondu à temps. La réponse a peut-être été conservée, ou non : rechargez la page."
+triage.answer.refused.store:
+  en: "The answer could not be written. Nothing you added was touched; see the self-diagnostic if it persists."
+  fr: "La réponse n'a pas pu être écrite. Rien de ce que vous avez ajouté n'a été touché ; consultez l'auto-diagnostic si cela persiste."
 inventory.title:
   en: "Your records"
   fr: "Vos fiches"
@@ -539,6 +602,13 @@ triage.documented_one:
 triage.documented_other:
   en: "%{n} fields added. The question has left the queue."
   fr: "%{n} champs ajoutés. La question a quitté la file."
+# Story 6.14b: the confirmation an answer carries across its redirect, as `?answered=`.
+triage.answered.same:
+  en: "Answered: the same machine. The engine will not ask this again."
+  fr: "Répondu : la même machine. Le moteur ne reposera pas cette question."
+triage.answered.distinct:
+  en: "Answered: distinct machines. The engine will not ask this again."
+  fr: "Répondu : des machines distinctes. Le moteur ne reposera pas cette question."
 gesture.badge_off:
   en: "Not enabled"
   fr: "Non activé"
@@ -594,11 +664,6 @@ gesture.document:
 gesture.resolve:
   en: "Resolve"
   fr: "Résoudre"
-gesture.not_built_resolve:
-  # Story 6.14: the sentence under an AMBIGUITY's bar, which carries *Résoudre* alone. What an answer
-  # WRITES is story 6.14b's — so this says what answering will be, and that it is not here yet.
-  en: "Marked %{badge}: resolving — saying whether these interfaces are one machine or several — is still to come. Until then the engine keeps asking rather than guessing."
-  fr: "Marqué %{badge} : résoudre — dire si ces interfaces sont une seule machine ou plusieurs — est à venir. D'ici là, le moteur continue de demander plutôt que de deviner."
 gesture.accept_gap:
   en: "Accept the gap"
   fr: "Accepter l'écart"

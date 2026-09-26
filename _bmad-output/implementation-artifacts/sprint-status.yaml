@@ -80,7 +80,7 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-09-25  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
+last_updated: 2026-09-26
                           # The first time in five weeks that what was built reached its user: the
                           # NAS had been on `0.1.0`, older than the identity engine, the write route
                           # and the ten screens, and nobody had checked.
@@ -5140,7 +5140,7 @@ development_status:
   #   🔑 NEXT — 6.12 merged 2026-09-25. Queued by Guy's act of 2026-09-24: this is where obelix becomes visible — as ONE question
   #   with two candidates the operator lifts, not as a device. It inherits 6.13's replacement tripwire.
   # INSERTED 2026-09-25 by Guy's act at 6.14's arbitration: the gesture that lifts the doubt
-  6-14b-the-operator-lifts-the-doubt: ready-for-dev
+  6-14b-the-operator-lifts-the-doubt: in-progress
   #   ✅ Contexted, validated (two layers), arbitrated twice by Guy 2026-09-25 (story §0.8, §0.11).
   #   Both answers are OPERATOR rows in l2_pair_decision; 0013 admits match for OPERATOR only.
   #   ✅ The release it waited for is out: v0.6.0 published 2026-09-25 (tag on dde0257, image verified).

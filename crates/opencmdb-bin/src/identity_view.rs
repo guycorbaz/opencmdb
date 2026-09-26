@@ -133,6 +133,11 @@ pub(crate) struct IdentityView {
     /// counts above (story 5.14b's arbitration 10). Only `/triage` reads the L2 table, so this is `0`
     /// wherever else this section renders — registered rather than implied.
     pub(crate) ambiguous_groups: usize,
+    /// How many of those questions the OPERATOR answered — story 6.14b's AC8 (Guy's G1 and 4a), counted
+    /// per answer by [`crate::ambiguity_view::answered_questions`], never in pairs. It keeps an answer
+    /// from vanishing from the screen that asked it; it says how many, not which. Same reader as
+    /// `ambiguous_groups`, so `0` wherever that is.
+    pub(crate) answered_questions: usize,
 }
 
 /// An identity abstention cause as the operator reads it: its label, **and why it carries no
@@ -242,6 +247,7 @@ pub(crate) fn build_identity_view(rows: Vec<EngineReachRow>) -> IdentityView {
     }
     IdentityView {
         ambiguous_groups: 0,
+        answered_questions: 0,
         placed,
         not_placed,
         causes,

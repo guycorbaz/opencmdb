@@ -68,6 +68,10 @@
          this screen gains a gesture that acts, this arm owes a real `<button>` — the `match` is
          what will make someone read this. -#}
     <span class="btn-gesture-inert">{{ gesture.label }}</span>
+    {#- UNREACHABLE for the same reason as `Live`: an answer needs a QUESTION to answer, and this screen
+         has none (story 6.14b). -#}
+    {%- when GestureRender::Answer { .. } %}
+    <span class="btn-gesture-inert">{{ gesture.label }}</span>
     {%- endmatch %}
   {%- endfor %}
   <p id="diag-gesture-not-built" class="gesture-note">{{ s.gesture_not_built }}</p>

@@ -879,7 +879,7 @@ impl IpamForms {
             route: route.path(),
         }) {
             Gesture::Live { route } => route,
-            Gesture::Planned { .. } | Gesture::Disabled { .. } => {
+            Gesture::Planned { .. } | Gesture::Disabled { .. } | Gesture::Answer { .. } => {
                 unreachable!("built as Live one line above")
             }
         };
