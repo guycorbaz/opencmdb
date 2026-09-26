@@ -6547,5 +6547,26 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
 
 - ⚠️ **One machine counts THREE times in the triage queue's *Pending* count** — its two `Nouveau` rows and
   its one Ambigu row (the seed's question reads *Pending 16*). It follows from Guy's decision C (the addresses
-  keep *Ajouter*); what the count should mean once grouping exists is not a display story's to decide.
+  keep *Ajouter*) — ⚠️ *a premise story 6.14b's E1 revokes while the question is open (the address rows show a link
+  instead of* Ajouter*); the rows stay in the queue, so the count is unchanged and the cause is no longer this one*; what the count should mean once grouping exists is not a display story's to decide.
   **Owner: Epic 6's RETROSPECTIVE.**
+
+## Deferred from: code review of 6-14b-the-operator-lifts-the-doubt (2026-09-26)
+
+- **The glossary twins disagree on the `triage` row's order.** `prd.md` reads `create / attach` where `ux-design-specification.md` reads `attach / create`; the two tables are binding twins and the PR #219 review compared only the `resolve` row byte for byte. Pre-existing, not introduced by PR #219. Owner: the next planning act that edits the glossary.
+- **A group of three or more gets one binary answer; its partition is not offered.** Story 6.14b's D1 (Guy,
+  2026-09-25): *the same machine* / *distinct machines* over the whole group, written on its ENGINE-ambiguous pairs
+  (§0.11(1a)). An operator whose group holds two machines of three cannot say so. **Owner: the first story whose
+  network shows such a group** — the reference LAN's only question is a pair.
+- **An answer cannot be changed or undone from the screen.** D21 makes a change an addition (supersede with another
+  OPERATOR row), and no screen shows an answered pair; the reach line (6.14b's AC8) counts answers, never names them.
+  A wrong *distinct machines* stays until superseded by hand. **Owner: Epic 6's RETROSPECTIVE**, which decides
+  where the gesture belongs (Epic 7's triage, or a story of its own).
+- **`is_persisted(&decision)?` runs BEFORE the operator skip** (`l2_pass.rs:150`, the skip at `:152`). Harmless
+  while no L2 rule is `Decisive`; the day one is, an engine `Match` on an operator-held pair aborts the whole
+  sweep, L1 included. **Owner: the story that first produces an L2 `Decisive`.**
+- **A chain's `match` rows join across an ENGINE `no_match`.** 6.14b writes `match` only on a group's
+  ENGINE-ambiguous pairs (§0.11(1a)), refusing to override `l2-virtual-mac-prefix`'s Disqualifying `no_match`; a
+  union-find over those `match` rows then joins the two interfaces that verdict separates. Unreachable with
+  today's rules (the virtual-MAC reading disqualifies on either key, hostname agreement is an equivalence);
+  reachable from stale rows or a non-transitive rule. **Owner: story 6.14c.**

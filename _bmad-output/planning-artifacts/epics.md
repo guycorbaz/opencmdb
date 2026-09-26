@@ -430,7 +430,7 @@ _**Why it is `6b` and not `7`:** renumbering seventeen epics to make room for on
 
 ### Epic 7: La boucle se ferme (v0.5)
 The rich triage inbox on a correct synchronous commit: review unreconciled discoveries; document (all/field); accept-gap (gap stays open, mandatory note, wakes on observed change); exclude; snooze; create; attach. This is the MVP "you could stop here" line — the product now reconciles, not just observes.
-**FRs covered:** FR12, FR13, FR14, FR15, FR18 (min). UX-DR13,14,15,16,22,23,42,43.
+**FRs covered:** FR12, FR13, FR14, FR15, FR18 (min). UX-DR13,14,15,16,22,23,42,43 (⚠️ UX-DR43 in part: story 6.14b takes *Ajouter* yielding to an open ambiguity on the `Nouveau` row; *Resolve instead of Document* on the card stays here).
 
 ### Epic 8: Triage fluide (v0.6)
 The optimistic UI over the inbox: the server-authoritative commit state machine (`in_queue → pending_commit → committed | failed`), scan-vs-triage quarantine (`superseded_by_pending`), undo, and the focus-management contract on every HTMX swap (accessibility requirement #1 — focus never lost).
@@ -2055,6 +2055,16 @@ I want to answer the question an ambiguity asks,
 So that the engine stops asking it and the answer is kept as mine.
 
 _**INSERTED by Guy's act of 2026-09-25**, at story 6.14's arbitration, on the 6b.4/6b.4b and 6.4/6.4b precedent: *a display story whose gesture's semantics are unspecified is two stories*. **Sequenced AFTER the next release**, so that `obelix` is seen and used on the NAS before its gesture is written. **Its first obligation is a planning act, not code**: what each answer WRITES — *"not the same machine"* (an OPERATOR `no_match` row in `l2_pair_decision`, D21's shape; it needs a `rule_id`, a `verdicts` and a `ruleset_version`) and *"the same machine"* (a device, whose mint 6.12 left ownerless, and a `match` outcome `0012` refuses) — and whether the glossary's `attach`/*rattacher* already names the positive answer. The engine already leaves an operator's pair alone (6.12's code review). **Resolve replaces Document on an ambiguous card** is Epic 7's by its coverage line (UX-DR43); this story decides whether to take it._
+
+_✅ **ARBITRATED 2026-09-25 by Guy** (story file §0.8, §0.11): both answers are OPERATOR rows in `l2_pair_decision` (`0013` admits `match` for `OPERATOR` only), written on the pairs that ARE the question and refused with 409 when the group changed under the page; *Ajouter* yields to an open question (UX-DR43, taken here); **the device and the inventory go to story 6.14c, inserted below**._
+
+### Story 6.14c: A machine the operator called one is shown as one — INSERTED 2026-09-25
+
+As the operator,
+I want the machine I said was one to appear once in the inventory,
+So that the product counts boxes, not network cards.
+
+_**INSERTED by Guy's act of 2026-09-25**, at story 6.14b's arbitration (A1): 6.14b records the operator's answer and mints nothing. **This story's producer is 6.14b's OPERATOR `match`** — the first real producer the device mint has had, which 6.12 found missing. Its scope: the device and its N:N membership (D14, *"`interface.device_id` is NOT a unique FK"*); the inventory showing a declared entity through the device its interface belongs to, **without ever updating `declared_attribute.entity_id`** (D15) — a path address → interface already exists (`ambiguity_view::ambiguity_rows`); and the double documentation 6.14b registers (*Ajouter* returns on both addresses after *the same machine*). Its first obligation is a planning act on what the inventory row of a grouped machine SHOWS. ⚠️ **It inherits a question, not an answer** (6.14b's code review, Guy 2026-09-26): 6.14b writes `match` only on the ENGINE-ambiguous pairs of a group, so a chain A–B, B–C whose A–C carries an ENGINE `no_match` (`l2-virtual-mac-prefix`, Disqualifying) joins A and C by union-find — overriding transitively the verdict 6.14b refused to override directly. This story decides whether the grouping honours it._
 
 ### Story 6.15: The `must-abstain` traps are routed, and the release gate falls green
 
