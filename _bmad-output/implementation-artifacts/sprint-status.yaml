@@ -5154,7 +5154,10 @@ development_status:
   #   ✅ Its planning act is PR #219 (the story file, 6.14c inserted, the glossary row `resolve`), code-reviewed
   #   2026-09-26 by three layers: six decisions by Guy, 23 patches applied. Next: merge #219, then dev-story.
   #   (History: it was sequenced after v0.6.0 so obelix is seen on the NAS before its gesture is written.)
-  6-14c-a-machine-called-one-is-shown-as-one: in-progress
+  6-14c-a-machine-called-one-is-shown-as-one: review
+  #   ✅ DEVELOPED 2026-09-26: device_grouping.rs (computed from match rows; MAC, else origin — the one provenance
+  #   read, sanctioned by name), one /devices row per device, header "appareils · fiches". 836 + 219 + 110, ten
+  #   gates, axe 0 nodes, kbd 70/0; seven mutation rows, N1 contradicts by OVER-predicting. Next: code review.
   #   ✅ Contexted, arbitrated (Guy 2026-09-26, six decisions), validated by two layers (a prototype on its own DB),
   #   re-arbitrated (four). COMPUTED, not stored: grouping from the operator's match rows; record → interface by
   #   MAC, else origin_obs_id (the address path merged two machines by DHCP); only answers join interfaces.
