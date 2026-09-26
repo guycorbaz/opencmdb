@@ -10,6 +10,15 @@ schema will move.
 
 ## Unreleased
 
+### Dependencies (issue #221)
+
+- **125 semver-compatible updates** (`cargo update`), all within the workspace's Rust 1.96. `generic-array`
+  moves DOWN 0.14.9 → 0.14.7 because `crypto-common` 0.1.7 pins it; no advisory is involved.
+- **`toml` 0.8 → 1.1**, aligned with the version `config` already pulls, with its writing half off.
+- **Kept on purpose**: `yaml-rust2` stays 0.11 and `base64` 0.22 — each is shared with a dependency
+  (`config`, `sqlx`) that has not moved, and bumping ours would compile two versions of each.
+- `cargo deny check`: advisories, bans, licences and sources all clean.
+
 ### One device, one row (story 6.14c)
 
 🔑 **The *Devices* screen lists devices, not records.** Records you answered **The same machine** share

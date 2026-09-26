@@ -17,7 +17,7 @@ anyhow = "1.0.103"
 serde = { version = "1.0.228", features = ["derive"] }
 sha2 = "0.11.0"
 # The fixture MANIFEST is TOML (D56). Already in the workspace tree; no new supply chain.
-toml = "0.8.23"
+toml = { version = "1.1.6", default-features = false, features = ["std", "serde", "parse"] }
 walkdir = "2.5.0"
 # The locale file is YAML and the `copy-vocabulary` gate is a DENYLIST, so a value it fails to
 # parse reads GREEN — a hole, not a false alarm. Story 6b.10's validation built both parses and
