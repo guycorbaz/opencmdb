@@ -1,6 +1,6 @@
 # Story 6.14b: The operator lifts the doubt
 
-Status: **ready-for-dev** — arbitrated (§0.8, §0.11) and validated (§0.9, two layers, one database each). The arbitration inserts
+Status: **review** — developed 2026-09-26 (see *Dev Agent Record*). Before that: **ready-for-dev** — arbitrated (§0.8, §0.11) and validated (§0.9, two layers, one database each). The arbitration inserts
 story 6.14c (A1). ~~a planning act recorded in `epics.md`~~ — ~~⚠️ *not yet: `epics.md` carries no 6.14c; the
 fact-check caught this line asserting it.*~~ ✅ Recorded by this story's planning PR (#219): `epics.md` carries 6.14c,
 and the glossary edit §0.9(G) owes. **Code-reviewed on that PR (2026-09-26)**, three isolated layers: six decisions
@@ -506,22 +506,22 @@ The planning act rides with this story file, as PR #213 did for 6.14:
 
 ## 1b. Tasks
 
-- [ ] T1 `0013_operator_answers.sql`: one `ALTER`, the two CHECKs re-added outcome-first, the TRIM idiom, the
+- [x] T1 `0013_operator_answers.sql`: one `ALTER`, the two CHECKs re-added outcome-first, the TRIM idiom, the
       recovery recipe; its raw-insert tests (AC3).
-- [ ] T2 `l2_repo::record_operator_answer` (a sibling adapter; no forged `Decision`), with group recomputation,
+- [x] T2 `l2_repo::record_operator_answer` (a sibling adapter; no forged `Decision`), with group recomputation,
       the group's rows read `FOR UPDATE`, the stale, forged-instant and changed-group checks, `NotFound`/unique
       mapped to the keyed 409, and the single transaction. Rewrite the two forging tests (AC2, AC4, AC5).
-- [ ] T3 `l2_pass`: the LOCKING re-read on a close that finds nothing (AC6), with its two-transaction test on
+- [x] T3 `l2_pass`: the LOCKING re-read on a close that finds nothing (AC6), with its two-transaction test on
       the changed-decision branch.
-- [ ] T4 The route (pool-bearing router, Origin check, keyed refusals, `HX-Redirect` with the confirmation; its
+- [x] T4 The route (pool-bearing router, Origin check, keyed refusals, `HX-Redirect` with the confirmation; its
       row in the auth route-table test).
-- [ ] T5 `Gesture`'s new variant and render arm; `_action_bar.html`; the keys (§0.9(H)); E1, H1 and the reach
+- [x] T5 `Gesture`'s new variant and render arm; `_action_bar.html`; the keys (§0.9(H)); E1, H1 and the reach
       line (AC1, AC7, AC8).
-- [ ] T6 Seed, `axe-gate.mjs`, `kbd-probe.mjs` (AC9).
-- [ ] T7 Mutation pass: predictions first; carriers derived by grepping the mutated token; `--baseline`; one
+- [x] T6 Seed, `axe-gate.mjs`, `kbd-probe.mjs` (AC9).
+- [x] T7 Mutation pass: predictions first; carriers derived by grepping the mutated token; `--baseline`; one
       database per process. It includes the re-read and the adapter's read made plain (drop `FOR UPDATE`), and
       the TRIM idiom dropped from each OPERATOR arm.
-- [ ] T8 Docs, register rows, twins, the Record (AC10).
+- [x] T8 Docs, register rows, twins, the Record (AC10).
 
 ### Review Findings
 
@@ -558,6 +558,103 @@ opencmdb is used regularly.* They are provisional against use, not settled again
 - [x] [Review][Patch] The register row "One machine counts THREE times … follows from Guy's decision C" states a premise E1 revokes while the question is open [deferred-work.md:6547] (auditor 8)
 - [x] [Review][Defer] The neighbouring glossary row `triage` differs between the twins (`create / attach` in `prd.md`, `attach / create` in the UX spec) [prd.md, ux-design-specification.md] — deferred, pre-existing
 
+## Dev Agent Record
+
+### Implementation plan, and where it departs from the criteria
+
+- **T1 `0013`** — as §0.9(A) prescribes, with the TRIM idiom written into both OPERATOR arms (the
+  review's patch) and `decided_by = 'ENGINE'` added to the two ENGINE arms, so an OPERATOR `abstained` is
+  refused. Constraint names measured for AC3's padded rows exactly as predicted: a padded-`decided_by`
+  `match` names `l2_pair_decision_outcome`; a padded `no_match` and a padded token name
+  `l2_pair_decision_rule_xor_cause`.
+- **T2 `l2_answer.rs`** — a NEW module rather than `l2_repo.rs` (at ~586 real code lines behind a
+  `file-size` gate that reads 83, registered). The adapter reads the question's rows `FOR UPDATE`,
+  RECOMPUTES the group with the screen's own `ambiguity_view::groups`, and refuses in this order: not
+  open → changed → (no placement → stale) → forged → stale; then closes each question-pair at the
+  instant shown and inserts the OPERATOR row by raw SQL, copying the vector — no forged `Decision`.
+  `NotFound` and `Constraint("unique")` inside the transaction map to *no longer open* (409).
+- **T3 `l2_pass.rs`** — a close that finds no row re-reads the slot `FOR UPDATE`; an OPERATOR row there is
+  `operator_held`, and the sweep continues. **Measured red first**: the race test failed with `NotFound`,
+  i.e. the whole sweep, L1 included, rolled back for one click.
+- **T4 the route** — `POST /triage/answer` on its own port-state sub-router (no pool on the state), NO
+  switch (F1), Origin check first, keyed refusals, `201` + `HX-Redirect: /triage?answered=same|distinct`.
+  The auth route-table test walks it (11 → 12 write routes). `ipam_write::Refusal::new` became
+  `pub(crate)` so both write surfaces share one refusal type rather than two.
+- **T5 the screen** — `Gesture::Answer { route, answer }` and `GestureRender::Answer { route, token,
+  name }`; the compiler named the four sites (`GestureView::of`, `ipam_page.rs`, both templates). The
+  answer labels live under `triage.answer.*`, NOT `gesture.*` (§0.9(H)). The *not built* note renders
+  only when a planned control is on the bar. Keys: 23 added, `gesture.not_built_resolve` removed.
+- **T6 browser gates** — the seed gains a SECOND question, already answered (`.202`/`.203`); the keyboard
+  gate's Ambigu block now reads the two answers, the gesture's name, E1's link, PRESSES an answer, and
+  reads the question gone and *Ajouter* back. `MIN_CHECKS` 66 → **70**, read off the run; the release
+  check's outside list gains the two new addresses.
+
+⚠️ **Divergence from AC10's letter: `0012`'s header is NOT corrected.** sqlx checksums every applied
+migration, so editing that comment would stop every existing store booting. `0013`'s header and
+`l2_repo.rs`'s module doc carry the correction; registered.
+
+⚠️ **Two of my own sentences failed the vocabulary gate**, both carrying the retired « documented » /
+« documentée » in `triage.answer.what` and `triage.answer.refused.store`; reworded to *added*.
+
+### Mutation pass (T7) — predictions written first, in `predictions.md`, before any run
+
+Every run on a VIRGIN database, `--baseline` except M4 (a migration mutation: the baseline would migrate
+the unmutated `0013` and the mutated one would then fail its checksum). Driver: `cargo xtask mutate`.
+
+| id | mutation | predicted | measured | carriers |
+|---|---|---|---|---|
+| M1 | the pass's re-read loses `FOR UPDATE` | red:1 | ✅ red 1 | `an_answer_that_races_a_sweep_does_not_cost_the_sweep` |
+| M2 | the adapter's read loses `FOR UPDATE` | green | ✅ green | **the finding**: two carriers — the close then finds no row and `NotFound` answers *no longer open* |
+| M2b | M2 AND `NotFound` no longer maps to 409 | red:2 | ✅ red 2 | `two_concurrent_answers…`, `every_refusal_is_keyed…` |
+| M3 | `NotFound` no longer maps to 409 | red:1 | ✅ red 1 | `every_refusal_is_keyed_and_a_lost_race_is_not_a_500` |
+| M4 | `0013`: TRIM idiom on `decided_by` dropped from the OPERATOR arm | red:1 | ✅ red 1 | `the_schema_admits_the_operators_answers_and_nothing_more` |
+| M6 | the upper bound (forged instant) neutered | red:1 | ✅ red 1 | `every_refusal_writes_nothing` |
+| M7 | the stale check neutered | red:1 | ✅ red 1 | `every_refusal_writes_nothing` |
+| M8 | the changed-group check neutered | red:2 | ✅ red 2 | `every_refusal_writes_nothing`, `a_group_that_shrank_under_the_page_is_refused` |
+| M9 | E1's `retain` neutered | red:2 | ✅ red 2 | `a_new_row_of_an_open_question_shows_the_link_instead_of_add`, `no_other_kind_carries_a_live_gesture…` |
+| M10 | H1: the question pushed to the end | red:1 | ✅ red 1 | `the_question_sits_before_its_addresses_rows` |
+| M11 | the *not built* note unconditional | red:1 | ✅ red 1 (+ clippy) | `the_ambiguity_pane_renders_resolves_two_live_answers_under_its_name` |
+| M12 | `answered_questions` keys every row together | red:1 | ✅ red 1 (+ clippy) | `answered_questions_are_counted_per_answer…` |
+| M13 | the answers painted amber | red:3 | 🔴 **red 2** | `the_ambiguity_pane_renders…`, `the_resolve_gesture_cannot_go_live…` |
+| M15 | *the same machine* writes `no_match` | red:5 | 🔴 **red 7** | the five predicted, plus `a_re_formed_group_writes_only_the_pairs_it_did_not_cover` and `page::…a_group_re_formed_around_an_answered_pair_names_the_earlier_answer` |
+
+**Fourteen rows: twelve conform, two contradict, and neither prediction is rewritten.**
+- 🔴 **M13**: I counted `ac4_the_amber_is_reserved_for_the_documenting_gesture` as a carrier because it
+  greps `btn-document`; it counts the token's READS IN THE SHEET, not its uses in templates. So on this
+  pane the amber's reservation is carried by the two render tests alone — *a guard found by grepping its
+  subject is not thereby a guard of it*.
+- 🔴 **M15**: I derived carriers by grepping the literal `"match"` in two files; the value also reaches
+  `Answer::of_outcome` in `page.rs` and a count of `no_match` rows. **The sixth instance in this project
+  of enumerating carriers too narrowly** — the grep was mechanical, and its PERIMETER was not.
+- M11 and M12 also red clippy (an askama constant condition; unused bindings), which the driver folds and
+  reports; the test counts are the prediction's.
+
+### Completion notes
+
+- **Live count: 822 + 219 + 110** (base 802 + 219 + 110, measured on `75a9037`'s successor `3c2f676`, a
+  planning-only merge). `RUSTFLAGS="-D warnings" cargo test --workspace --locked` green on a VIRGIN store;
+  ten `cargo xtask ci` gates; clippy `--all-targets`; fmt.
+- **Browser gates, run as `ci.yml` runs them** against this story's store: axe **10 routes + 6 states,
+  0 violation nodes** (empty-plan pass first, then all seven `REQUIRE` flags); kbd **70 checks, 0 failed**
+  — it pressed *Distinct machines* with Enter and read `status=201 url=/triage?answered=distinct`, the
+  question gone, and *Ajouter* back on `.200`.
+- **What the operator gains**: they can ANSWER `obelix`'s question, from the keyboard, and the answer is
+  kept as theirs; the engine stops asking, and the reach line counts it. **What they still cannot do**:
+  change or undo an answer from the screen; see `obelix` as one row in `/devices` (story 6.14c).
+
+### File List
+
+- `crates/opencmdb-bin/migrations/0013_operator_answers.sql` (new)
+- `crates/opencmdb-bin/src/l2_answer.rs` (new)
+- `crates/opencmdb-bin/src/l2_pass.rs`, `l2_repo.rs`, `ambiguity_view.rs`, `triage_view.rs`, `page.rs`,
+  `identity_view.rs`, `ipam_write.rs`, `ipam_page.rs`, `state_vocabulary.rs`, `sighting_repo.rs`, `main.rs`
+- `crates/opencmdb-bin/templates/_action_bar.html`, `_triage.html`, `_identity_section.html`, `_diagnostic.html`
+- `crates/opencmdb-bin/locales/app.yml`, `crates/opencmdb-bin/assets/app.css`
+- `a11y/seed.sql`, `a11y/kbd-probe.mjs`
+- `docs/manuals/user-manual/user-manual.tex`, `CHANGELOG.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`, `sprint-status.yaml`, this file
+- `CLAUDE.md`, `docs/project-context.md`
+
 ## 2. What this story must NOT do
 
 - Mint a device, add a membership table, or change `/devices` (6.14c).
@@ -593,6 +690,7 @@ supersedes it by hand. The reach line (AC8) says HOW MANY questions were answere
 | 2026-09-25 | Contexted. Eight decisions posed with recommendations (§0.5). |
 | 2026-09-25 | **Guy's arbitration**: all eight on the recommendation (§0.8); story 6.14c inserted. |
 | 2026-09-25 | Validated by two layers (§0.9); **Guy's second arbitration**, all four on the recommendation (§0.11); criteria rewritten; `ready-for-dev`. |
+| 2026-09-26 | **Developed**: `0013`, `l2_answer.rs`, the pass's locking re-read, the route, the screen, the gates; fourteen mutation rows (12 conform, 2 contradict); `review`. |
 | 2026-09-26 | Code review of planning PR #219 (three layers): 24 findings, **six decisions by Guy** (all (a)), 23 patches applied — locking reads (AC2, AC6), the instant's upper bound, the TRIM idiom written into the shape, the re-formed group, the per-answer count, the no-placement case decided, *Résoudre* kept on screen; stale sentences struck. Still `ready-for-dev`. |
 
 ## References
@@ -602,3 +700,39 @@ supersedes it by hand. The reach line (AC8) says HOW MANY questions were answere
 `0006_entity_device_and_state.sql` · `0012_l2_pair_decision.sql` · `l2_pass.rs:25,150,152,795,807,899,926` ·
 `l2_repo.rs:352,406` · `inventory_view.rs:19` · `_triage.html` ·
 `6-14-ambiguity-explains-itself.md` §0.5 (C), §0.8 · `deferred-work.md:6541`.
+
+## Record
+
+- live-count: bin=822 core=219 xtask=110
+- base: 3c2f6768393fd59241839496237919c0f7fcd58a
+- registered: After *the same machine*, both addresses offer Add again and can be recorded twice.
+- registered: The `file-size` gate is blind to `l2_repo.rs` and `main.rs`, both grown by story 6.14b.
+- registered: `0012`'s header still says `match` is refused outright, and cannot be corrected where it stands.
+- file: CHANGELOG.md
+- file: CLAUDE.md
+- file: _bmad-output/implementation-artifacts/6-14b-the-operator-lifts-the-doubt.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: a11y/kbd-probe.mjs
+- file: a11y/seed.sql
+- file: crates/opencmdb-bin/assets/app.css
+- file: crates/opencmdb-bin/locales/app.yml
+- file: crates/opencmdb-bin/migrations/0013_operator_answers.sql
+- file: crates/opencmdb-bin/src/ambiguity_view.rs
+- file: crates/opencmdb-bin/src/identity_view.rs
+- file: crates/opencmdb-bin/src/ipam_page.rs
+- file: crates/opencmdb-bin/src/ipam_write.rs
+- file: crates/opencmdb-bin/src/l2_answer.rs
+- file: crates/opencmdb-bin/src/l2_pass.rs
+- file: crates/opencmdb-bin/src/l2_repo.rs
+- file: crates/opencmdb-bin/src/main.rs
+- file: crates/opencmdb-bin/src/page.rs
+- file: crates/opencmdb-bin/src/sighting_repo.rs
+- file: crates/opencmdb-bin/src/state_vocabulary.rs
+- file: crates/opencmdb-bin/src/triage_view.rs
+- file: crates/opencmdb-bin/templates/_action_bar.html
+- file: crates/opencmdb-bin/templates/_diagnostic.html
+- file: crates/opencmdb-bin/templates/_identity_section.html
+- file: crates/opencmdb-bin/templates/_triage.html
+- file: docs/manuals/user-manual/user-manual.tex
+- file: docs/project-context.md

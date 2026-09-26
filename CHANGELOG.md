@@ -8,6 +8,34 @@ schema will move.
 
 ---
 
+## Unreleased
+
+### You can answer the question (story 6.14b)
+
+🔑 **An *Ambiguous* line now takes an answer.** Its pane carries **Resolve** as two buttons, **The same
+machine** and **Distinct machines**. Either answer is kept as the operator's: the engine never asks that
+question again and never overwrites the answer, the line leaves the queue, and the addresses it
+concerned offer **Add** again. While the question is open those addresses link to it *instead of*
+offering **Add**, so a machine is not recorded twice before anyone has said it is one. The reach
+section counts the questions answered.
+
+⚠️ **The answer is dated at what the page showed.** If the question or its machines changed since the
+page was drawn, the answer is refused and nothing is written: reload and look again.
+
+⚠️ **What it does not do yet.** An answer cannot be changed or undone from the screen. The inventory
+still lists each added address on its own — *the same machine* is recorded, and the machine appears
+once only when the device grouping arrives.
+
+⚠️ **The route carries no opt-in.** `POST /triage/answer` is always mounted, behind the same Basic
+authentication and same-origin check as every write: it records an identity decision and never a
+declared value, so `OPENCMDB_DOCUMENT_ENABLED`, which guards documenting, does not apply to it.
+
+**Migration `0013`** widens two CHECKs of `l2_pair_decision` so an OPERATOR row may say `match`. A
+store holding an operator row this refuses boots `Dirty(13)`; the migration's header carries the
+two-line recovery. Only tests ever wrote such rows.
+
+---
+
 ## 0.6.0 — the product shows you the machine it may be counting twice
 
 🔑 **A machine with two network cards answering to one name is now ONE question on the triage screen,
