@@ -5140,7 +5140,9 @@ development_status:
   #   🔑 NEXT — 6.12 merged 2026-09-25. Queued by Guy's act of 2026-09-24: this is where obelix becomes visible — as ONE question
   #   with two candidates the operator lifts, not as a device. It inherits 6.13's replacement tripwire.
   # INSERTED 2026-09-25 by Guy's act at 6.14's arbitration: the gesture that lifts the doubt
-  6-14b-the-operator-lifts-the-doubt: review
+  6-14b-the-operator-lifts-the-doubt: done
+  #   ✅ MERGED 2026-09-26: PR #220 squash-merged as 8d2a881, CI green on the head e7e7128 itself (run 36242637321),
+  #   code-reviewed by three isolated layers and REPAIRED first (26 findings, three decisions by Guy).
   #   ✅ DEVELOPED 2026-09-26 on story/6-14b-the-operator-lifts-the-doubt: 0013, l2_answer.rs (POST /triage/answer,
   #   no switch), the pass's FOR UPDATE re-read (measured red first: the sweep rolled back), the Ambigu pane's
   #   two live answers under Résoudre, E1/H1, the answered-questions line. 822 + 219 + 110, ten gates, axe 0
