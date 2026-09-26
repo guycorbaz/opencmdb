@@ -573,6 +573,7 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 /* The browser's default blue, seen in Chrome — the product's links carry its own ink. */
 .open-question a { color: var(--text); text-decoration: underline; }
 .identity .pair.ambiguous { margin-top: 4px; }
+.identity .pair.answered { margin-top: 4px; }
 .photo .meta { margin: 4px 0 0; font-size: 11px; overflow-wrap: anywhere; }
 
 /* A grid child that may hold long values needs this or it refuses to shrink. */
@@ -721,6 +722,39 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .btn-gesture.btn-document:hover {
   background: color-mix(in srgb, var(--accent-document) 86%, var(--text));
   border-color: color-mix(in srgb, var(--accent-document) 86%, var(--text));
+}
+
+/* 🔑 THE TWO ANSWERS OF `resolve` (story 6.14b): live, and NOT amber. The UX spec reserves
+   `--accent-document` for the documenting gesture alone, and the validation measured `Live`'s shape
+   painting both answers amber (§0.9(C)); an answer is a decision about identity, not a declared
+   value. Weight only, on `.btn-gesture.live`'s quiet ground, at its specificity and after it. */
+.btn-gesture.btn-answer {
+  font-weight: 600;
+}
+
+/* The gesture's NAME over its two answers — the binding term stays on the screen (story 6.14b). */
+.gesture-name {
+  margin: 12px 0 4px;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* The operator's earlier answers inside a re-formed group, and why no answer is offered on a group
+   none of whose candidates is placed now (story 6.14b). Plain statements, never alarms. */
+.earlier-answers { margin: 4px 0 8px; padding-left: 18px; }
+.earlier-answers li { margin: 2px 0; }
+.no-placement { margin: 8px 0 0; color: var(--text); font-size: 13px; }
+
+/* The confirmation an answer leaves in the URL. Its edge is NEUTRAL: the amber of `.documented`
+   belongs to the documenting gesture, and an answer is not one. */
+.answered-note {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--color-neutral-500);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
 }
 
 /* A control on a screen that has no subject to act on — `/diagnostic`'s unreachable `Live` arm.

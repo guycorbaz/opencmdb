@@ -91,7 +91,7 @@ When you review a discovery, you choose one canonical gesture:
   \item \textbf{Attach}, \textbf{create}, \textbf{snooze} — link to an existing record,
         create a new declaration, or defer.
   \item \textbf{Resolve} — answer an \emph{ambiguity}: say whether the interfaces it names
-        are one machine or several. \emph{Not yet built} --- see below.
+        are one machine or several. See \emph{Answering an ambiguity} below.
 \end{itemize}
 
 \begin{note}
@@ -100,13 +100,43 @@ reappear on the next scan.
 \end{note}
 
 \begin{planned}
-The triage screen shows these five controls today, each labelled \emph{Not yet}:
-none of them acts. They are visible so that the shape of the work is legible before the
-gestures are built. Epic~7 makes them live.
+The triage screen shows the gap gestures today, each labelled \emph{Not yet}: they do not
+act yet. They are visible so that the shape of the work is legible before the gestures are
+built. Epic~7 makes them live.
+\end{planned}
 
-An \emph{Ambiguous} line carries one control, \textbf{Resolve}, also labelled \emph{Not
-yet}: what each answer records is still to be decided, and until it acts the engine keeps
-asking rather than guessing.
+\subsection{Answering an ambiguity}
+An \emph{Ambiguous} line asks whether several network interfaces --- two cards answering to
+one name, for example --- are one machine or several. Its pane shows each candidate as the
+network shows it now, says why the engine asks rather than decides, and carries
+\textbf{Resolve} as two answers:
+\begin{itemize}
+  \item \textbf{The same machine} --- the candidates are one box.
+  \item \textbf{Distinct machines} --- none of them is the other.
+\end{itemize}
+Either answer is kept as \emph{yours}: the engine will not ask that question again and will
+never overwrite your answer. The question leaves the queue at once, and the addresses it
+concerned offer \textbf{Add} again. While the question is open, those addresses show a link
+to it \emph{instead of} \textbf{Add}, so that you answer before you record a machine twice.
+The reach section at the bottom of the screen counts the questions you have answered.
+
+If some of the interfaces were already answered as \emph{distinct machines}, only
+\textbf{Distinct machines} is offered: saying \emph{the same machine} now would contradict your
+earlier answer, and the pane says so.
+
+\begin{note}
+The answer is dated at the moment the page showed you, not at the moment you pressed. If the
+network changed the question in between, or its machines changed, the product refuses the
+answer and asks you to reload and look again --- nothing is written.
+\end{note}
+
+\begin{planned}
+Two limits of this version. An answer cannot yet be changed or undone from the screen, and the
+count says \emph{how many} questions you answered, not \emph{which}. And the inventory still
+lists each address you added on its own: a machine you called one appears once only when the
+device grouping arrives --- so after answering \emph{the same machine}, pressing \textbf{Add} on
+each of its addresses records it twice, which is exactly what answering first was meant to avoid. A question whose machines are not answering on the network right now
+offers no answer, and says so; the answers return with the next sweep that sees them.
 \end{planned}
 
 \chapter{Getting started}

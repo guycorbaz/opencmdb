@@ -6533,6 +6533,9 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   handler alone and is `0` wherever else the section renders — a partial picture, stated in the field's
   doc rather than implied. **Owner: Epic 6's RETROSPECTIVE.** _(It named a second, conditional owner until
   6.14's code review — a row with an either/or owner is weaker than the house rule of one.)_
+  ⚠️ _Widened by story 6.14b: `IdentityView::answered_questions` — the reach line counting the questions the
+  operator ANSWERED — has the same reader and the same partial picture; `0` wherever the section renders
+  outside `/triage`._
 - ⚠️ **One Ambigu row per GROUP is exact only while an L2 `Ambiguous` comes from an EQUIVALENCE.** Today it
   arises from `l2-hostname-agrees` alone, whose agreement is set equality, so a group is a clique. A rule
   whose agreement is not transitive — an uplink or a switch port — can make a group join two interfaces
@@ -6570,3 +6573,39 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   union-find over those `match` rows then joins the two interfaces that verdict separates. Unreachable with
   today's rules (the virtual-MAC reading disqualifies on either key, hostname agreement is an equivalence);
   reachable from stale rows or a non-transitive rule. **Owner: story 6.14c.**
+
+## Story 6.14b — the operator lifts the doubt
+
+- **After *the same machine*, both addresses offer Add again and can be recorded twice.** E1 takes
+  *Add* away only while the question is OPEN (Guy's arbitration 3b, 2026-09-25); once answered, either
+  way, each address of the answered group offers *Add* again, and adding both creates two declared
+  entities for what the operator just called one machine — D12's over-count, which E1 exists to prevent
+  and which 6.14c's device grouping is what closes. On `obelix` it changes nothing: both addresses were
+  documented before the question existed. **Owner: story 6.14c.**
+- **The `file-size` gate is blind to `l2_repo.rs` and `main.rs`, both grown by story 6.14b.** It stops at
+  the first `#[cfg(test)]` at any nesting: in `l2_repo.rs` that is a test-only type alias at line **84**,
+  where the trailing test module opens at **587**; in `main.rs` line **45**, against **1110**. So the gate
+  reads ~83 and ~44 production lines where ~586 and ~1109 are. The same blindness as `repo.rs` and
+  `ipam_write.rs` above, and whatever closes one closes all four. **Owner: Epic 6's RETROSPECTIVE**,
+  which names the story that fixes the gate (it read *"the story that raises the ceiling"*, which names
+  none — PR #220's review).
+- **`0012`'s header still says `match` is refused outright, and cannot be corrected where it stands.**
+  AC10 asked for it to be corrected; sqlx checksums every applied migration, so editing a comment in
+  `0012` would stop every existing store booting with a version mismatch. `0013`'s header and
+  `l2_repo.rs`'s module doc carry the correction instead. Registered as the divergence from AC10's
+  letter it is. **Owner: Epic 6's RETROSPECTIVE**, which decides whether migrations are ever squashed;
+  until then the correction lives in `0013`'s header (it read *"Owner: none"* — PR #220's review).
+- **An answer can still wait on — and deadlock with — the pair that is its NEIGHBOUR in the unique key.**
+  PR #220's review measured the first adapter locking the whole table; the repair locks only the
+  question's own pairs (Guy, 2026-09-26). But the answer's INSERT checks the unique key
+  `(interface_low, interface_high, is_current)` for duplicates, finds its own just-closed entry, and
+  InnoDB then takes a shared lock on the NEXT entry — measured: with two questions minted in one sweep, an
+  answer waited on the neighbour a sweep had closed, the INSERT in `Update` state and `INNODB_LOCKS`
+  empty. A sweep that then needs the answer's rows deadlocks, and the victim can be the sweep (rolled back
+  entirely, L1 included — AC6's cost) or the answer (503, *nothing was written*). Rare — it needs a sweep
+  open on a neighbouring pair while the operator presses — and not closed here. **Owner: story 6.14c**,
+  whose device writer adds a third writer to the same table.
+- **Two states of the Ambigu pane are measured by no browser gate: a group with no current placement, and
+  a group naming an earlier answer.** Their render is carried by Rust tests; seeding them would add
+  questions the keyboard gate's "first Ambigu row" would then have to tell apart (Guy, 2026-09-26, PR
+  #220's review). `?answered=` joined axe's states. **Owner: Epic 6's RETROSPECTIVE.**

@@ -31,10 +31,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rust_i18n::t;
 
+use crate::l2_answer::Answer;
 use crate::page::{counted_fields, hostname_of};
 use crate::repo::ObservedBatch;
 use crate::triage_view::{
-    DetailPane, Gesture, GestureView, MetaLine, QueueRow, relative_time, row_href,
+    DetailPane, GestureView, MetaLine, QuestionForm, QueueRow, relative_time, row_href,
 };
 
 /// What `/triage` reads to show L2 questions: the current ENGINE `Ambiguous` pairs, and for each of
@@ -46,6 +47,41 @@ pub(crate) struct AmbiguityInput {
     /// `(interface_id, mac_canon, observation_id)` — EVERY latest placed observation of each interface
     /// (several when tied at one instant), and `None` for an interface with no current placement.
     pub(crate) sightings: Vec<(String, String, Option<String>)>,
+    /// One [`OperatorAnswer`] per current OPERATOR row — the answers already given (story 6.14b): named
+    /// on a group that re-forms around one, refusing *the same machine* where it would contradict one,
+    /// and counted on the reach section.
+    pub(crate) answers: Vec<OperatorAnswer>,
+}
+
+/// One current OPERATOR row: `(interface_low, interface_high, outcome, valid_from, mac_low, mac_high)`.
+pub(crate) type OperatorAnswer = (String, String, String, String, String, String);
+
+/// `(interface_low, interface_high, verdicts)` — one pair as [`groups`] reads it.
+type Pair = (String, String, String);
+
+/// How many QUESTIONS the operator answered — story 6.14b's AC8, in the unit the queue asks them in.
+///
+/// 🔴 **Per ANSWER, not per component of every OPERATOR row** (PR #219's review). A union-find over
+/// all current OPERATOR rows merges two answers that share a member — A–B answered, then B–C — into
+/// ONE. An answer writes every one of its rows at the instant it was shown and with one outcome, so the
+/// rows of one answer share `(valid_from, outcome)`: the union-find runs inside each such set, and the
+/// count is the sum of their components.
+///
+/// ⚠️ **The limit, said rather than left to be found**: two answers given on DISJOINT groups at the
+/// same shown instant and with the same outcome are still two components, so they count two; two
+/// answers on OVERLAPPING groups at the same instant with the same outcome would count one. That needs
+/// two questions sharing a member and a freshness, which one sweep cannot produce and two sweeps date
+/// apart.
+pub(crate) fn answered_questions(answers: &[OperatorAnswer]) -> usize {
+    // Keyed by `(valid_from, outcome)`: the rows ONE answer wrote.
+    let mut by_answer: BTreeMap<(&str, &str), Vec<Pair>> = BTreeMap::new();
+    for (low, high, outcome, valid_from, ..) in answers {
+        by_answer
+            .entry((valid_from.as_str(), outcome.as_str()))
+            .or_default()
+            .push((low.clone(), high.clone(), String::new()));
+    }
+    by_answer.values().map(|pairs| groups(pairs).len()).sum()
 }
 
 /// One group of interfaces the engine will not say are one machine or several.
@@ -243,6 +279,39 @@ pub(crate) fn ambiguity_rows(
             || t!("meta.never_seen").to_string(),
             |at| relative_time(now, at),
         );
+        // Story 6.14b (Guy, 2026-09-26): a group that re-formed around a pair the operator already
+        // answered NAMES that answer. 🔑 ONE end in the group is enough (PR #220's review): after A–B, a
+        // group {A, D} says nothing otherwise, while A is already joined by an earlier answer. The MACs
+        // come from `interface` itself, never a raw id (the first version fell back to one).
+        let named = |mac: &str| {
+            if mac.is_empty() {
+                t!("triage.ambiguous.unknown_interface").to_string()
+            } else {
+                mac.to_string()
+            }
+        };
+        let earlier: Vec<String> = input
+            .answers
+            .iter()
+            .filter(|(low, high, ..)| {
+                group.interfaces.contains(low) || group.interfaces.contains(high)
+            })
+            .map(|(_, _, outcome, _, mac_low, mac_high)| {
+                let key = match Answer::of_outcome(outcome) {
+                    Some(Answer::SameMachine) => "triage.ambiguous.earlier_same",
+                    _ => "triage.ambiguous.earlier_distinct",
+                };
+                t!(key, a = named(mac_low), b = named(mac_high)).to_string()
+            })
+            .collect();
+        // 🔴 Guy, 2026-09-26 (PR #220's review): *the same machine* is not offered on a group holding a
+        // pair the operator already answered DISTINCT — it would make those two one by transitivity. The
+        // route refuses it too (`AnswerRefused::Contradicts`); the pane says why.
+        let only_distinct = input.answers.iter().any(|(low, high, outcome, ..)| {
+            Answer::of_outcome(outcome) == Some(Answer::DistinctMachines)
+                && group.interfaces.contains(low)
+                && group.interfaces.contains(high)
+        });
         let kind = t!("state.ambiguous").to_string();
         // Never an empty token joined in: a candidate with no sighting has no address, and one whose
         // interface vanished has no MAC either — the review measured the first version rendering `" · "`.
@@ -272,11 +341,25 @@ pub(crate) fn ambiguity_rows(
             age_seconds: newest.map_or(i64::MAX, |at| (now - at).num_seconds().max(0)),
             selected: false,
         });
+        // 🔑 The instant the answer is dated at IS the freshness the page shows (§0.8 C1), rendered with
+        // its microseconds — the connector dates below the second, and an instant truncated to seconds
+        // was measured refused as stale on every real answer (§0.9(D)). A group with NO current
+        // placement has no such instant, so it offers no answer (AC5) — never `UNIX_EPOCH`.
+        let question = newest.map(|at| QuestionForm {
+            group: group.id.clone(),
+            members: group.interfaces.join(","),
+            shown: at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+        });
+        let gestures = if question.is_some() {
+            resolve_bar(&entity, only_distinct)
+        } else {
+            Vec::new()
+        };
         panes.push((
             group.id.clone(),
             DetailPane {
                 subject: String::new(),
-                gestures: resolve_bar(),
+                gestures,
                 kind,
                 entity,
                 field: String::new(),
@@ -293,21 +376,30 @@ pub(crate) fn ambiguity_rows(
                 candidates,
                 evidence: evidence_sentences(&group.verdicts),
                 open_question: None,
-                not_built: t!("gesture.not_built_resolve", badge = t!("gesture.badge")).to_string(),
+                not_built: String::new(),
+                no_placement: question.is_none(),
+                question,
+                earlier,
+                only_distinct,
             },
         ));
     }
     (rows, panes, address_to_group)
 }
 
-/// The action bar of an Ambigu pane: *Résoudre* ALONE, labelled and not acting (Guy's decisions A and
-/// E). Epic 7's four gap gestures answer a GAP and not a doubt, so they are not offered here; what an
-/// answer writes is story 6.14b's, which is why the control is `Planned`.
-pub(crate) fn resolve_bar() -> Vec<GestureView> {
-    vec![GestureView::of(
-        Gesture::Planned { owner: "6.14b" },
-        t!("gesture.resolve").to_string(),
-    )]
+/// The action bar of an Ambigu pane: *Résoudre*'s two answers, live (story 6.14b). Epic 7's four gap
+/// gestures answer a GAP and not a doubt, so they are not offered here (story 6.14's decisions A and E).
+/// ⚠️ The gesture's NAME, *Résoudre*, is rendered by the pane above the two answers — the binding term
+/// stays on the screen (Guy, 2026-09-26) while each control carries its answer's label.
+///
+/// With `only_distinct`, *the same machine* is left off: the group holds a pair already answered
+/// distinct, and saying one machine now would contradict it (Guy, 2026-09-26).
+pub(crate) fn resolve_bar(group: &str, only_distinct: bool) -> Vec<GestureView> {
+    Answer::ALL
+        .into_iter()
+        .filter(|answer| !(only_distinct && *answer == Answer::SameMachine))
+        .map(|answer| GestureView::answer(answer, group))
+        .collect()
 }
 
 /// Tests for the grouping and the evidence sentences — pure; the rendered pane is tested in `page.rs`.
@@ -389,6 +481,7 @@ mod tests {
         let input = AmbiguityInput {
             pairs: vec![pair("i1", "i2"), pair("i1", "i3"), pair("i2", "i3")],
             sightings: Vec::new(),
+            answers: Vec::new(),
         };
         let (rows, panes, _) = ambiguity_rows(
             &input,
@@ -438,6 +531,7 @@ mod tests {
                 ("i1".into(), "aa".into(), id(2)),
                 ("i2".into(), "bb".into(), id(3)),
             ],
+            answers: Vec::new(),
         };
         let (_, panes, links) = ambiguity_rows(&input, &batches, now(), false);
         assert_eq!(panes[0].1.candidates[0].addresses, "192.0.2.8 · 192.0.2.18");
@@ -470,6 +564,7 @@ mod tests {
                 ("i1".into(), "aa".into(), None),
                 ("i2".into(), "bb".into(), None),
             ],
+            answers: Vec::new(),
         };
         let (rows, panes, _) = ambiguity_rows(&input, &[], now(), false);
         let macs: Vec<&str> = panes[0]
@@ -483,6 +578,7 @@ mod tests {
         let bare = AmbiguityInput {
             pairs: vec![pair("i1", "i2")],
             sightings: Vec::new(),
+            answers: Vec::new(),
         };
         let (rows, _, _) = ambiguity_rows(&bare, &[], now(), false);
         assert!(
@@ -506,6 +602,7 @@ mod tests {
                 ("i1".into(), "aa".into(), Some(batches[0].id.to_string())),
                 ("i8".into(), "bb".into(), Some(batches[1].id.to_string())),
             ],
+            answers: Vec::new(),
         };
         let (_, _, links) = ambiguity_rows(&input, &batches, now(), false);
         assert_eq!(

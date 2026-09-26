@@ -94,7 +94,7 @@ pub(crate) struct Refusal {
 
 impl Refusal {
     /// A refusal at `status`, naming `key`.
-    const fn new(status: StatusCode, key: &'static str) -> Self {
+    pub(crate) const fn new(status: StatusCode, key: &'static str) -> Self {
         Self { status, key }
     }
 

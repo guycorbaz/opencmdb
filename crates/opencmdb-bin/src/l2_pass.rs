@@ -167,7 +167,23 @@ pub async fn judge_within(
                 if datetime_literal(reached_at) < current.valid_from {
                     return Err(RepositoryError::InstantRegressed);
                 }
-                close_l2_decision(&mut *conn, &current.id, reached_at).await?;
+                match close_l2_decision(&mut *conn, &current.id, reached_at).await {
+                    Ok(()) => {}
+                    // 🔴 Story 6.14b, AC6 (Guy's 2a): the row this sweep's SNAPSHOT shows was closed by
+                    // someone else — an operator answering the question while the sweep judged it. The
+                    // slot is re-read with a LOCKING read: under REPEATABLE READ a plain read returns the
+                    // snapshot, still showing the ENGINE row, and the skip would never fire (measured by
+                    // PR #219's review). An OPERATOR row found there is a human's answer, left alone, and
+                    // the sweep commits its L1 placements instead of rolling back for a click. Anything
+                    // else, the original refusal stands.
+                    Err(RepositoryError::NotFound)
+                        if current_is_operators_for_update(&mut *conn, low, high).await? =>
+                    {
+                        summary.operator_held += 1;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                }
                 if persisted {
                     insert(conn, low, high, &decision, reached_at).await?;
                     summary.written += 1;
@@ -179,6 +195,29 @@ pub async fn judge_within(
         }
     }
     Ok(summary)
+}
+
+/// Whether the pair's CURRENT row is an operator's, read with a LOCKING read (`FOR UPDATE`) — the
+/// latest committed version, never this transaction's snapshot. Story 6.14b's AC6.
+///
+/// # Errors
+///
+/// Any database error, classified.
+async fn current_is_operators_for_update(
+    conn: &mut MySqlConnection,
+    low: InterfaceId,
+    high: InterfaceId,
+) -> Result<bool, RepositoryError> {
+    let decided_by: Option<String> = sqlx::query_scalar(
+        "SELECT decided_by FROM l2_pair_decision \
+         WHERE interface_low = ? AND interface_high = ? AND is_current = 1 FOR UPDATE",
+    )
+    .bind(low.to_string())
+    .bind(high.to_string())
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(classify)?;
+    Ok(decided_by.as_deref() == Some("OPERATOR"))
 }
 
 async fn insert(
@@ -804,10 +843,9 @@ mod tests {
         )
         .await
         .expect("first sweep");
-        sqlx::query("UPDATE l2_pair_decision SET decided_by = 'OPERATOR'")
-            .execute(&pool)
-            .await
-            .expect("a human takes the pair");
+        // Story 6.14b, AC4: the operator's row is written by its REAL producer — the answer's adapter —
+        // where this test forged it with a raw `UPDATE` until then.
+        answer(&pool, crate::l2_answer::Answer::DistinctMachines, 100).await;
         let links_before = links(&pool).await;
         let second = sweep(
             &pool,
@@ -831,6 +869,83 @@ mod tests {
                 .await
                 .expect("read");
         assert_eq!(who, vec!["OPERATOR".to_string()]);
+    }
+
+    /// Answer the one open question of the store through the adapter, shown at `seen` seconds — what
+    /// `POST /triage/answer` does, without the route.
+    async fn answer(pool: &MySqlPool, answer: crate::l2_answer::Answer, seen: i64) {
+        let members: BTreeSet<String> = sqlx::query_scalar("SELECT id FROM interface")
+            .fetch_all(pool)
+            .await
+            .expect("read")
+            .into_iter()
+            .collect();
+        let mut conn = pool.acquire().await.expect("connection");
+        let mut tx = sqlx::Connection::begin(&mut *conn).await.expect("tx");
+        crate::l2_answer::record_operator_answer(&mut tx, &members, answer, at(seen))
+            .await
+            .expect("the answer");
+        tx.commit().await.expect("commit");
+    }
+
+    /// 🔴 Story 6.14b, AC6: an answer committed WHILE a sweep judges the same pair does not cost the
+    /// sweep. The sweep's snapshot still shows the ENGINE row; its decision CHANGED (one NIC lost its
+    /// name), so it goes to close that row, finds the operator already closed it, re-reads the slot —
+    /// with a LOCKING read, since a plain one returns the snapshot under REPEATABLE READ (measured by
+    /// PR #219's review) — finds the OPERATOR row, and skips the pair. It commits its L1 links.
+    ///
+    /// ⚠️ The changed decision is load-bearing: an UNCHANGED pair is counted `unchanged` from the
+    /// snapshot and never reaches the close, so a test on that branch would measure nothing.
+    #[tokio::test]
+    async fn an_answer_that_races_a_sweep_does_not_cost_the_sweep() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else { return };
+        sweep(
+            &pool,
+            vec![
+                sighting(1, nic(8), Some("obelix"), 100),
+                sighting(2, nic(9), Some("obelix"), 100),
+            ],
+        )
+        .await
+        .expect("first sweep");
+        let second_sweep = vec![
+            sighting(11, nic(8), Some("obelix"), 400),
+            sighting(12, nic(9), None, 400),
+        ];
+        for observation in &second_sweep {
+            crate::repo::insert_observation(&pool, observation)
+                .await
+                .expect("insert observation");
+        }
+        // The sweep's transaction opens and TAKES ITS SNAPSHOT first — the ENGINE row is current in it.
+        let mut sweep_conn = pool.acquire().await.expect("connection");
+        let mut sweep_tx = sqlx::Connection::begin(&mut *sweep_conn).await.expect("tx");
+        let seen: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM l2_pair_decision")
+            .fetch_one(&mut *sweep_tx)
+            .await
+            .expect("the snapshot");
+        assert_eq!(seen, 1, "premise: the question is in the sweep's snapshot");
+        // Then the operator answers, and commits.
+        answer(&pool, crate::l2_answer::Answer::SameMachine, 100).await;
+        let links_before = links(&pool).await;
+        let resolution = resolve(&mut sweep_tx, &second_sweep)
+            .await
+            .expect("the sweep must not fail on the operator's answer");
+        sweep_tx.commit().await.expect("the sweep commits");
+        assert_eq!(resolution.l2.operator_held, 1, "{resolution:?}");
+        assert_eq!((resolution.l2.written, resolution.l2.vacated), (0, 0));
+        assert_eq!(
+            links(&pool).await,
+            links_before + 2,
+            "the sweep's L1 links are written"
+        );
+        let who: Vec<(String, String)> =
+            sqlx::query_as("SELECT decided_by, outcome FROM l2_pair_decision WHERE is_current = 1")
+                .fetch_all(&pool)
+                .await
+                .expect("read");
+        assert_eq!(who, vec![("OPERATOR".to_string(), "match".to_string())]);
     }
 
     /// Story 6.6's registered hazard is an UPLINK narrowing at the call site. 🔴 The first guard counted
@@ -922,12 +1037,27 @@ mod tests {
             1,
             "the ambiguity, and not the two `NoMatch`: {pairs:?}"
         );
-        sqlx::query(
-            "UPDATE l2_pair_decision SET decided_by = 'OPERATOR' WHERE outcome = 'abstained'",
+        // Story 6.14b, AC4: answered through the adapter, where this test forged the row by `UPDATE`.
+        let obelix: BTreeSet<String> = sqlx::query_scalar(
+            "SELECT interface_low FROM l2_pair_decision WHERE outcome = 'abstained' \
+             UNION SELECT interface_high FROM l2_pair_decision WHERE outcome = 'abstained'",
         )
-        .execute(&pool)
+        .fetch_all(&pool)
+        .await
+        .expect("read")
+        .into_iter()
+        .collect();
+        let mut conn = pool.acquire().await.expect("connection");
+        let mut tx = sqlx::Connection::begin(&mut *conn).await.expect("tx");
+        crate::l2_answer::record_operator_answer(
+            &mut tx,
+            &obelix,
+            crate::l2_answer::Answer::DistinctMachines,
+            at(100),
+        )
         .await
         .expect("a human answers");
+        tx.commit().await.expect("commit");
         assert!(
             crate::l2_repo::load_current_ambiguous_pairs(&pool)
                 .await

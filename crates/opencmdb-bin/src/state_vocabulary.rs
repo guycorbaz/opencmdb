@@ -376,7 +376,7 @@ mod gesture_axis_tests {
     /// extending a binding table is a planning act and Guy's (story 6b.7's precedent, where it was
     /// refused as *premature, not wrong*). `baseline` is a third of the same class (a fourth until story 6.14 gave `resolve` its row), already owned
     /// by Epic 9.
-    const NOT_A_GLOSSARY_GESTURE: [(&str, &str); 7] = [
+    const NOT_A_GLOSSARY_GESTURE: [(&str, &str); 6] = [
         (
             "gesture.badge",
             "the *not yet* marker, not a gesture (story 6b.4b)",
@@ -384,10 +384,6 @@ mod gesture_axis_tests {
         (
             "gesture.not_built",
             "the sentence under the bar (story 6b.4b)",
-        ),
-        (
-            "gesture.not_built_resolve",
-            "the sentence under an AMBIGUITY's bar, saying what *Résoudre* will do (story 6.14)",
         ),
         (
             "gesture.badge_off",

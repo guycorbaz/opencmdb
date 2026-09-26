@@ -408,6 +408,12 @@ behind a switch, \texttt{OPENCMDB\_DOCUMENT\_ENABLED}, because it lets the produ
 the declared side on its own initiative, which is the hazard \texttt{FR13} is careful about.
 The addressing plan carries no such hazard: every one of its rows is something a human typed.
 
+\textbf{The answer to an ambiguity is the same kind of route.} Since story~6.14b,
+\texttt{POST /triage/answer} is always mounted: anyone who can sign in can say whether the network
+interfaces of an \emph{Ambiguous} question are one machine or several. It writes an identity
+\emph{decision} the operator makes, never a declared value, so \texttt{OPENCMDB\_DOCUMENT\_ENABLED}
+does not apply to it. An answer cannot yet be changed or undone from the screen.
+
 \textbf{What follows for you.} If your instance is reachable by anyone you would not trust
 with your addressing plan, that is now a decision you are making rather than one the product
 makes for you. The plan is data an operator owns; treat the credential accordingly.
@@ -513,13 +519,18 @@ says one row was affected.
 Migration \texttt{0012} adds \texttt{l2\_pair\_decision}: one row per PAIR of network interfaces the
 engine has an answer about --- two cards that may be one machine, or a pair it refused because one
 address is a virtual router's. It is additive and empty after the upgrade; the next sweep fills it.
-The engine's rows are a cache of its reasoning, not a record anyone wrote, so they can be removed by
+The ENGINE's rows are a cache of its reasoning, not a record anyone wrote, so they can be removed by
 hand and the following sweeps rebuild them --- a pair only once both of its interfaces are seen in the
 same sweep:
 \begin{verbatim}
 DELETE FROM l2_pair_decision WHERE decided_by = 'ENGINE';
 \end{verbatim}
-No screen writes an operator's row yet; when one does, the engine will leave that pair alone.
+\textbf{The OPERATOR's rows are answers, not a cache.} Since story~6.14b (migration \texttt{0013})
+the triage screen writes one when someone answers an \emph{Ambiguous} question --- \texttt{match}
+for \emph{the same machine}, \texttt{no\_match} for \emph{distinct machines}, with
+\texttt{rule\_id = 'operator'}. The engine never supersedes them, and no sweep rebuilds them: do
+not delete them, or the question comes back unanswered. Keep the statement above filtered on
+\texttt{decided\_by = 'ENGINE'}.
 
 \appendix
 \chapter{Troubleshooting}

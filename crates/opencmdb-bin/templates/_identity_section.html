@@ -48,6 +48,11 @@
     {% if identity.ambiguous_groups > 0 %}
     <p class="pair ambiguous"><span class="muted">{{ s.identity_ambiguous }}</span> <span class="count">{{ identity.ambiguous_groups }}</span></p>
     {% endif %}
+    {#- Story 6.14b, AC8: the questions the operator answered, in QUESTIONS, on a line of their own — an
+         answer does not vanish from the screen that asked it. -#}
+    {% if identity.answered_questions > 0 %}
+    <p class="pair answered"><span class="muted">{{ s.identity_answered }}</span> <span class="count">{{ identity.answered_questions }}</span></p>
+    {% endif %}
     <p class="muted note">{{ s.identity_unit }}</p>
     <p class="muted note">{{ s.identity_floor }}</p>
   {% else %}

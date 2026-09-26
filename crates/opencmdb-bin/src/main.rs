@@ -31,6 +31,7 @@ mod ipam_rail;
 mod ipam_repo;
 mod ipam_write;
 mod l1_runner;
+mod l2_answer;
 mod l2_pass;
 mod l2_repo;
 mod metrics;
@@ -769,7 +770,12 @@ fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFac
         // ⚠️ Merged as its OWN sub-router and never onto `ipam_page::router`, which BEARS THE POOL:
         // fusing them would silently retire the compile-time refusal of `State<MySqlPool>` that
         // `ipam_write::IpamWriteState` exists to hold (AC2).
-        .merge(ipam_write::router(pool.clone()));
+        .merge(ipam_write::router(pool.clone()))
+        // 🔑 THE ANSWER TO AN L2 QUESTION (story 6.14b), with NO SWITCH (Guy's F1, 2026-09-25): it
+        // writes an identity INPUT and never a declared value, so the authorship hazard
+        // `OPENCMDB_DOCUMENT_ENABLED` guards is absent. Its own sub-router, whose state holds a port and
+        // no pool — never merged onto `page::triage_router`, which bears the pool.
+        .merge(l2_answer::router(pool.clone()));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
         // is auth-gated exactly like every other non-public path. The pool lives INSIDE the
@@ -1816,12 +1822,13 @@ mod tests {
             .iter()
             .copied()
             .chain(ipam_write::WriteRoute::paths())
+            .chain(l2_answer::PATHS.iter().copied())
             .collect();
         assert_eq!(
             declared.len(),
-            11,
-            "the premise: eleven write routes today ({declared:?}) — `/document-all` plus the plan's \
-             three definitions, SIX corrections and one release. A loop that went empty would assert nothing, \
+            12,
+            "the premise: twelve write routes today ({declared:?}) — `/document-all`, the plan's \
+             three definitions, SIX corrections and one release, and the answer to an L2 question. A loop that went empty would assert nothing, \
              and a list that shrank silently would assert less" // ⚠️ **This premise is DERIVED from `WriteRoute::ALL`, so it can catch a shrink and
                                                                 // never an omission**: a variant missing from that list is missing from `declared` too,
                                                                 // and 10 stays 10. `ipam_write`'s `every_variant_is_in_the_route_list` is what carries

@@ -52,7 +52,10 @@ const SETTLE_WAIT_MS = 900;
 // 🔑 62 → 65 with story 6.14: the Ambigu pane's candidates, its one planned control, and that
 // control's focus and describing sentence; → 66 at its code review, the same control reached with TAB.
 // Read off the run, as above.
-const MIN_CHECKS = 66;
+// 🔑 66 → 70 with story 6.14b: the Ambigu pane's planned control became TWO live answers, and the block
+// now also reads E1 (the link instead of *Ajouter*), PRESSES an answer, and reads the question gone and
+// *Ajouter* back — `kbd gate: 70 check(s) run`, read off the run.
+const MIN_CHECKS = 70;
 const MIN_ROWS = 2;
 // 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
 // the field at one site and spelled out inside the expected triage href at another — so a seed that
@@ -480,20 +483,18 @@ async function main() {
         );
       }
       const p = await open(ambiguous);
+      // ── Story 6.14b: *Résoudre* ACTS, as its two answers ──
       const pane = await p.evaluate((live) => {
         const aside = document.querySelector("aside.photos");
-        const controls = aside === null ? [] : [...aside.querySelectorAll(".btn-gesture")];
-        const first = controls[0] ?? null;
-        if (first !== null) first.focus();
-        const described = first === null ? null : first.getAttribute("aria-describedby");
-        const note = described === null ? null : document.getElementById(described);
+        const answers = aside === null ? [] : [...aside.querySelectorAll("button.btn-answer")];
         return {
           candidates: aside === null ? 0 : aside.querySelectorAll(".photo.candidate").length,
-          controls: controls.length,
+          answers: answers.length,
+          planned: aside === null ? 0 : aside.querySelectorAll(".btn-gesture.planned").length,
           live: aside === null ? 0 : aside.querySelectorAll(live).length,
-          planned: first !== null && first.classList.contains("planned"),
-          focused: first !== null && document.activeElement === first,
-          note: note === null ? "" : note.textContent.trim(),
+          name: (aside?.querySelector(".gesture-name")?.textContent ?? "").trim(),
+          notBuilt: document.getElementById("gesture-not-built") !== null,
+          named: answers.every((a) => (a.getAttribute("aria-label") ?? "").startsWith(a.textContent.trim())),
         };
       }, GESTURE);
       check(
@@ -502,18 +503,18 @@ async function main() {
         `candidates=${pane.candidates}`,
       );
       check(
-        pane.controls === 1 && pane.planned && pane.live === 0,
-        "its bar carries ONE control, planned, and no live documenting gesture",
-        `controls=${pane.controls} planned=${pane.planned} live=${pane.live}`,
+        pane.answers === 2 && pane.planned === 0 && pane.live === 0,
+        "its bar carries *Résoudre*'s TWO answers, live, nothing planned and no documenting gesture",
+        `answers=${pane.answers} planned=${pane.planned} live=${pane.live}`,
       );
+      // 🔑 The binding term stays on the screen (Guy, 2026-09-26), and the *not built* note does not
+      // render beside controls that act — story 6.4's shipped-sentence-made-false defect.
       check(
-        pane.focused && pane.note.length > 0,
-        "that control takes the focus and is described by a sentence saying what it will do",
-        `focused=${pane.focused} note=${JSON.stringify(pane.note.slice(0, 60))}`,
+        pane.name !== "" && !pane.notBuilt && pane.named,
+        "the gesture's NAME heads them, no *not built* note stands beside them, and each accessible name starts with its label",
+        `name=${JSON.stringify(pane.name)} notBuilt=${pane.notBuilt} named=${pane.named}`,
       );
-      // 🔴 **Reached with TAB, not only by script.** `.focus()` succeeds on a `tabindex="-1"` control,
-      // so the check above would pass over story 6b.4b's defect — a planned control no Tab press ever
-      // reaches. Found by story 6.14's acceptance review; this walks the page the way an operator does.
+      // 🔴 **Reached with TAB, not only by script** — `.focus()` succeeds on a `tabindex="-1"` control.
       await p.evaluate(() => {
         document.activeElement?.blur();
         window.scrollTo(0, 0);
@@ -524,10 +525,89 @@ async function main() {
         tabbed = await p.evaluate(() => {
           const active = document.activeElement;
           return active !== null && active.closest("aside.photos") !== null &&
-            active.classList.contains("btn-gesture");
+            active.classList.contains("btn-answer");
         });
       }
-      check(tabbed, "and the Tab key REACHES it from the top of the page", `reached=${tabbed}`);
+      check(tabbed, "and the Tab key REACHES an answer from the top of the page", `reached=${tabbed}`);
+
+      // ── E1: while the question is open, each of its addresses shows the LINK instead of *Ajouter* ──
+      // The address row is FOUND by the link it carries back to this question, never by a selector.
+      const question = new URL(ambiguous, BASE).search;
+      let addressHref = null;
+      for (const href of hrefs) {
+        if (href === null || href === ambiguous) continue;
+        const q = await open(href);
+        const links = await q.$$eval(".open-question a", (as) => as.map((a) => a.getAttribute("href")));
+        if (links.some((link) => link !== null && new URL(link, "http://x").search === question)) {
+          addressHref = href;
+          const offered = await q.$$eval(GESTURE, (found) => found.length);
+          check(
+            offered === 0,
+            "E1: an address of the OPEN question links to it INSTEAD of offering *Ajouter*",
+            `href=${href} ajouter=${offered}`,
+          );
+          await q.close();
+          break;
+        }
+        await q.close();
+      }
+      if (addressHref === null) {
+        cannotRun(
+          "no queue row links back to the open question, so E1 is on no page this gate can reach. " +
+            "Seed the store with a11y/seed.sql, whose question's candidates carry addresses.",
+        );
+      }
+
+      // ── PRESS an answer with the keyboard, and read what the product did ──
+      // 🔴 THIS WRITES TO THE STORE: the seed's one open question is answered, so a second run answers
+      // 409 (*no longer open*), which is the harness and reported as such, never as the product.
+      await p.evaluate(() => {
+        document.querySelectorAll("aside.photos button.btn-answer")[1]?.focus();
+      });
+      const posted = p.waitForResponse((response) => response.request().method() === "POST", {
+        timeout: NAV_TIMEOUT_MS,
+      });
+      await p.keyboard.press("Enter");
+      let status = null;
+      try {
+        status = (await posted).status();
+      } catch (error) {
+        cannotRun(`the answer never answered — ${error.message}`);
+      }
+      if (status === 409) {
+        cannotRun(
+          "the answer answered 409: this store's question was already answered. Re-run a11y/seed.sql " +
+            "before this gate rather than reading the absence of an answer as a product defect.",
+        );
+      }
+      await p
+        .waitForNavigation({ waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS })
+        .catch(() => {});
+      const landed = await p.evaluate(() => ({
+        url: window.location.pathname + window.location.search,
+        confirmation: (document.querySelector(".answered-note")?.textContent ?? "").trim(),
+        questions: [...document.querySelectorAll(".queue .queue-row > a")]
+          .map((a) => a.getAttribute("href") ?? "")
+          .filter((href) => href.includes("sel=ambigu:")).length,
+      }));
+      check(
+        status === 201 && landed.url.includes("answered=") && landed.confirmation !== "",
+        "the answer is written, the screen RE-RENDERS, and the confirmation rides in the URL",
+        `status=${status} url=${landed.url} confirmation=${JSON.stringify(landed.confirmation)}`,
+      );
+      check(
+        landed.questions === 0,
+        "the answered question has LEFT the queue",
+        `questions=${landed.questions}`,
+      );
+      const back = await open(addressHref);
+      const returned = await back.$$eval(GESTURE, (found) => found.length);
+      check(
+        returned === 1,
+        "and its address offers *Ajouter* again, the question being answered (AC7)",
+        `href=${addressHref} ajouter=${returned}`,
+      );
+      await back.close();
       await p.close();
     }
 
@@ -1311,6 +1391,10 @@ async function main() {
       // summary to keep this list short would have made the seed disagree with what the product writes.
       "192.0.2.200",
       "192.0.2.201",
+      // Story 6.14b: the seed's SECOND, already-answered question sits at `.202` and `.203`, outside
+      // every subnet for the same reason, so both are outside findings carrying a release too.
+      "192.0.2.202",
+      "192.0.2.203",
     ];
     const read = (p) =>
       p.evaluate(() => {
